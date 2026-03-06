@@ -3,223 +3,314 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Speakeasy</title>
+  <title>Speakeasy — Chat with Alex</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --cream:     #f7f3ee;
-      --cream-dark:#ede7de;
-      --ink:       #2c2416;
-      --ink-light: #7a6e62;
-      --sage:      #7a9e87;
-      --sage-dark: #5c8069;
-      --sage-light:#c8ddd0;
-      --bubble-ai: #ffffff;
-      --bubble-user: #e8f0eb;
-      --shadow:    rgba(44,36,22,0.08);
-      --radius:    18px;
+      --cream:       #f5f0e8;
+      --cream-dark:  #e8e0d0;
+      --cream-panel: #f0ead8;
+      --ink:         #28200f;
+      --ink-mid:     #5a5040;
+      --ink-light:   #9a8e7a;
+      --sage:        #6b9478;
+      --sage-dark:   #4e7a5c;
+      --sage-pale:   #d4e8da;
+      --white:       #ffffff;
+      --shadow-sm:   0 1px 4px rgba(40,32,15,0.07);
+      --shadow-md:   0 4px 16px rgba(40,32,15,0.10);
+      --r-bubble:    20px;
+      --r-panel:     16px;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    body {
+    html, body {
+      height: 100%;
       background: var(--cream);
       color: var(--ink);
       font-family: 'DM Sans', sans-serif;
-      height: 100dvh;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ═══════════════════════════════════════
+       APP SHELL — desktop two-column layout
+    ═══════════════════════════════════════ */
+    .app {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      grid-template-rows: 100vh;
+      height: 100vh;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* ── Left Panel ── */
+    .panel {
+      background: var(--cream-panel);
+      border-right: 1px solid var(--cream-dark);
       display: flex;
       flex-direction: column;
+      padding: 32px 24px;
+      gap: 32px;
+      overflow-y: auto;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-avatar {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--sage) 0%, var(--sage-dark) 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: var(--shadow-md);
+      flex-shrink: 0;
+    }
+
+    .brand-text h1 {
+      font-family: 'Lora', serif;
+      font-size: 20px;
+      font-weight: 500;
+      line-height: 1.2;
+    }
+
+    .brand-text p {
+      font-size: 13px;
+      color: var(--sage-dark);
+      margin-top: 3px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .brand-text p::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      background: var(--sage);
+      border-radius: 50%;
+      animation: pulse 2.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
+    }
+
+    .panel-section h3 {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-light);
+      margin-bottom: 12px;
+    }
+
+    .panel-section p {
+      font-size: 14px;
+      color: var(--ink-mid);
+      line-height: 1.7;
+    }
+
+    .topic-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .topic-btn {
+      background: var(--white);
+      border: 1.5px solid var(--cream-dark);
+      color: var(--ink);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .topic-btn:hover {
+      border-color: var(--sage);
+      background: var(--sage-pale);
+      color: var(--sage-dark);
+      transform: translateX(3px);
+    }
+
+    .topic-icon { font-size: 16px; flex-shrink: 0; }
+
+    .end-btn {
+      margin-top: auto;
+      background: transparent;
+      border: 1.5px solid var(--cream-dark);
+      color: var(--ink-mid);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 11px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .end-btn:hover {
+      border-color: var(--sage);
+      color: var(--sage-dark);
+      background: var(--sage-pale);
+    }
+
+    /* ── Right: Chat Column ── */
+    .chat-col {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
       overflow: hidden;
     }
 
-    /* ── Header ── */
-    header {
+    /* ── Chat Header ── */
+    .chat-header {
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--cream-dark);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 24px;
-      background: var(--cream);
-      border-bottom: 1px solid var(--cream-dark);
       flex-shrink: 0;
-      gap: 12px;
+      background: var(--cream);
     }
 
-    .header-left {
+    .chat-header-left {
       display: flex;
       align-items: center;
       gap: 12px;
     }
 
-    .avatar {
-      width: 42px;
-      height: 42px;
+    .chat-avatar {
+      width: 40px;
+      height: 40px;
       background: linear-gradient(135deg, var(--sage) 0%, var(--sage-dark) 100%);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 18px;
-      flex-shrink: 0;
-      box-shadow: 0 2px 8px var(--shadow);
+      box-shadow: var(--shadow-sm);
     }
 
-    .header-info h1 {
+    .chat-header h2 {
       font-family: 'Lora', serif;
-      font-size: 17px;
+      font-size: 18px;
       font-weight: 500;
-      color: var(--ink);
-      line-height: 1.2;
     }
 
-    .status {
-      font-size: 12px;
-      color: var(--sage-dark);
-      display: flex;
-      align-items: center;
-      gap: 5px;
+    .chat-header .sub {
+      font-size: 13px;
+      color: var(--ink-light);
       margin-top: 2px;
     }
 
-    .status::before {
-      content: '';
-      width: 6px;
-      height: 6px;
-      background: var(--sage);
-      border-radius: 50%;
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-
-    .end-btn {
-      background: transparent;
-      border: 1.5px solid var(--cream-dark);
-      color: var(--ink-light);
-      font-family: 'DM Sans', sans-serif;
+    .turn-counter {
       font-size: 13px;
-      font-weight: 500;
-      padding: 7px 16px;
+      color: var(--ink-light);
+      background: var(--cream-dark);
+      padding: 5px 12px;
       border-radius: 20px;
-      cursor: pointer;
-      transition: all 0.2s;
-      white-space: nowrap;
     }
 
-    .end-btn:hover {
-      border-color: var(--sage);
-      color: var(--sage-dark);
-      background: var(--sage-light);
-    }
-
-    /* ── Chat Area ── */
+    /* ── Messages ── */
     #chat {
       flex: 1;
       overflow-y: auto;
-      padding: 24px 20px;
+      padding: 32px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 20px;
       scroll-behavior: smooth;
     }
 
-    #chat::-webkit-scrollbar { width: 4px; }
+    #chat::-webkit-scrollbar { width: 5px; }
     #chat::-webkit-scrollbar-track { background: transparent; }
     #chat::-webkit-scrollbar-thumb { background: var(--cream-dark); border-radius: 4px; }
 
     /* ── Welcome ── */
     .welcome {
       text-align: center;
-      padding: 32px 16px 16px;
-      animation: fadeUp 0.6s ease;
-    }
-
-    .welcome-icon {
-      font-size: 40px;
-      margin-bottom: 12px;
-      display: block;
-    }
-
-    .welcome h2 {
-      font-family: 'Lora', serif;
-      font-size: 22px;
-      font-weight: 500;
-      color: var(--ink);
-      margin-bottom: 8px;
-      line-height: 1.3;
-    }
-
-    .welcome p {
-      font-size: 14px;
-      color: var(--ink-light);
-      line-height: 1.7;
-      max-width: 280px;
-      margin: 0 auto 20px;
-    }
-
-    .topic-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: center;
-      max-width: 340px;
+      padding: 48px 24px 24px;
+      animation: fadeUp 0.5s ease;
+      max-width: 520px;
       margin: 0 auto;
     }
 
-    .chip {
-      background: white;
-      border: 1.5px solid var(--cream-dark);
+    .welcome-icon { font-size: 48px; margin-bottom: 16px; display: block; }
+
+    .welcome h2 {
+      font-family: 'Lora', serif;
+      font-size: 28px;
+      font-weight: 500;
       color: var(--ink);
-      font-size: 13px;
-      font-family: 'DM Sans', sans-serif;
-      padding: 7px 14px;
-      border-radius: 20px;
-      cursor: pointer;
-      transition: all 0.2s;
-      white-space: nowrap;
+      margin-bottom: 12px;
     }
 
-    .chip:hover {
-      border-color: var(--sage);
-      background: var(--sage-light);
-      color: var(--sage-dark);
-      transform: translateY(-1px);
-    }
-
-    /* ── Messages ── */
-    .msg {
-      display: flex;
-      gap: 10px;
-      animation: fadeUp 0.3s ease;
-      max-width: 100%;
+    .welcome p {
+      font-size: 16px;
+      color: var(--ink-mid);
+      line-height: 1.75;
     }
 
     @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(10px); }
+      from { opacity: 0; transform: translateY(12px); }
       to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Message rows ── */
+    .msg {
+      display: flex;
+      gap: 14px;
+      animation: fadeUp 0.25s ease;
+      max-width: 720px;
     }
 
     .msg.user {
       flex-direction: row-reverse;
+      align-self: flex-end;
+    }
+
+    .msg.ai {
+      align-self: flex-start;
     }
 
     .msg-avatar {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
+      font-size: 16px;
       flex-shrink: 0;
       margin-top: 2px;
     }
 
     .msg.ai .msg-avatar {
       background: linear-gradient(135deg, var(--sage) 0%, var(--sage-dark) 100%);
+      box-shadow: var(--shadow-sm);
     }
 
     .msg.user .msg-avatar {
@@ -227,118 +318,134 @@
     }
 
     .bubble {
-      max-width: calc(100% - 80px);
-      padding: 12px 16px;
-      border-radius: var(--radius);
-      font-size: 15px;
-      line-height: 1.6;
-      box-shadow: 0 1px 4px var(--shadow);
+      padding: 14px 18px;
+      border-radius: var(--r-bubble);
+      font-size: 16px;
+      line-height: 1.65;
+      box-shadow: var(--shadow-sm);
+      max-width: 560px;
     }
 
     .msg.ai .bubble {
-      background: var(--bubble-ai);
-      border-bottom-left-radius: 4px;
+      background: var(--white);
+      border-bottom-left-radius: 5px;
       color: var(--ink);
     }
 
     .msg.user .bubble {
-      background: var(--bubble-user);
-      border-bottom-right-radius: 4px;
+      background: var(--sage-pale);
+      border-bottom-right-radius: 5px;
       color: var(--ink);
     }
 
-    /* ── Typing indicator ── */
-    .typing .bubble {
-      padding: 14px 18px;
-    }
+    /* ── Typing dots ── */
+    .typing .bubble { padding: 16px 20px; }
 
-    .dots {
-      display: flex;
-      gap: 5px;
-      align-items: center;
-    }
+    .dots { display: flex; gap: 6px; align-items: center; }
 
     .dots span {
-      width: 7px;
-      height: 7px;
+      width: 8px;
+      height: 8px;
       background: var(--sage);
       border-radius: 50%;
-      animation: bounce 1.2s infinite;
+      animation: bounce 1.3s infinite;
     }
 
     .dots span:nth-child(2) { animation-delay: 0.2s; }
     .dots span:nth-child(3) { animation-delay: 0.4s; }
 
     @keyframes bounce {
-      0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
-      30% { transform: translateY(-6px); opacity: 1; }
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+      30% { transform: translateY(-7px); opacity: 1; }
     }
 
-    /* ── Today's Tip card ── */
+    /* ── Tip card ── */
     .tip-card {
       background: linear-gradient(135deg, var(--sage-dark) 0%, var(--sage) 100%);
-      border-radius: var(--radius);
-      padding: 20px;
+      border-radius: var(--r-panel);
+      padding: 24px 28px;
       color: white;
       animation: fadeUp 0.5s ease;
-      box-shadow: 0 4px 16px rgba(92,128,105,0.3);
+      box-shadow: 0 6px 24px rgba(78,122,92,0.3);
+      max-width: 560px;
+      align-self: center;
     }
 
-    .tip-card .tip-label {
+    .tip-label {
       font-size: 11px;
       font-weight: 500;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
-      opacity: 0.8;
-      margin-bottom: 8px;
+      opacity: 0.75;
+      margin-bottom: 10px;
     }
 
-    .tip-card .tip-text {
+    .tip-text {
       font-family: 'Lora', serif;
-      font-size: 16px;
-      line-height: 1.6;
+      font-size: 18px;
+      line-height: 1.65;
     }
 
-    .tip-card .tip-restart {
-      margin-top: 16px;
-      background: rgba(255,255,255,0.2);
+    .tip-restart {
+      margin-top: 20px;
+      background: rgba(255,255,255,0.18);
       border: 1.5px solid rgba(255,255,255,0.4);
       color: white;
       font-family: 'DM Sans', sans-serif;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 500;
-      padding: 8px 18px;
+      padding: 10px 22px;
       border-radius: 20px;
       cursor: pointer;
       transition: all 0.2s;
     }
 
-    .tip-card .tip-restart:hover {
-      background: rgba(255,255,255,0.3);
+    .tip-restart:hover { background: rgba(255,255,255,0.28); }
+
+    /* ── Divider ── */
+    .divider {
+      text-align: center;
+      font-size: 13px;
+      color: var(--ink-light);
+      position: relative;
+      align-self: stretch;
     }
 
-    /* ── Input area ── */
+    .divider::before, .divider::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 40%;
+      height: 1px;
+      background: var(--cream-dark);
+    }
+
+    .divider::before { left: 0; }
+    .divider::after { right: 0; }
+
+    /* ── Input Area ── */
     .input-area {
-      padding: 12px 16px 20px;
-      background: var(--cream);
+      padding: 16px 32px 24px;
       border-top: 1px solid var(--cream-dark);
+      background: var(--cream);
       flex-shrink: 0;
     }
 
     .input-wrap {
       display: flex;
-      gap: 10px;
+      gap: 12px;
       align-items: flex-end;
-      background: white;
+      background: var(--white);
       border: 1.5px solid var(--cream-dark);
       border-radius: 24px;
-      padding: 10px 10px 10px 18px;
-      box-shadow: 0 2px 8px var(--shadow);
-      transition: border-color 0.2s;
+      padding: 12px 12px 12px 22px;
+      box-shadow: var(--shadow-sm);
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
 
     .input-wrap:focus-within {
       border-color: var(--sage);
+      box-shadow: 0 0 0 3px rgba(107,148,120,0.12);
     }
 
     #input {
@@ -347,22 +454,19 @@
       outline: none;
       background: transparent;
       font-family: 'DM Sans', sans-serif;
-      font-size: 15px;
+      font-size: 16px;
       color: var(--ink);
       resize: none;
-      max-height: 120px;
-      line-height: 1.5;
-      min-height: 24px;
+      max-height: 140px;
+      line-height: 1.55;
+      min-height: 26px;
     }
 
-    #input::placeholder {
-      color: var(--ink-light);
-      opacity: 0.7;
-    }
+    #input::placeholder { color: var(--ink-light); opacity: 0.65; }
 
     #send {
-      width: 38px;
-      height: 38px;
+      width: 42px;
+      height: 42px;
       background: linear-gradient(135deg, var(--sage) 0%, var(--sage-dark) 100%);
       border: none;
       border-radius: 50%;
@@ -372,107 +476,151 @@
       justify-content: center;
       flex-shrink: 0;
       transition: all 0.2s;
-      box-shadow: 0 2px 6px rgba(92,128,105,0.3);
+      box-shadow: 0 2px 8px rgba(78,122,92,0.3);
     }
 
-    #send:hover { transform: scale(1.08); }
-    #send:active { transform: scale(0.95); }
-    #send:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    #send svg { pointer-events: none; }
+    #send:hover { transform: scale(1.08); box-shadow: 0 4px 12px rgba(78,122,92,0.4); }
+    #send:active { transform: scale(0.94); }
+    #send:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
 
     .hint {
       text-align: center;
-      font-size: 11px;
+      font-size: 12px;
       color: var(--ink-light);
-      opacity: 0.6;
+      opacity: 0.55;
       margin-top: 8px;
     }
 
-    /* ── Divider ── */
-    .divider {
+    /* ── Error ── */
+    .error-msg {
       text-align: center;
-      font-size: 12px;
-      color: var(--ink-light);
-      opacity: 0.5;
-      position: relative;
-      margin: 4px 0;
+      font-size: 13px;
+      color: #b06050;
+      padding: 6px;
+      align-self: center;
     }
 
-    .divider::before, .divider::after {
-      content: '';
-      position: absolute;
-      top: 50%;
-      width: 30%;
-      height: 1px;
-      background: var(--cream-dark);
+    /* ── Responsive: hide panel on narrow screens ── */
+    @media (max-width: 768px) {
+      .app { grid-template-columns: 1fr; }
+      .panel { display: none; }
+      #chat { padding: 20px 16px; }
+      .input-area { padding: 12px 16px 20px; }
+      .chat-header { padding: 16px 20px; }
     }
-
-    .divider::before { left: 0; }
-    .divider::after { right: 0; }
   </style>
 </head>
 <body>
+<div class="app">
 
-<!-- Header -->
-<header>
-  <div class="header-left">
-    <div class="avatar">🌿</div>
-    <div class="header-info">
-      <h1>Alex</h1>
-      <div class="status">随时可以聊</div>
+  <!-- ── Left Panel ── -->
+  <aside class="panel">
+    <div class="brand">
+      <div class="brand-avatar">🌿</div>
+      <div class="brand-text">
+        <h1>Speakeasy</h1>
+        <p>Alex 在线</p>
+      </div>
     </div>
-  </div>
-  <button class="end-btn" onclick="endSession()">结束对话</button>
-</header>
 
-<!-- Chat -->
-<div id="chat">
-  <div class="welcome" id="welcome">
-    <span class="welcome-icon">👋</span>
-    <h2>Hi, I'm Alex!</h2>
-    <p>今天想聊什么？随便说，没有对错，就像和朋友聊天一样。</p>
-    <div class="topic-chips">
-      <button class="chip" onclick="startWith('My day at work')">💼 工作日常</button>
-      <button class="chip" onclick="startWith('Something funny happened today')">😄 趣事分享</button>
-      <button class="chip" onclick="startWith('I watched a great movie recently')">🎬 影视剧</button>
-      <button class="chip" onclick="startWith('I want to talk about travel')">✈️ 旅行计划</button>
-      <button class="chip" onclick="startWith('Let me tell you about my weekend')">🌿 周末生活</button>
+    <div class="panel-section">
+      <h3>关于 Alex</h3>
+      <p>英语母语朋友，永远不评判你，在聊天中悄悄帮你变流利。</p>
     </div>
-  </div>
-</div>
 
-<!-- Input -->
-<div class="input-area">
-  <div class="input-wrap">
-    <textarea id="input" rows="1" placeholder="Type in English... just like texting a friend"
-      onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-    <button id="send" onclick="sendMessage()" title="发送">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <path d="M14 8L2 2l2.5 6L2 14l12-6z" fill="white"/>
-      </svg>
+    <div class="panel-section">
+      <h3>今天聊什么</h3>
+      <div class="topic-list">
+        <button class="topic-btn" onclick="startWith('Tell me about your day at work')">
+          <span class="topic-icon">💼</span> 工作日常
+        </button>
+        <button class="topic-btn" onclick="startWith('Something funny happened to me today')">
+          <span class="topic-icon">😄</span> 趣事分享
+        </button>
+        <button class="topic-btn" onclick="startWith('I watched a really good movie recently')">
+          <span class="topic-icon">🎬</span> 影视剧
+        </button>
+        <button class="topic-btn" onclick="startWith('I want to talk about my travel plans')">
+          <span class="topic-icon">✈️</span> 旅行计划
+        </button>
+        <button class="topic-btn" onclick="startWith('Let me tell you about my weekend')">
+          <span class="topic-icon">🌿</span> 周末生活
+        </button>
+        <button class="topic-btn" onclick="startWith('I have been thinking about changing jobs')">
+          <span class="topic-icon">🔄</span> 职业规划
+        </button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>使用提示</h3>
+      <p>不懂 Alex 说的词？直接问他，他会用更简单的方式解释。</p>
+    </div>
+
+    <button class="end-btn" onclick="endSession()">
+      ✨ 结束对话，获取今日一句
     </button>
+  </aside>
+
+  <!-- ── Right: Chat ── -->
+  <div class="chat-col">
+
+    <div class="chat-header">
+      <div class="chat-header-left">
+        <div class="chat-avatar">🌿</div>
+        <div>
+          <h2>Alex</h2>
+          <div class="sub">随时可以聊</div>
+        </div>
+      </div>
+      <div class="turn-counter" id="turnCounter">0 轮对话</div>
+    </div>
+
+    <div id="chat">
+      <div class="welcome" id="welcome">
+        <span class="welcome-icon">👋</span>
+        <h2>Hey, I'm Alex!</h2>
+        <p>今天想聊什么？从左边选一个话题，或者直接打字。<br/>没有对错，就像和朋友发消息一样。</p>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <div class="input-wrap">
+        <textarea id="input" rows="1"
+          placeholder="Type in English... or mix Chinese, it's totally fine"
+          onkeydown="handleKey(event)"
+          oninput="autoResize(this)"></textarea>
+        <button id="send" onclick="sendMessage()">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M16 9L2 2.5l2.8 6.5L2 15.5 16 9z" fill="white"/>
+          </svg>
+        </button>
+      </div>
+      <div class="hint">Enter 发送 · Shift+Enter 换行 · 不懂的词直接问 Alex</div>
+    </div>
+
   </div>
-  <div class="hint">Enter 发送 · Shift+Enter 换行</div>
 </div>
 
 <script>
   const API = 'http://localhost:8000';
   let sessionId = crypto.randomUUID();
   let history = [];
+  let turnCount = 0;
   let isLoading = false;
 
-  const chat = document.getElementById('chat');
-  const input = document.getElementById('input');
+  const chatEl = document.getElementById('chat');
+  const inputEl = document.getElementById('input');
   const sendBtn = document.getElementById('send');
+  const turnEl  = document.getElementById('turnCounter');
+
+  function updateTurnCounter() {
+    turnEl.textContent = `${turnCount} 轮对话`;
+  }
 
   function autoResize(el) {
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    el.style.height = Math.min(el.scrollHeight, 140) + 'px';
   }
 
   function handleKey(e) {
@@ -483,9 +631,9 @@
   }
 
   function startWith(text) {
-    input.value = text;
-    autoResize(input);
-    input.focus();
+    inputEl.value = text;
+    autoResize(inputEl);
+    inputEl.focus();
     sendMessage();
   }
 
@@ -509,7 +657,7 @@
 
     wrap.appendChild(avatar);
     wrap.appendChild(bubble);
-    chat.appendChild(wrap);
+    chatEl.appendChild(wrap);
     scrollDown();
     return wrap;
   }
@@ -529,7 +677,7 @@
 
     wrap.appendChild(avatar);
     wrap.appendChild(bubble);
-    chat.appendChild(wrap);
+    chatEl.appendChild(wrap);
     scrollDown();
   }
 
@@ -539,21 +687,21 @@
   }
 
   function scrollDown() {
-    setTimeout(() => chat.scrollTop = chat.scrollHeight, 50);
+    setTimeout(() => chatEl.scrollTop = chatEl.scrollHeight, 50);
   }
 
   function setLoading(val) {
     isLoading = val;
     sendBtn.disabled = val;
-    input.disabled = val;
+    inputEl.disabled = val;
   }
 
   async function sendMessage() {
-    const text = input.value.trim();
+    const text = inputEl.value.trim();
     if (!text || isLoading) return;
 
-    input.value = '';
-    input.style.height = 'auto';
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
     setLoading(true);
 
     addMessage('user', text);
@@ -578,28 +726,33 @@
         addMessage('ai', reply);
         history.push({ role: 'user', content: text });
         history.push({ role: 'assistant', content: reply });
+        turnCount++;
+        updateTurnCounter();
       } else {
-        addErrorMsg(data.error || '出了点问题，再试一次？');
+        addError(data.error || '出了点问题，再试一次？');
       }
     } catch (e) {
       removeTyping();
-      addErrorMsg('连接不上服务，确认后端已启动（localhost:8000）');
+      addError('连接不上服务，确认后端已启动（localhost:8000）');
     }
 
     setLoading(false);
-    input.focus();
+    inputEl.focus();
   }
 
-  function addErrorMsg(msg) {
+  function addError(msg) {
     const div = document.createElement('div');
-    div.style.cssText = 'text-align:center;font-size:13px;color:#c0826a;padding:4px;';
+    div.className = 'error-msg';
     div.textContent = '⚠ ' + msg;
-    chat.appendChild(div);
+    chatEl.appendChild(div);
     scrollDown();
   }
 
   async function endSession() {
-    if (history.length === 0) return;
+    if (history.length === 0) {
+      inputEl.focus();
+      return;
+    }
 
     const btn = document.querySelector('.end-btn');
     btn.textContent = '生成中...';
@@ -609,30 +762,23 @@
       const res = await fetch(`${API}/chat/summary`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: sessionId,
-          history: history
-        })
+        body: JSON.stringify({ session_id: sessionId, history })
       });
 
       const data = await res.json();
+      const divider = document.createElement('div');
+      divider.className = 'divider';
+      divider.textContent = '对话结束';
+      chatEl.appendChild(divider);
 
-      // 分割线
-      const div = document.createElement('div');
-      div.className = 'divider';
-      div.textContent = '今日对话结束';
-      chat.appendChild(div);
+      if (res.ok) showTipCard(data.tip);
+      else addError('今日一句生成失败，请重试');
 
-      if (res.ok) {
-        showTipCard(data.tip);
-      } else {
-        addErrorMsg('今日一句生成失败');
-      }
     } catch (e) {
-      addErrorMsg('连接失败，请重试');
+      addError('连接失败，请重试');
     }
 
-    btn.textContent = '结束对话';
+    btn.textContent = '✨ 结束对话，获取今日一句';
     btn.disabled = false;
   }
 
@@ -644,42 +790,37 @@
       <div class="tip-text">${tip}</div>
       <button class="tip-restart" onclick="restartSession()">开始新对话</button>
     `;
-    chat.appendChild(card);
+    chatEl.appendChild(card);
     scrollDown();
 
-    // 禁用输入
-    input.disabled = true;
+    inputEl.disabled = true;
     sendBtn.disabled = true;
-    input.placeholder = '点击「开始新对话」继续';
+    inputEl.placeholder = '点击「开始新对话」继续';
   }
 
   function restartSession() {
     sessionId = crypto.randomUUID();
     history = [];
-    chat.innerHTML = '';
-    input.disabled = false;
+    turnCount = 0;
+    updateTurnCounter();
+    chatEl.innerHTML = '';
+    inputEl.disabled = false;
     sendBtn.disabled = false;
-    input.placeholder = 'Type in English... just like texting a friend';
+    inputEl.placeholder = 'Type in English... or mix Chinese, it\'s totally fine';
 
-    // 重新插入欢迎页
     const welcome = document.createElement('div');
     welcome.className = 'welcome';
     welcome.id = 'welcome';
     welcome.innerHTML = `
       <span class="welcome-icon">👋</span>
-      <h2>Hi, I'm Alex!</h2>
-      <p>今天想聊什么？随便说，没有对错，就像和朋友聊天一样。</p>
-      <div class="topic-chips">
-        <button class="chip" onclick="startWith('My day at work')">💼 工作日常</button>
-        <button class="chip" onclick="startWith('Something funny happened today')">😄 趣事分享</button>
-        <button class="chip" onclick="startWith('I watched a great movie recently')">🎬 影视剧</button>
-        <button class="chip" onclick="startWith('I want to talk about travel')">✈️ 旅行计划</button>
-        <button class="chip" onclick="startWith('Let me tell you about my weekend')">🌿 周末生活</button>
-      </div>
+      <h2>Hey, I'm Alex!</h2>
+      <p>今天想聊什么？从左边选一个话题，或者直接打字。<br/>没有对错，就像和朋友发消息一样。</p>
     `;
-    chat.appendChild(welcome);
-    input.focus();
+    chatEl.appendChild(welcome);
+    inputEl.focus();
   }
+
+  updateTurnCounter();
 </script>
 </body>
 </html>
