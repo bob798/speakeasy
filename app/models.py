@@ -18,6 +18,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str          # AI 回复内容
     session_id: str     # 回传 session_id
+    request_id: str = ""  # 本次请求唯一追踪 ID
 
 
 # 结束对话请求

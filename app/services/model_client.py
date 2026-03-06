@@ -1,10 +1,14 @@
 import os
+import time
 import httpx
 import anthropic
 from openai import OpenAI
 from app.config import MAX_TOKENS, MODEL_NAME
 from app.prompts.system import SYSTEM_PROMPT
 from app.prompts.summary import SUMMARY_PROMPT
+from app.logger import get_logger
+
+logger = get_logger("model_client")
 
 # ──────────────────────────────────────────────
 # 支持的 Provider 及对应配置
@@ -87,6 +91,8 @@ class AnthropicClient(BaseModelClient):
         )
 
     def chat(self, message: str, history: list[dict]) -> str:
+        logger.info("调用 Anthropic chat model=%s history_turns=%d", MODEL_NAME, len(history))
+        t0 = time.time()
         try:
             messages = history + [{"role": "user", "content": message}]
             response = self.client.messages.create(
@@ -95,11 +101,17 @@ class AnthropicClient(BaseModelClient):
                 system=SYSTEM_PROMPT,
                 messages=messages,
             )
+            elapsed = time.time() - t0
+            logger.info("Anthropic chat 完成 耗时=%.2fs", elapsed)
             return response.content[0].text
         except Exception as e:
+            elapsed = time.time() - t0
+            logger.error("Anthropic chat 失败 耗时=%.2fs error=%s", elapsed, e, exc_info=True)
             raise Exception(f"Anthropic API 调用失败：{e}")
 
     def generate_summary(self, history: list[dict]) -> str:
+        logger.info("调用 Anthropic summary model=%s", MODEL_NAME)
+        t0 = time.time()
         try:
             prompt = SUMMARY_PROMPT + self._format_history(history)
             response = self.client.messages.create(
@@ -107,8 +119,12 @@ class AnthropicClient(BaseModelClient):
                 max_tokens=256,
                 messages=[{"role": "user", "content": prompt}],
             )
+            elapsed = time.time() - t0
+            logger.info("Anthropic summary 完成 耗时=%.2fs", elapsed)
             return response.content[0].text
         except Exception as e:
+            elapsed = time.time() - t0
+            logger.error("Anthropic summary 失败 耗时=%.2fs error=%s", elapsed, e, exc_info=True)
             raise Exception(f"今日一句生成失败：{e}")
 
 
@@ -127,6 +143,8 @@ class OpenAICompatibleClient(BaseModelClient):
         )
 
     def chat(self, message: str, history: list[dict]) -> str:
+        logger.info("调用 %s chat model=%s history_turns=%d", self.provider, MODEL_NAME, len(history))
+        t0 = time.time()
         try:
             messages = (
                 [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -138,11 +156,17 @@ class OpenAICompatibleClient(BaseModelClient):
                 max_tokens=MAX_TOKENS,
                 messages=messages,
             )
+            elapsed = time.time() - t0
+            logger.info("%s chat 完成 耗时=%.2fs", self.provider, elapsed)
             return response.choices[0].message.content
         except Exception as e:
+            elapsed = time.time() - t0
+            logger.error("%s chat 失败 耗时=%.2fs error=%s", self.provider, elapsed, e, exc_info=True)
             raise Exception(f"{self.provider} API 调用失败：{e}")
 
     def generate_summary(self, history: list[dict]) -> str:
+        logger.info("调用 %s summary model=%s", self.provider, MODEL_NAME)
+        t0 = time.time()
         try:
             prompt = SUMMARY_PROMPT + self._format_history(history)
             response = self.client.chat.completions.create(
@@ -150,8 +174,12 @@ class OpenAICompatibleClient(BaseModelClient):
                 max_tokens=256,
                 messages=[{"role": "user", "content": prompt}],
             )
+            elapsed = time.time() - t0
+            logger.info("%s summary 完成 耗时=%.2fs", self.provider, elapsed)
             return response.choices[0].message.content
         except Exception as e:
+            elapsed = time.time() - t0
+            logger.error("%s summary 失败 耗时=%.2fs error=%s", self.provider, elapsed, e, exc_info=True)
             raise Exception(f"今日一句生成失败（{self.provider}）：{e}")
 
 
