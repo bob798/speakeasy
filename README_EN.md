@@ -61,7 +61,7 @@ HTML/CSS/JS  ───► FastAPI      ───► Claude Sonnet / Haiku
 ## Project Structure
 
 ```
-english-buddy/
+speakeasy/
 ├── main.py                  # FastAPI entry point
 ├── index.html               # Frontend chat UI
 ├── requirements.txt
@@ -84,8 +84,8 @@ english-buddy/
 ### 1. Clone
 
 ```bash
-git clone https://github.com/your-username/english-buddy.git
-cd english-buddy
+git clone https://github.com/your-username/speakeasy.git
+cd speakeasy
 ```
 
 ### 2. Install

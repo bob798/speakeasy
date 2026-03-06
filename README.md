@@ -61,7 +61,7 @@ HTML/CSS/JS  ───► FastAPI      ───► Claude Sonnet / Haiku
 ## 项目结构
 
 ```
-english-buddy/
+speakeasy/
 ├── main.py                  # FastAPI 入口
 ├── index.html               # 前端聊天界面
 ├── requirements.txt
@@ -84,8 +84,8 @@ english-buddy/
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/your-username/english-buddy.git
-cd english-buddy
+git clone https://github.com/your-username/speakeasy.git
+cd speakeasy
 ```
 
 ### 2. 安装依赖

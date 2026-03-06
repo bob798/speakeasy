@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(claude-api)",
+      "Bash(source venv/bin/activate && python -c \"\nfrom app.config import ANTHROPIC_API_KEY, MAX_TOKENS, MODEL_NAME, ALLOWED_ORIGINS\nprint\\(f'ANTHROPIC_API_KEY: {\\\\\"set\\\\\" if ANTHROPIC_API_KEY else \\\\\"not set\\\\\"} \\(from .env\\)'\\)\nprint\\(f'MAX_TOKENS: {MAX_TOKENS}'\\)\nprint\\(f'MODEL_NAME: {MODEL_NAME}'\\)\nprint\\(f'ALLOWED_ORIGINS: {ALLOWED_ORIGINS}'\\)\n\")",
+      "Bash(source venv/bin/activate && python -c \"from main import app; print\\('Routes:', [r.path for r in app.routes]\\)\")"
+    ]
+  }
+}
