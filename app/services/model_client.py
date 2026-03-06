@@ -28,7 +28,7 @@ PROVIDER_CONFIG = {
     "volcengine": {
         "env_key": "VOLCENGINE_API_KEY",
         "base_url": "https://ark.cn-beijing.volces.com/api/v3",
-        "default_model": "doubao-1-5-pro-32k-250115",
+        "default_model": "deepseek-v3-250324",
     },
     "zhipu": {
         "env_key": "ZHIPU_API_KEY",
@@ -140,6 +140,8 @@ class OpenAICompatibleClient(BaseModelClient):
             api_key=api_key,
             base_url=base_url,
             timeout=30.0,
+            http_client=httpx.Client(trust_env=False),  # 忽略系统代理
+
         )
 
     def chat(self, message: str, history: list[dict]) -> str:
