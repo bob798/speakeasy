@@ -132,6 +132,56 @@ python3 -m http.server 3000
 
 ---
 
+## FAQ
+
+### Q：启动服务后调用 API 报 httpx 连接错误，但我没有设置代理？
+
+**原因**
+
+终端没有设置代理 ≠ 系统没有代理。httpx 默认会读取系统级代理配置（`trust_env=True`），如果本机运行着 Clash / V2Ray / Surge 等代理软件并开启了"系统代理"，Python 的网络请求会被自动转发到代理端口，进而导致连接失败。
+
+验证是否存在系统代理：
+
+```bash
+networksetup -getwebproxy Wi-Fi
+networksetup -getsecurewebproxy Wi-Fi
+# 若显示 Enabled: Yes，说明系统代理开着
+```
+
+**解决方法（三选一）**
+
+方法一：代码层面忽略系统代理（推荐，一劳永逸）
+
+在 `OpenAICompatibleClient.__init__` 中加入 `trust_env=False`：
+
+```python
+import httpx
+
+self.client = OpenAI(
+    api_key=_get_api_key(provider),
+    base_url=PROVIDER_CONFIG[provider]["base_url"],
+    timeout=30.0,
+    http_client=httpx.Client(trust_env=False),
+)
+```
+
+方法二：启动服务前临时清除代理环境变量
+
+```bash
+unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY
+uvicorn main:app --reload --port 8000
+```
+
+方法三：在代理软件中将国内 API 域名加入直连规则
+
+```
+ark.cn-beijing.volces.com   # 火山方舟
+api.deepseek.com            # DeepSeek
+open.bigmodel.cn            # 智谱 GLM
+```
+
+国内服务本不需要走代理，直连规则既能解决问题，也能降低延迟。
+
 ## 模型价格参考
 
 | 模型 | 输入 | 输出 | 推荐阶段 |
