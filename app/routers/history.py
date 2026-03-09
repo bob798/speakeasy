@@ -1,0 +1,95 @@
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
+
+from app.database import get_db
+from app.models.db import Session, Message
+
+router = APIRouter()
+STALE = timedelta(hours=2)
+
+
+@router.get("/history/{user_id}")
+async def get_history(
+    user_id: str,
+    limit:   int = Query(default=20, ge=1, le=100),
+    offset:  int = Query(default=0,  ge=0),
+    db: AsyncSession = Depends(get_db)
+):
+    # 懒更新：超 2 小时的活跃 session 补齐 ended_at
+    stale_result = await db.execute(
+        select(Session)
+        .where(Session.user_id == user_id, Session.ended_at == None)
+        .options(selectinload(Session.messages))
+    )
+    now = datetime.utcnow()
+    for s in stale_result.scalars():
+        if s.messages:
+            last = max(m.created_at for m in s.messages)
+            if now - last > STALE:
+                s.ended_at = last
+    await db.commit()
+
+    total_result = await db.execute(
+        select(func.count()).select_from(Session).where(Session.user_id == user_id)
+    )
+    total = total_result.scalar()
+
+    rows_result = await db.execute(
+        select(Session)
+        .where(Session.user_id == user_id)
+        .options(selectinload(Session.messages))
+        .order_by(Session.created_at.desc())
+        .limit(limit).offset(offset)
+    )
+    rows = rows_result.scalars().all()
+
+    def preview(s):
+        first = next((m for m in s.messages if m.role == "user"), None)
+        if first:
+            t = first.content[:20]
+            return t + ("..." if len(first.content) > 20 else "")
+        return f"对话 · {s.created_at.strftime('%H:%M')}"
+
+    return {
+        "sessions": [
+            {
+                "id":         s.id,
+                "created_at": s.created_at.isoformat() + "Z",
+                "ended_at":   (s.ended_at.isoformat() + "Z") if s.ended_at else None,
+                "preview":    preview(s)
+            } for s in rows
+        ],
+        "total": total,
+        "limit": limit,
+        "offset": offset
+    }
+
+
+@router.get("/history/{session_id}/messages")
+async def get_session_messages(
+    session_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(Session)
+        .where(Session.id == session_id)
+        .options(selectinload(Session.messages))
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        return {"session_id": session_id, "messages": []}
+
+    return {
+        "session_id": session_id,
+        "messages": [
+            {
+                "id":         m.id,
+                "role":       m.role,
+                "content":    m.content,
+                "created_at": m.created_at.isoformat() + "Z"
+            } for m in session.messages
+        ]
+    }

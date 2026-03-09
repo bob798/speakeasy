@@ -1,5 +1,6 @@
 import os
 import time
+from typing import AsyncGenerator
 import httpx
 import anthropic
 from openai import OpenAI
@@ -68,6 +69,9 @@ class BaseModelClient:
     def chat(self, message: str, history: list[dict]) -> str:
         raise NotImplementedError
 
+    async def chat_stream(self, message: str, history: list[dict]) -> AsyncGenerator[str, None]:
+        raise NotImplementedError
+
     def generate_summary(self, history: list[dict]) -> str:
         raise NotImplementedError
 
@@ -108,6 +112,16 @@ class AnthropicClient(BaseModelClient):
             elapsed = time.time() - t0
             logger.error("Anthropic chat 失败 耗时=%.2fs error=%s", elapsed, e, exc_info=True)
             raise Exception(f"Anthropic API 调用失败：{e}")
+
+    async def chat_stream(self, message: str, history: list[dict]) -> AsyncGenerator[str, None]:
+        logger.info("调用 Anthropic chat_stream model=%s history_turns=%d", MODEL_NAME, len(history))
+        messages = history + [{"role": "user", "content": message}]
+        with self.client.messages.stream(
+            model=MODEL_NAME, max_tokens=MAX_TOKENS, system=SYSTEM_PROMPT,
+            messages=messages
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
 
     def generate_summary(self, history: list[dict]) -> str:
         logger.info("调用 Anthropic summary model=%s", MODEL_NAME)
@@ -166,6 +180,22 @@ class OpenAICompatibleClient(BaseModelClient):
             logger.error("%s chat 失败 耗时=%.2fs error=%s", self.provider, elapsed, e, exc_info=True)
             raise Exception(f"{self.provider} API 调用失败：{e}")
 
+    async def chat_stream(self, message: str, history: list[dict]) -> AsyncGenerator[str, None]:
+        logger.info("调用 %s chat_stream model=%s history_turns=%d", self.provider, MODEL_NAME, len(history))
+        messages = (
+            [{"role": "system", "content": SYSTEM_PROMPT}]
+            + history
+            + [{"role": "user", "content": message}]
+        )
+        resp = self.client.chat.completions.create(
+            model=MODEL_NAME, max_tokens=MAX_TOKENS, stream=True,
+            messages=messages
+        )
+        for chunk in resp:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
+
     def generate_summary(self, history: list[dict]) -> str:
         logger.info("调用 %s summary model=%s", self.provider, MODEL_NAME)
         t0 = time.time()
@@ -203,3 +233,7 @@ def get_client() -> BaseModelClient:
 class ClaudeService:
     def __new__(cls):
         return get_client()
+
+
+# V0.2a 别名
+get_model_client = get_client

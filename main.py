@@ -1,25 +1,43 @@
-import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from app.config import ALLOWED_ORIGINS, MODEL_NAME
-from app.api.chat import router
-from app.logger import get_logger
 
-logger = get_logger("main")
-app = FastAPI(title="Speakeasy API")
+from app.database import create_tables
+from app.routers import chat, stt, tts, history, debug
 
 
-@app.on_event("startup")
-async def _on_startup():
-    provider = os.getenv("MODEL_PROVIDER", "anthropic")
-    logger.info("服务启动 provider=%s model=%s", provider, MODEL_NAME)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await create_tables()
+    yield
+
+
+app = FastAPI(title="Speakeasy API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[ALLOWED_ORIGINS],
-    allow_credentials=True,
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(router)
+app.include_router(chat.router)
+app.include_router(stt.router)
+app.include_router(tts.router)
+app.include_router(history.router)
+app.include_router(debug.router)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.get("/.well-known/appspecific/com.chrome.devtools.json")
+async def devtools_noop():
+    from fastapi.responses import Response
+    return Response(status_code=204)
+
+
+@app.get("/")
+async def root():
+    return FileResponse("static/index.html")
