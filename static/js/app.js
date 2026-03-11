@@ -322,6 +322,7 @@ function onNewChat() {
   _roundCount = 0;
   updateRoundCount(0);
   clearChatArea();
+  resetEndBtn();
   setMode('chat');
   document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
   setCurrentSessionActive(true);
@@ -349,6 +350,8 @@ function returnToCurrentSession() {
   _roundCount = chatHistory.filter(m => m.role === 'assistant').length;
   updateRoundCount(_roundCount);
 
+  hideReviewBtn();
+  resetEndBtn();
   setMode('chat');
   document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
   setCurrentSessionActive(true);
@@ -411,7 +414,46 @@ async function onHistoryClick(sid) {
           ← 回到当前对话
         </button>`;
     }
+
+    // 检查是否有复盘数据，有则在右上角渲染「查看复盘」按钮
+    try {
+      const reviewRes = await fetch(`${CONFIG.REVIEW}/${sid}`);
+      if (reviewRes.ok) {
+        showReviewBtn(sid);
+      } else {
+        hideReviewBtn();
+      }
+    } catch {
+      hideReviewBtn();
+    }
   } catch (e) {
     showToast('加载历史失败', 'error');
   }
+}
+
+function showReviewBtn(sid) {
+  hideReviewBtn(); // 避免重复
+  const btn = document.createElement('button');
+  btn.id = 'review-btn';
+  btn.textContent = '查看复盘';
+  btn.style.cssText = 'font-size:12px;font-weight:500;color:var(--accent);background:var(--elevated);border:1px solid var(--accent);border-radius:var(--r-full);padding:4px 13px;transition:all 0.15s;';
+  btn.onclick = () => {
+    window.location.href = `/review?session_id=${sid}&user_id=${typeof userId !== 'undefined' ? userId : ''}`;
+  };
+  document.getElementById('header-right').prepend(btn);
+}
+
+function hideReviewBtn() {
+  document.getElementById('review-btn')?.remove();
+}
+
+function resetEndBtn() {
+  const btn = document.getElementById('end-btn');
+  if (!btn) return;
+  btn.textContent = '结束对话';
+  btn.disabled = false;
+  btn.style.color = '';
+  btn.style.borderColor = '';
+  btn.onclick = null;  // 恢复 HTML onclick="onEndChat()"
+  btn.setAttribute('onclick', 'onEndChat()');
 }

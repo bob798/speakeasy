@@ -78,9 +78,11 @@ class SessionReview(Base):
 - 形式：朋友的总结便签，不是老师的红笔批注
 - 错误：用"更地道的说法"引导，不用"你错了"定性
 - 亮点：独立展示，不被错误板块淹没
-- 降级：LLM 失败时展示今日一句
+- 降级：LLM 失败时展示今日一句  **SPEC-07**
 
 ### 3.2 触发时机
+
+> **SPEC-01**：结束对话触发 · **SPEC-02**：超过10轮轻提示 · **SPEC-03**：历史记录复盘入口
 
 - 用户点击「结束对话」→ 自动触发
 - 对话超过 10 轮 → 顶部轻提示（可忽略）
@@ -88,7 +90,7 @@ class SessionReview(Base):
 
 ### 3.3 复盘卡片三层结构
 
-**第一层：摘要卡（默认展示，异步加载）**
+**SPEC-04**  第一层：摘要卡（默认展示，异步加载）
 ```
 加载中：⏳ Alex 正在整理今天的对话...
 
@@ -103,7 +105,7 @@ class SessionReview(Base):
   {今日一句内容}
 ```
 
-**第二层：错误详情（点击「查看详情」展开）**
+**SPEC-05**  第二层：错误详情（点击「查看详情」展开）
 ```
 错误类型：出现 N 次
 你说：   原句
@@ -115,7 +117,7 @@ class SessionReview(Base):
 👍 → FSRS Rating.Good
 🔁 → FSRS Rating.Again
 
-**第三层：亮点时刻（独立板块）**
+**SPEC-06**  第三层：亮点时刻（独立板块）
 ```
 ✨ 今天用得很地道
 你说：   原句
@@ -128,7 +130,7 @@ class SessionReview(Base):
 
 ---
 
-## 四、LLM 分析 Prompt
+## 四、LLM 分析 Prompt  <!-- SPEC-08 -->
 
 文件位置：`app/prompts/review.py`
 
@@ -184,7 +186,7 @@ REVIEW_PROMPT = """
 pip install fsrs
 ```
 
-### 5.2 两个入口优先级
+### 5.2 两个入口优先级  <!-- SPEC-09：用户显式评分入口 -->
 
 ```
 入口 1（高优先级）：用户在复盘页显式操作
@@ -198,7 +200,7 @@ pip install fsrs
   如 is_user_rated=true，则跳过本次 session 的入口 2
 ```
 
-### 5.3 注入条件
+### 5.3 注入条件  <!-- SPEC-10：记忆注入 Alex system prompt -->
 
 ```python
 # due <= now 的 active card 才注入
@@ -225,6 +227,8 @@ async def build_system_prompt(user_id: str) -> str:
 ---
 
 ## 六、API 接口
+
+<!-- 接口覆盖：SPEC-01~SPEC-10，以下接口为实现手段，非独立功能点 -->
 
 | 接口 | 方法 | 说明 |
 |---|---|---|

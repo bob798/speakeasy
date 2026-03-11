@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>对话复盘 - Speakeasy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+button { cursor: pointer; font-family: inherit; border: none; background: none; }
+
+:root {
+  --bg:        #ede8de;
+  --surface:   #e4ddd2;
+  --elevated:  #ffffff;
+  --overlay:   #f7f4ef;
+  --border:       rgba(0,0,0,0.08);
+  --border-hover: rgba(0,0,0,0.16);
+  --accent:      #3d6b4f;
+  --accent-light:#4e8963;
+  --accent-dim:  rgba(61,107,79,0.1);
+  --accent-glow: rgba(61,107,79,0.2);
+  --text-1: #2c2820;
+  --text-2: #7a7060;
+  --text-3: #b5aa9a;
+  --r-sm:   8px;
+  --r-md:   14px;
+  --r-lg:   20px;
+  --r-full: 9999px;
+}
+
+html, body {
+  min-height: 100%;
+  background: var(--bg);
+  font-family: 'Sora', sans-serif;
+  font-size: 14px;
+  color: var(--text-1);
+  -webkit-font-smoothing: antialiased;
+}
+
+.page {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 32px 20px 60px;
+}
+
+/* Back link */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+  margin-bottom: 28px;
+  text-decoration: none;
+}
+.back-link:hover { color: var(--accent); }
+
+/* Loading */
+.loading-state {
+  text-align: center;
+  padding: 80px 0;
+  font-size: 15px;
+  color: var(--text-2);
+}
+
+/* Fallback / tip card */
+.tip-card {
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 32px;
+  text-align: center;
+}
+.tip-card h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin-bottom: 16px;
+}
+.tip-text {
+  font-size: 14px;
+  color: var(--text-2);
+  line-height: 1.7;
+}
+
+/* Summary card */
+.summary-card {
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 24px;
+  margin-bottom: 16px;
+}
+.summary-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 12px;
+}
+.summary-stats {
+  font-size: 15px;
+  color: var(--text-1);
+  line-height: 1.8;
+}
+.summary-stats .stat-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+/* Errors section */
+.section {
+  margin-bottom: 16px;
+}
+.section-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0 4px;
+  margin-bottom: 8px;
+}
+
+.error-card {
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.error-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.error-header:hover { background: var(--overlay); }
+.error-type-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+}
+.error-count-badge {
+  font-size: 11px;
+  color: var(--text-3);
+  background: var(--overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  padding: 2px 10px;
+}
+.detail-btn {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 500;
+  padding: 4px 12px;
+  border: 1px solid var(--accent-glow);
+  border-radius: var(--r-full);
+  background: var(--accent-dim);
+  transition: all 0.12s;
+}
+.detail-btn:hover { background: rgba(61,107,79,0.15); }
+
+.error-detail {
+  display: none;
+  padding: 0 18px 18px;
+  border-top: 1px solid var(--border);
+}
+.error-detail.open { display: block; }
+
+.detail-row {
+  margin-top: 14px;
+}
+.detail-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+.detail-text-wrong {
+  font-size: 14px;
+  color: #c0392b;
+  line-height: 1.6;
+}
+.detail-text-right {
+  font-size: 14px;
+  color: var(--accent);
+  font-weight: 500;
+  line-height: 1.6;
+}
+.detail-text-explain {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.7;
+}
+
+.rate-btns {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+.rate-btn {
+  flex: 1;
+  padding: 10px 0;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s;
+  border: 1px solid var(--border);
+  background: var(--overlay);
+  color: var(--text-1);
+}
+.rate-btn:hover { border-color: var(--border-hover); background: var(--elevated); }
+.rate-btn.good {
+  background: var(--accent-dim);
+  border-color: var(--accent-glow);
+  color: var(--accent);
+}
+.rate-btn.good:hover { background: rgba(61,107,79,0.18); }
+.rate-btn.done {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Highlights section */
+.highlight-card {
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 16px 18px;
+  margin-bottom: 10px;
+}
+.highlight-original {
+  font-size: 14px;
+  color: var(--text-1);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.highlight-praise {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.7;
+}
+
+@keyframes fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.fade-in { animation: fade-in 0.3s ease; }
+</style>
+</head>
+<body>
+<div class="page">
+  <a href="/" class="back-link">← 返回对话</a>
+
+  <div id="content">
+    <div class="loading-state">⏳ Alex 正在整理今天的对话...</div>
+  </div>
+</div>
+
+<script>
+(async function() {
+  const params    = new URLSearchParams(location.search);
+  const sessionId = params.get('session_id') || '';
+  const userId    = params.get('user_id') || '';
+
+  const content = document.getElementById('content');
+
+  async function getDailyTip() {
+    try {
+      const r = await fetch('/chat/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId || 'anon', session_id: 'tip_' + Date.now(), history: [] })
+      });
+      const data = await r.json();
+      return data.type === 'tip' ? data.tip : '今天练习得很棒，继续保持！';
+    } catch { return '继续练习，每次对话都是进步！'; }
+  }
+
+  async function loadReview() {
+    if (!sessionId) {
+      showFallback(await getDailyTip());
+      return;
+    }
+
+    try {
+      const r = await fetch('/review/' + sessionId);
+      if (r.status === 404) {
+        showFallback(await getDailyTip());
+        return;
+      }
+      const data = await r.json();
+      renderReview(data);
+    } catch {
+      showFallback('继续练习，每次对话都是进步！');
+    }
+  }
+
+  function showFallback(tip) {
+    content.innerHTML = `
+      <div class="tip-card fade-in">
+        <h2>✨ 今日一句</h2>
+        <div class="tip-text">${esc(tip)}</div>
+      </div>`;
+  }
+
+  function renderReview(data) {
+    const errors     = data.errors     || [];
+    const highlights = data.highlights || [];
+    const stats      = data.stats      || {};
+    const turns      = stats.turns     || 0;
+    const mins       = Math.round((stats.duration_seconds || 0) / 60);
+
+    const html = `
+      <div class="summary-card fade-in">
+        <div class="summary-title">今天的对话</div>
+        <div class="summary-stats">
+          <div class="stat-line">🎯 今天聊了 ${turns} 轮${mins > 0 ? '，约 ' + mins + ' 分钟' : ''}</div>
+          <div class="stat-line">📌 Alex 注意到 ${errors.length} 个可以改进的地方</div>
+          <div class="stat-line">✨ ${highlights.length} 个你用得很地道的表达</div>
+        </div>
+      </div>
+
+      <div class="section" data-section="errors">
+        <div class="section-header">可以改进的地方</div>
+        ${errors.length === 0 ? '<div style="color:var(--text-3);font-size:13px;padding:8px 4px">没有发现明显的语法错误，继续保持！</div>' : ''}
+        ${errors.map((e, i) => renderErrorCard(e, i)).join('')}
+      </div>
+
+      <div class="section" data-section="highlights">
+        <div class="section-header">今天用得很地道</div>
+        ${highlights.length === 0 ? '<div style="color:var(--text-3);font-size:13px;padding:8px 4px">继续多和 Alex 聊，精彩表达会越来越多！</div>' : ''}
+        ${highlights.map(h => `
+          <div class="highlight-card">
+            <div class="highlight-original">"${esc(h.original)}"</div>
+            <div class="highlight-praise">👏 ${esc(h.praise_zh)}</div>
+          </div>`).join('')}
+      </div>`;
+
+    content.innerHTML = html;
+
+    // Bind expand buttons
+    content.querySelectorAll('.error-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const detail = header.nextElementSibling;
+        const btn    = header.querySelector('.detail-btn');
+        const open   = detail.classList.toggle('open');
+        if (btn) btn.textContent = open ? '收起' : '查看详情';
+      });
+    });
+
+    // Bind rate buttons
+    content.querySelectorAll('.rate-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const cardKey = btn.dataset.cardKey;
+        const rating  = btn.dataset.rating;
+        try {
+          const r = await fetch('/review/' + sessionId + '/rate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId, card_key: cardKey, rating })
+          });
+          if (r.ok) {
+            const data = await r.json();
+            // Mark both buttons as done
+            const parent = btn.closest('.rate-btns');
+            parent.querySelectorAll('.rate-btn').forEach(b => b.classList.add('done'));
+            btn.textContent = btn.dataset.rating === 'good' ? '✓ 已记住' : '✓ 稍后再来';
+          }
+        } catch {}
+      });
+    });
+  }
+
+  function renderErrorCard(err, idx) {
+    return `
+      <div class="error-card">
+        <div class="error-header">
+          <span class="error-type-label">${esc(err.content || err.key || '语法错误')}</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            ${err.count ? `<span class="error-count-badge">出现 ${err.count} 次</span>` : ''}
+            <button class="detail-btn">查看详情</button>
+          </div>
+        </div>
+        <div class="error-detail">
+          <div class="detail-row">
+            <div class="detail-label">你说</div>
+            <div class="detail-text-wrong">${esc(err.original || '')}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">更地道</div>
+            <div class="detail-text-right">${esc(err.corrected || '')}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">为什么？</div>
+            <div class="detail-text-explain">${esc(err.explanation_zh || '')}</div>
+          </div>
+          <div class="rate-btns">
+            <button class="rate-btn good"
+              data-card-key="${esc(err.key)}"
+              data-rating="good">
+              👍 我记住了
+            </button>
+            <button class="rate-btn"
+              data-card-key="${esc(err.key)}"
+              data-rating="again">
+              🔁 再给我讲一遍
+            </button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  await loadReview();
+})();
+</script>
+</body>
+</html>

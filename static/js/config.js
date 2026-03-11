@@ -5,5 +5,6 @@ const CONFIG = {
   TTS_ENDPOINT: '/tts',
   CHAT_STREAM:  '/chat/stream',
   HISTORY:      '/history',
+  REVIEW:       '/review',
   DEBUG:        '/debug/status',
 };

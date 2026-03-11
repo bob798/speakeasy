@@ -10,3 +10,4 @@ asyncpg==0.30.0
 groq
 edge-tts
 python-multipart
+fsrs

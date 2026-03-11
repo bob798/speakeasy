@@ -1,0 +1,170 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.9.6, pytest-8.4.2, pluggy-1.6.0 -- /Users/bob/workspace/speakeasy/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/bob/workspace/speakeasy
+plugins: anyio-4.12.1, asyncio-1.2.0, base-url-2.1.0, playwright-0.7.1
+asyncio: mode=strict, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 35 items
+
+tests/test_step1.py::test_fsrs_importable PASSED                         [  2%]
+tests/test_step1.py::test_tables_exist PASSED                            [  5%]
+tests/test_step1.py::test_grammar_cards_schema PASSED                    [  8%]
+tests/test_step1.py::test_session_reviews_schema PASSED                  [ 11%]
+tests/test_step1.py::test_grammar_card_crud PASSED                       [ 14%]
+tests/test_step2.py::test_first_occurrence_is_pending FAILED             [ 17%]
+tests/test_step2.py::test_second_occurrence_becomes_active FAILED        [ 20%]
+tests/test_step2.py::test_third_occurrence_increments_frequency FAILED   [ 22%]
+tests/test_step2.py::test_get_injectable_cards_due FAILED                [ 25%]
+tests/test_step2.py::test_get_injectable_cards_not_due FAILED            [ 28%]
+tests/test_step2.py::test_build_system_prompt_with_cards FAILED          [ 31%]
+tests/test_step2.py::test_build_system_prompt_without_cards FAILED       [ 34%]
+tests/test_step3.py::test_returns_errors_for_wrong_history FAILED        [ 37%]
+tests/test_step3.py::test_returns_empty_errors_for_correct_history FAILED [ 40%]
+tests/test_step3.py::test_returns_highlights_for_idiomatic FAILED        [ 42%]
+tests/test_step3.py::test_returns_none_on_llm_failure FAILED             [ 45%]
+tests/test_step3.py::test_returns_none_for_short_history FAILED          [ 48%]
+tests/test_step4.py::test_summary_returns_review PASSED                  [ 51%]
+tests/test_step4.py::test_summary_fallback_on_llm_failure PASSED         [ 54%]
+tests/test_step4.py::test_summary_fallback_on_short_history PASSED       [ 57%]
+tests/test_step4.py::test_summary_creates_grammar_cards PASSED           [ 60%]
+tests/test_step5.py::test_chat_injects_memory_in_system_prompt PASSED    [ 62%]
+tests/test_step5.py::test_chat_no_injection_without_due_cards PASSED     [ 65%]
+tests/test_step6.py::test_get_review_success PASSED                      [ 68%]
+tests/test_step6.py::test_get_review_not_found PASSED                    [ 71%]
+tests/test_step6.py::test_rate_good_updates_fsrs PASSED                  [ 74%]
+tests/test_step6.py::test_rate_again_sooner_than_good PASSED             [ 77%]
+tests/test_step6.py::test_is_user_rated_set_after_rating PASSED          [ 80%]
+tests/test_step7_e2e.py::test_review_card_renders[chromium] PASSED       [ 82%]
+tests/test_step7_e2e.py::test_error_detail_expandable[chromium] PASSED   [ 85%]
+tests/test_step7_e2e.py::test_good_button_calls_api[chromium] PASSED     [ 88%]
+tests/test_step7_e2e.py::test_highlights_separate_from_errors[chromium] PASSED [ 91%]
+tests/test_step7_e2e.py::test_tip_fallback_renders[chromium] PASSED      [ 94%]
+tests/test_step8_e2e.py::test_action_bar_visible_on_hover[chromium] PASSED [ 97%]
+tests/test_step8_e2e.py::test_explain_button_sends_message[chromium] PASSED [100%]/Users/bob/workspace/speakeasy/venv/lib/python3.9/site-packages/_pytest/unraisableexception.py:33: RuntimeWarning: coroutine 'analyze_conversation' was never awaited
+  gc.collect()
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+
+
+=================================== FAILURES ===================================
+_______________________ test_first_occurrence_is_pending _______________________
+tests/test_step2.py:46: in test_first_occurrence_is_pending
+    run(update_grammar_cards(TEST_USER, [ERROR_GO_WENT]))
+tests/test_step2.py:31: in run
+    return asyncio.get_event_loop().run_until_complete(coro)
+/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/asyncio/events.py:642: in get_event_loop
+    raise RuntimeError('There is no current event loop in thread %r.'
+E   RuntimeError: There is no current event loop in thread 'MainThread'.
+____________________ test_second_occurrence_becomes_active _____________________
+tests/test_step2.py:55: in test_second_occurrence_becomes_active
+    run(update_grammar_cards(TEST_USER, [ERROR_GO_WENT]))
+tests/test_step2.py:31: in run
+    return asyncio.get_event_loop().run_until_complete(coro)
+/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/asyncio/events.py:642: in get_event_loop
+    raise RuntimeError('There is no current event loop in thread %r.'
+E   RuntimeError: There is no current event loop in thread 'MainThread'.
+__________________ test_third_occurrence_increments_frequency __________________
+tests/test_step2.py:67: in test_third_occurrence_increments_frequency
+    run(update_grammar_cards(TEST_USER, [ERROR_GO_WENT]))
+tests/test_step2.py:31: in run
+    return asyncio.get_event_loop().run_until_complete(coro)
+/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/asyncio/events.py:642: in get_event_loop
+    raise RuntimeError('There is no current event loop in thread %r.'
+E   RuntimeError: There is no current event loop in thread 'MainThread'.
+________________________ test_get_injectable_cards_due _________________________
+tests/test_step2.py:93: in test_get_injectable_cards_due
+    result = run(get_injectable_cards(TEST_USER))
+tests/test_step2.py:31: in run
+    return asyncio.get_event_loop().run_until_complete(coro)
+/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/asyncio/events.py:642: in get_event_loop
+    raise RuntimeError('There is no current event loop in thread %r.'
+E   RuntimeError: There is no current event loop in thread 'MainThread'.
+______________________ test_get_injectable_cards_not_due _______________________
+tests/test_step2.py:112: in test_get_injectable_cards_not_due
+    result = run(get_injectable_cards(TEST_USER))
+tests/test_step2.py:31: in run
+    return asyncio.get_event_loop().run_until_complete(coro)
+/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/asyncio/events.py:642: in get_event_loop
+    raise RuntimeError('There is no current event loop in thread %r.'
+E   RuntimeError: There is no current event loop in thread 'MainThread'.
+_____________________ test_build_system_prompt_with_cards ______________________
+tests/test_step2.py:132: in test_build_system_prompt_with_cards
+    prompt = run(build_system_prompt(TEST_USER))
+tests/test_step2.py:31: in run
+    return asyncio.get_event_loop().run_until_complete(coro)
+/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/asyncio/events.py:642: in get_event_loop
+    raise RuntimeError('There is no current event loop in thread %r.'
+E   RuntimeError: There is no current event loop in thread 'MainThread'.
+____________________ test_build_system_prompt_without_cards ____________________
+tests/test_step2.py:138: in test_build_system_prompt_without_cards
+    prompt = run(build_system_prompt(TEST_USER))
+tests/test_step2.py:31: in run
+    return asyncio.get_event_loop().run_until_complete(coro)
+/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/asyncio/events.py:642: in get_event_loop
+    raise RuntimeError('There is no current event loop in thread %r.'
+E   RuntimeError: There is no current event loop in thread 'MainThread'.
+____________________ test_returns_errors_for_wrong_history _____________________
+tests/test_step3.py:35: in test_returns_errors_for_wrong_history
+    result = run(analyze_conversation(TEST_SESSION, TEST_USER, HISTORY_WITH_ERROR))
+tests/test_step3.py:12: in run
+    return asyncio.get_event_loop().run_until_complete(coro)
+/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/asyncio/events.py:642: in get_event_loop
+    raise RuntimeError('There is no current event loop in thread %r.'
+E   RuntimeError: There is no current event loop in thread 'MainThread'.
+________________ test_returns_empty_errors_for_correct_history _________________
+tests/test_step3.py:48: in test_returns_empty_errors_for_correct_history
+    result = run(analyze_conversation(TEST_SESSION + "_correct", TEST_USER, HISTORY_CORRECT))
+tests/test_step3.py:12: in run
+    return asyncio.get_event_loop().run_until_complete(coro)
+/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/asyncio/events.py:642: in get_event_loop
+    raise RuntimeError('There is no current event loop in thread %r.'
+E   RuntimeError: There is no current event loop in thread 'MainThread'.
+____________________ test_returns_highlights_for_idiomatic _____________________
+tests/test_step3.py:54: in test_returns_highlights_for_idiomatic
+    result = run(analyze_conversation(TEST_SESSION + "_idiomatic", TEST_USER, HISTORY_IDIOMATIC))
+tests/test_step3.py:12: in run
+    return asyncio.get_event_loop().run_until_complete(coro)
+/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/asyncio/events.py:642: in get_event_loop
+    raise RuntimeError('There is no current event loop in thread %r.'
+E   RuntimeError: There is no current event loop in thread 'MainThread'.
+_______________________ test_returns_none_on_llm_failure _______________________
+tests/test_step3.py:64: in test_returns_none_on_llm_failure
+    result = run(analyze_conversation(TEST_SESSION + "_fail", TEST_USER, HISTORY_WITH_ERROR))
+tests/test_step3.py:12: in run
+    return asyncio.get_event_loop().run_until_complete(coro)
+/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/asyncio/events.py:642: in get_event_loop
+    raise RuntimeError('There is no current event loop in thread %r.'
+E   RuntimeError: There is no current event loop in thread 'MainThread'.
+_____________________ test_returns_none_for_short_history ______________________
+tests/test_step3.py:70: in test_returns_none_for_short_history
+    result = run(analyze_conversation(TEST_SESSION + "_short", TEST_USER, short))
+tests/test_step3.py:12: in run
+    return asyncio.get_event_loop().run_until_complete(coro)
+/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/asyncio/events.py:642: in get_event_loop
+    raise RuntimeError('There is no current event loop in thread %r.'
+E   RuntimeError: There is no current event loop in thread 'MainThread'.
+=============================== warnings summary ===============================
+venv/lib/python3.9/site-packages/starlette/formparsers.py:12
+  /Users/bob/workspace/speakeasy/venv/lib/python3.9/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+tests/test_step4.py::test_summary_returns_review
+  /Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/abc.py:123: RuntimeWarning: coroutine 'analyze_conversation' was never awaited
+    return _abc_subclasscheck(cls, subclass)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_step2.py::test_first_occurrence_is_pending - RuntimeError: ...
+FAILED tests/test_step2.py::test_second_occurrence_becomes_active - RuntimeEr...
+FAILED tests/test_step2.py::test_third_occurrence_increments_frequency - Runt...
+FAILED tests/test_step2.py::test_get_injectable_cards_due - RuntimeError: The...
+FAILED tests/test_step2.py::test_get_injectable_cards_not_due - RuntimeError:...
+FAILED tests/test_step2.py::test_build_system_prompt_with_cards - RuntimeErro...
+FAILED tests/test_step2.py::test_build_system_prompt_without_cards - RuntimeE...
+FAILED tests/test_step3.py::test_returns_errors_for_wrong_history - RuntimeEr...
+FAILED tests/test_step3.py::test_returns_empty_errors_for_correct_history - R...
+FAILED tests/test_step3.py::test_returns_highlights_for_idiomatic - RuntimeEr...
+FAILED tests/test_step3.py::test_returns_none_on_llm_failure - RuntimeError: ...
+FAILED tests/test_step3.py::test_returns_none_for_short_history - RuntimeErro...
+================== 12 failed, 23 passed, 2 warnings in 41.79s ==================

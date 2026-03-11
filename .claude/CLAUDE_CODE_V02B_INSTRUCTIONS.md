@@ -14,11 +14,18 @@
 5. 测试数据使用独立 user_id（如 `test_user_v02b`），每个测试后清理
 6. 不修改 V0.2a 已有测试
 7. mock 策略：只 mock 外部 LLM 调用，不 mock 内部服务
-8. 每个 Step 完成后终端打印 `✅ Step N 完成`
+8.  每个 Step 完成后：
+    · 终端打印 `✅ Step N 完成`
+    · 将 CLAUDE.md 中对应 Step 的 `⬜ 未开始` 更新为 `✅ 完成`
+    · 如涉及架构变更，同步更新 docs/architecture/c4-container.md
+9.  每完成 3 个 Step，重新阅读 SPEC_V02B.md 第一章（User Stories）和第二章（BDD Scenarios），
+    确认后续 Step 仍与 Story 对齐
+10. 全部 Step 完成后，汇报中包含"文档同步状态"一节（见汇报模板）
 
 ---
 
 ## Step 1：环境 + 数据表
+> SPEC 覆盖：TECH（纯技术 Step，创建 grammar_cards / session_reviews 数据表，是 SPEC-09 · SPEC-10 的基础设施）
 
 ### 实现
 
@@ -123,6 +130,7 @@ def test_grammar_card_crud():
 ---
 
 ## Step 2：FSRS 记忆服务
+> SPEC 覆盖：SPEC-09 · SPEC-10
 
 > 参考 SPEC_V02B.md 第五节
 
@@ -291,6 +299,7 @@ def test_build_system_prompt_without_cards():
 ---
 
 ## Step 3：对话分析服务
+> SPEC 覆盖：SPEC-08
 
 > 参考 SPEC_V02B.md 第四节
 
@@ -416,6 +425,7 @@ def test_returns_none_for_short_history():
 ---
 
 ## Step 4：升级 /chat/summary 接口
+> SPEC 覆盖：SPEC-01 · SPEC-07 · SPEC-08
 
 > 替换原有今日一句逻辑，今日一句作为降级保留
 
@@ -540,6 +550,7 @@ async def test_summary_creates_grammar_cards():
 ---
 
 ## Step 5：升级 /chat 接口注入记忆
+> SPEC 覆盖：SPEC-10
 
 ### 实现
 
@@ -655,6 +666,7 @@ async def test_chat_no_injection_without_due_cards():
 ---
 
 ## Step 6：复盘查询 + 评分接口
+> SPEC 覆盖：SPEC-03 · SPEC-09
 
 ### 实现
 
@@ -829,6 +841,7 @@ async def test_is_user_rated_set_after_rating():
 ---
 
 ## Step 7：复盘前端 UI
+> SPEC 覆盖：SPEC-01 · SPEC-02 · SPEC-04 · SPEC-05 · SPEC-06 · SPEC-07
 
 > 参考 SPEC_V02B.md 第三节
 
@@ -949,6 +962,7 @@ def test_tip_fallback_renders(page):
 ---
 
 ## Step 8：点击提问 UI
+> SPEC 覆盖：⚠️ 无对应 SPEC-XX（点击提问功能在版本目标中但未在 SPEC 中分配编号，建议 V0.3 补充 SPEC-11）
 
 > 参考 SPEC_V02B.md 第六节
 
@@ -1008,6 +1022,7 @@ def test_explain_button_sends_message(page):
 ---
 
 ## Step 9：全链路回归 + 汇报
+> SPEC 覆盖：TECH（全量回归验证 SPEC-01~SPEC-10 所有功能点）
 
 ### 执行
 

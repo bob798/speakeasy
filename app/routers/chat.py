@@ -1,5 +1,6 @@
 import json
 import uuid
+import asyncio
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -8,8 +9,10 @@ from sqlalchemy import select
 
 from app.database import get_db, AsyncSessionLocal
 from app.models.db import Session, Message
-from app.schemas.chat import ChatRequest, ChatResponse
-from app.services.model_client import get_model_client
+from app.schemas.chat import ChatRequest, ChatResponse, SummaryRequest
+import app.services.chat_service as chat_service
+from app.services.review_service import analyze_conversation
+from app.services.memory_service import update_grammar_cards, mark_errors_not_appeared, build_system_prompt
 from app.logger import get_logger
 
 router = APIRouter()
@@ -37,6 +40,17 @@ async def save_message(db: AsyncSession, session_id: str, role: str, content: st
     return msg
 
 
+async def get_daily_tip() -> str:
+    """降级场景：生成今日一句（调用 LLM 的 generate_summary 接口）"""
+    try:
+        client = chat_service.get_client()
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, lambda: client.generate_summary([]))
+    except Exception as e:
+        logger.error("get_daily_tip failed: %s", e)
+        return "Keep practicing — every conversation makes you better!"
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)):
     rid = _new_request_id()
@@ -47,9 +61,15 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)):
         await save_message(db, req.session_id, "user", req.message)
 
     try:
-        client = get_model_client()
+        system_prompt = await build_system_prompt(req.user_id or "")
+        client = chat_service.get_client()
         history = [msg.model_dump() for msg in req.history]
-        reply   = client.chat(req.message, history)
+        messages = (
+            [{"role": "system", "content": system_prompt}]
+            + history
+            + [{"role": "user", "content": req.message}]
+        )
+        reply = await client.complete(messages)
 
         if req.session_id:
             await save_message(db, req.session_id, "assistant", reply)
@@ -67,7 +87,7 @@ async def chat_stream(req: ChatRequest, db: AsyncSession = Depends(get_db)):
         await save_message(db, req.session_id, "user", req.message)
         await db.commit()  # release write lock before streaming starts
 
-    client     = get_model_client()
+    client     = chat_service.get_client()
     history    = [msg.model_dump() for msg in req.history]
     session_id = req.session_id
 
@@ -97,3 +117,24 @@ async def chat_stream(req: ChatRequest, db: AsyncSession = Depends(get_db)):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     )
+
+
+@router.post("/chat/summary")
+async def chat_summary(request: SummaryRequest):
+    logger.info("POST /chat/summary session=%s", request.session_id)
+    history = [msg.model_dump() for msg in request.history]
+
+    result = await analyze_conversation(
+        session_id=request.session_id,
+        user_id=request.user_id,
+        history=history
+    )
+
+    if result is not None:
+        appeared_keys = [e["key"] for e in result.get("errors", [])]
+        await update_grammar_cards(request.user_id, result.get("errors", []))
+        await mark_errors_not_appeared(request.user_id, appeared_keys)
+        return {"type": "review", **result}
+    else:
+        tip = await get_daily_tip()
+        return {"type": "tip", "tip": tip}

@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import create_tables
-from app.routers import chat, stt, tts, history, debug
+from app.routers import chat, stt, tts, history, debug, review
 
 
 @asynccontextmanager
@@ -28,6 +28,7 @@ app.include_router(stt.router)
 app.include_router(tts.router)
 app.include_router(history.router)
 app.include_router(debug.router)
+app.include_router(review.router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -41,3 +42,8 @@ async def devtools_noop():
 @app.get("/")
 async def root():
     return FileResponse("static/index.html")
+
+
+@app.get("/review")
+async def review_page():
+    return FileResponse("static/review.html")

@@ -36,7 +36,24 @@
       "Bash(python3 -m playwright install chromium 2>&1 | tail -5)",
       "Bash(python3 /tmp/diag.py)",
       "Bash(pkill -f \"uvicorn main:app\" 2>/dev/null; echo \"stopped\")",
-      "Bash(curl -s -X POST http://localhost:8000/tts \\\\\n  -H 'Content-Type: application/json' \\\\\n  -d '{\"text\":\"Hello, this is a test.\"}' \\\\\n  -o /tmp/tts_test.mp3 -w \"%{http_code} size=%{size_download}\")"
+      "Bash(curl -s -X POST http://localhost:8000/tts \\\\\n  -H 'Content-Type: application/json' \\\\\n  -d '{\"text\":\"Hello, this is a test.\"}' \\\\\n  -o /tmp/tts_test.mp3 -w \"%{http_code} size=%{size_download}\")",
+      "Bash(ls /Users/bob/workspace/speakeasy/*.py 2>/dev/null; ls /Users/bob/workspace/speakeasy/tests/ 2>/dev/null)",
+      "Bash(source venv/bin/activate && pip install fsrs -q && echo \"fsrs installed ok\")",
+      "Bash(source venv/bin/activate && pytest tests/test_step1.py -v 2>&1)",
+      "Bash(source venv/bin/activate && python -m pytest tests/test_step1.py -v 2>&1)",
+      "Bash(source venv/bin/activate && pip install pytest pytest-asyncio -q && python -m pytest tests/test_step1.py -v 2>&1)",
+      "Bash(source venv/bin/activate && python -m pytest tests/test_step2.py -v 2>&1)",
+      "Bash(source venv/bin/activate && python -m pytest tests/test_step3.py -v 2>&1)",
+      "Bash(source venv/bin/activate && python -m pytest tests/test_step4.py -v 2>&1)",
+      "Bash(source venv/bin/activate && python -c \"import httpx; print\\(httpx.__version__\\)\")",
+      "Bash(source venv/bin/activate && python -m pytest tests/test_step5.py -v 2>&1)",
+      "Bash(source venv/bin/activate && python -m pytest tests/test_step6.py -v 2>&1)",
+      "Bash(source venv/bin/activate && pip install playwright pytest-playwright -q 2>&1 | tail -3)",
+      "Bash(source venv/bin/activate && python -m playwright install chromium 2>&1 | tail -3)",
+      "Bash(source venv/bin/activate && python -m pytest tests/test_step7_e2e.py -v 2>&1)",
+      "Bash(source venv/bin/activate && python -m pytest tests/test_step8_e2e.py -v 2>&1)",
+      "Bash(source venv/bin/activate && python -m pytest tests/ -v --tb=short 2>&1 | tee test_report.txt)",
+      "Bash(source venv/bin/activate && python -m pytest tests/ -v --tb=short 2>&1 | tail -30)"
     ]
   }
 }

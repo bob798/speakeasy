@@ -689,6 +689,28 @@ body {
 }
 #interim-label.show { opacity: 1; }
 
+/* ── Action Bar (below AI bubbles) ── */
+.action-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  margin-left: 2px;
+  opacity: 0.3;
+  transition: opacity 0.15s;
+}
+.bubble-row.ai:hover .action-bar { opacity: 1; }
+.action-btn {
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  padding: 3px 10px;
+  transition: all 0.12s;
+}
+.action-btn:hover { border-color: var(--border-hover); color: var(--text-1); }
+
 /* ── Input hint ── */
 .input-hint {
   text-align: center;
@@ -743,8 +765,9 @@ body {
         </div>
       </div>
     </div>
-    <div class="header-right">
+    <div class="header-right" id="header-right">
       <span class="round-count" id="round-count">0 轮对话</span>
+      <button id="end-btn" onclick="onEndChat()" style="font-size:12px;font-weight:500;color:var(--text-2);background:var(--elevated);border:1px solid var(--border);border-radius:var(--r-full);padding:4px 13px;transition:all 0.15s;" title="结束对话并查看复盘">结束对话</button>
       <div class="autoplay-wrap">
         <span class="autoplay-label">自动朗读</span>
         <button id="autoplay-btn" class="toggle" role="switch" aria-checked="false">
@@ -816,12 +839,13 @@ body {
     <div class="input-wrap">
       <textarea
         id="input-box"
+        data-testid="chat-input"
         rows="1"
         placeholder="Type in English… or mix Chinese, it's totally fine"
         onkeydown="handleKey(event)"
         oninput="autoResize(this)"
       ></textarea>
-      <button class="send-btn" onclick="onSend()" title="发送 (Enter)">
+      <button class="send-btn" data-testid="send-button" onclick="onSend()" title="发送 (Enter)">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="19" x2="12" y2="5"/>
           <polyline points="5 12 12 5 19 12"/>
@@ -869,18 +893,23 @@ function appendBubble(role, content, streaming = false) {
   row.id = id;
 
   if (role === 'ai' && !content) {
-    row.innerHTML = `<div class="bubble ai"><div class="loading-dots"><span></span><span></span><span></span></div></div>`;
+    row.innerHTML = `<div class="bubble ai" data-loading="true"><div class="loading-dots"><span></span><span></span><span></span></div></div>`;
   } else if (role === 'ai') {
     row.innerHTML = `
-      <div class="bubble ai ${streaming ? 'streaming' : ''}">
-        <span class="bubble-text">${escHtml(content)}</span>
-        <button class="tts-btn" title="朗读">
-          <svg class="tts-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-          </svg>
-          <div class="wave-bars"><span></span><span></span><span></span></div>
-        </button>
+      <div style="display:flex;flex-direction:column;align-items:flex-start;max-width:70%">
+        <div class="bubble ai ${streaming ? 'streaming' : ''}" data-testid="ai-bubble">
+          <span class="bubble-text">${escHtml(content)}</span>
+          <button class="tts-btn" title="朗读">
+            <svg class="tts-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+            </svg>
+            <div class="wave-bars"><span></span><span></span><span></span></div>
+          </button>
+        </div>
+        <div class="action-bar" data-testid="action-bar">
+          <button class="action-btn" data-testid="explain-button" onclick="onExplain()">💬 解释一下</button>
+        </div>
       </div>`;
   } else {
     row.innerHTML = `<div class="bubble user"><span class="bubble-text">${escHtml(content)}</span></div>`;
@@ -898,7 +927,9 @@ function updateBubble(id, content, streaming = false) {
   let textEl = bubble.querySelector('.bubble-text');
 
   if (!textEl) {
-    // 替换 loading dots
+    // 替换 loading dots，并补充 action-bar（如果还没有）
+    bubble.removeAttribute('data-loading');
+    bubble.setAttribute('data-testid', 'ai-bubble');
     bubble.innerHTML = `
       <span class="bubble-text">${escHtml(content)}</span>
       <button class="tts-btn" title="朗读">
@@ -909,6 +940,15 @@ function updateBubble(id, content, streaming = false) {
         <div class="wave-bars"><span></span><span></span><span></span></div>
       </button>`;
     textEl = bubble.querySelector('.bubble-text');
+    // Add action-bar if not already present (for loading-dots → content transition)
+    const parent = bubble.parentElement;
+    if (parent && !parent.querySelector('.action-bar')) {
+      const actionBar = document.createElement('div');
+      actionBar.className = 'action-bar';
+      actionBar.setAttribute('data-testid', 'action-bar');
+      actionBar.innerHTML = `<button class="action-btn" data-testid="explain-button" onclick="onExplain()">💬 解释一下</button>`;
+      parent.appendChild(actionBar);
+    }
   } else {
     textEl.textContent = content;
   }
@@ -1133,6 +1173,56 @@ function stopCountdown() {
 }
 </script>
 
+<script>
+function onExplain() {
+  const msg = "Could you explain what you just said in simpler words?";
+  if (typeof sendMessage === 'function') {
+    sendMessage(msg);
+  }
+}
+
+async function onEndChat() {
+  const sid = typeof sessionId !== 'undefined' ? sessionId : '';
+  const uid = typeof userId !== 'undefined' ? userId : '';
+  const reviewUrl = `/review?session_id=${sid}&user_id=${uid}`;
+
+  const endBtn = document.getElementById('end-btn');
+
+  // 不够历史直接跳复盘页
+  if (typeof chatHistory === 'undefined' || chatHistory.length < 2) {
+    window.location.href = reviewUrl;
+    return;
+  }
+
+  if (endBtn) { endBtn.disabled = true; endBtn.textContent = '分析中...'; }
+
+  try {
+    await fetch('/chat/summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id:    uid,
+        session_id: sid,
+        history:    typeof chatHistory !== 'undefined' ? chatHistory : [],
+      })
+    });
+  } catch {
+    // 即使分析失败也继续，让复盘页自行处理
+  }
+
+  // 锁住输入区
+  if (typeof setMode === 'function') setMode('readonly');
+
+  // 把「结束对话」替换为「查看复盘」按钮
+  if (endBtn) {
+    endBtn.textContent = '查看复盘';
+    endBtn.disabled = false;
+    endBtn.style.color = 'var(--accent)';
+    endBtn.style.borderColor = 'var(--accent)';
+    endBtn.onclick = () => { window.location.href = reviewUrl; };
+  }
+}
+</script>
 <script src="/static/js/config.js?v=6"></script>
 <script src="/static/js/utils.js?v=6"></script>
 <script src="/static/js/tts-provider.js?v=6"></script>
