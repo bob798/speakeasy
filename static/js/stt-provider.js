@@ -84,9 +84,10 @@ class STTProvider {
 class ServerSTTProvider extends STTProvider {
   constructor() {
     super();
-    this.silenceThresholdDb = -45;
-    this.silenceDurationMs  = 2000;
-    this.absTimeout         = 30000;
+    this.silenceThresholdDb = -35;    // 从 -45 收紧：过滤背景噪音，避免 absTimeout 兜底
+    this.silenceDurationMs  = 2000;   // SPEC: 停顿 2 秒自动发送
+    this.absTimeout         = 12000;  // 从 30s 缩短：最差情况 12s 兜底，消除"1分钟"现象
+    this.countdownMs        = 3000;   // 倒计时时长，Hands Free 模式设为 0（跳过倒计时）
   }
 
   isSupported() {
@@ -144,9 +145,9 @@ class ServerSTTProvider extends STTProvider {
           silenceThresholdDb: this.silenceThresholdDb,
           silenceDurationMs:  this.silenceDurationMs,
           onSilence: () => {
-            // 静音 2 秒 → 启动 3 秒倒计时，倒计时结束自动停止
-            if (typeof startCountdown === 'function') {
-              startCountdown(3000, () => this.stop());
+            // 静音 2 秒后：Hands Free 直接停止（countdownMs=0），Push-to-talk 显示倒计时
+            if (this.countdownMs > 0 && typeof startCountdown === 'function') {
+              startCountdown(this.countdownMs, () => this.stop());
             } else {
               this.stop();
             }

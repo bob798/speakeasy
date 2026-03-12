@@ -66,6 +66,16 @@ class SessionReview(Base):
     created_at    = Column(DateTime, default=datetime.utcnow)
 
 
+class UserSettings(Base):
+    __tablename__ = "user_settings"
+
+    user_id    = Column(String, primary_key=True)
+    voice      = Column(String, nullable=False, default="warm")
+    speed      = Column(String, nullable=False, default="normal")
+    activation = Column(String, nullable=False, default="push_to_talk")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 # Sync engine for ORM operations (tests, memory_service, review_service)
 engine = create_engine(
     "sqlite:///./speakeasy.db",

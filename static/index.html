@@ -745,6 +745,26 @@ body {
 .toast.error   { border-color: rgba(192,57,43,0.3); color: var(--rec); }
 .toast.success { border-color: rgba(61,107,79,0.3); color: var(--accent); }
 .toast.info    { border-color: rgba(61,107,79,0.2); color: var(--text-2); }
+/* ── Voice Settings ── */
+.vs-option {
+  flex: 1;
+  padding: 10px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--overlay);
+  color: var(--text-1);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.vs-option:hover { border-color: var(--border-hover); }
+.vs-option.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.vs-option.active div { color: rgba(255,255,255,0.7) !important; }
 </style>
 </head>
 <body>
@@ -774,6 +794,8 @@ body {
           <span class="toggle-dot"></span>
         </button>
       </div>
+      <span id="hands-free-badge" style="display:none;font-size:11px;color:var(--accent);font-weight:500;">· Hands free 🟢</span>
+      <button id="settings-btn" onclick="openVoiceSettings()" title="Voice Settings" style="font-size:18px;background:none;border:none;cursor:pointer;padding:2px 4px;color:var(--text-2);transition:color 0.15s;" onmouseover="this.style.color='var(--text-1)'" onmouseout="this.style.color='var(--text-2)'">⚙️</button>
     </div>
   </header>
 
@@ -855,6 +877,87 @@ body {
 
   </div>
 
+</div>
+
+<!-- Voice Settings Bottom Sheet -->
+<div id="voice-settings-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;" onclick="closeVoiceSettings()"></div>
+<div id="voice-settings-sheet" style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--elevated);border-radius:20px 20px 0 0;padding:0 20px 32px;z-index:201;box-shadow:0 -4px 24px rgba(0,0,0,0.12);">
+  <div style="display:flex;justify-content:center;padding:12px 0 8px;">
+    <div style="width:36px;height:4px;background:var(--border);border-radius:2px;"></div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+    <span style="font-size:15px;font-weight:600;color:var(--text-1);">Voice Settings</span>
+    <button onclick="closeVoiceSettings()" style="font-size:18px;color:var(--text-2);padding:4px;">✕</button>
+  </div>
+
+  <!-- Voice -->
+  <div style="margin-bottom:20px;">
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);margin-bottom:10px;">Voice</div>
+    <div style="display:flex;gap:8px;" id="voice-options">
+      <button class="vs-option" data-field="voice" data-value="warm" onclick="saveSetting({voice:'warm'})">
+        <div style="font-size:13px;font-weight:500;">Warm</div>
+        <div style="font-size:10px;color:var(--text-3);">Jenny</div>
+      </button>
+      <button class="vs-option" data-field="voice" data-value="steady" onclick="saveSetting({voice:'steady'})">
+        <div style="font-size:13px;font-weight:500;">Steady</div>
+        <div style="font-size:10px;color:var(--text-3);">Guy</div>
+      </button>
+      <button class="vs-option" data-field="voice" data-value="bright" onclick="saveSetting({voice:'bright'})">
+        <div style="font-size:13px;font-weight:500;">Bright</div>
+        <div style="font-size:10px;color:var(--text-3);">Aria</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Speed -->
+  <div style="margin-bottom:20px;">
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);margin-bottom:10px;">Speed</div>
+    <div style="display:flex;gap:8px;" id="speed-options">
+      <button class="vs-option" data-field="speed" data-value="slow" onclick="saveSetting({speed:'slow'})">Slow</button>
+      <button class="vs-option" data-field="speed" data-value="normal" onclick="saveSetting({speed:'normal'})">Normal</button>
+      <button class="vs-option" data-field="speed" data-value="fast" onclick="saveSetting({speed:'fast'})">Fast</button>
+    </div>
+  </div>
+
+  <!-- Activation -->
+  <div>
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);margin-bottom:10px;">Activation</div>
+    <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+      <div onclick="saveSetting({activation:'hands_free'})" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-size:13px;font-weight:500;color:var(--text-1);">Hands free</div>
+          <div style="font-size:11px;color:var(--text-3);">Best for quiet environments</div>
+        </div>
+        <span id="check-hands-free" style="color:var(--accent);font-weight:600;"></span>
+      </div>
+      <div onclick="saveSetting({activation:'push_to_talk'})" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;">
+        <div>
+          <div style="font-size:13px;font-weight:500;color:var(--text-1);">Push to talk</div>
+          <div style="font-size:11px;color:var(--text-3);">Hold to speak, release to send</div>
+        </div>
+        <span id="check-push-to-talk" style="color:var(--accent);font-weight:600;"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Start Conversation Bar（仅 Hands free 模式显示）-->
+<!-- BUG-004 修复：用户主动点击后才启动 VAD -->
+<div id="start-conversation-bar" style="display:none;position:fixed;bottom:90px;left:50%;transform:translateX(-50%);z-index:200;">
+  <button id="start-btn" onclick="activateHandsFree()" style="background:var(--accent);color:#fff;border-radius:var(--r-full);padding:10px 22px;font-size:14px;font-weight:500;box-shadow:0 2px 8px var(--accent-glow);">
+    🎤 点击开始对话
+  </button>
+</div>
+
+<!-- Misfire Toast -->
+<div id="misfire-toast" style="display:none;position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--text-1);color:#fff;border-radius:10px;padding:10px 16px;font-size:13px;z-index:300;max-width:300px;text-align:center;">
+  环境较嘈杂，建议切换为 Push to talk
+  <button onclick="this.parentElement.style.display='none'" style="color:#fff;margin-left:8px;font-size:12px;">✕</button>
+</div>
+
+<!-- Listening Indicator -->
+<div id="listening-indicator" style="display:none;position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;border-radius:var(--r-full);padding:8px 16px;font-size:13px;z-index:150;">
+  🎤 Listening...
 </div>
 
 <!-- 话题数据（动态随机3个） -->
@@ -1228,6 +1331,198 @@ async function onEndChat() {
 <script src="/static/js/tts-provider.js?v=6"></script>
 <script src="/static/js/stt-provider.js?v=6"></script>
 <script src="/static/js/app.js?v=6"></script>
+
+<script>
+// ── Voice Settings ──
+let currentSettings = { voice: "warm", speed: "normal", activation: "push_to_talk" };
+
+async function loadSettings() {
+  const uid = typeof userId !== 'undefined' ? userId : '';
+  if (!uid) return;
+  try {
+    const resp = await fetch(`/settings/${uid}`);
+    if (resp.ok) {
+      currentSettings = await resp.json();
+      renderSettings();
+      // 运行时切换（如用户在设置面板外调用此函数）
+      // 页面初始加载时的启动由 load 事件回调处理，避免 sttProvider 未就绪
+    }
+  } catch(e) { console.warn('loadSettings failed', e); }
+}
+
+function renderSettings() {
+  // Voice options
+  document.querySelectorAll('#voice-options .vs-option').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.value === currentSettings.voice);
+  });
+  // Speed options
+  document.querySelectorAll('#speed-options .vs-option').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.value === currentSettings.speed);
+  });
+  // Activation checks
+  const hf = document.getElementById('check-hands-free');
+  const pt = document.getElementById('check-push-to-talk');
+  if (hf) hf.textContent = currentSettings.activation === 'hands_free' ? '✓' : '';
+  if (pt) pt.textContent = currentSettings.activation === 'push_to_talk' ? '✓' : '';
+  // Hands-free badge
+  const badge = document.getElementById('hands-free-badge');
+  if (badge) badge.style.display = currentSettings.activation === 'hands_free' ? '' : 'none';
+  // 开始对话按钮：hands_free 且 VAD 未运行时显示
+  const bar = document.getElementById('start-conversation-bar');
+  if (bar) {
+    bar.style.display = (currentSettings.activation === 'hands_free' && !handsFreeLoop) ? '' : 'none';
+  }
+}
+
+// BUG-004 修复：用户主动触发才启动 VAD
+function activateHandsFree() {
+  const bar = document.getElementById('start-conversation-bar');
+  if (bar) bar.style.display = 'none';
+  startHandsFreeMode();
+}
+
+async function saveSetting(updates) {
+  const uid = typeof userId !== 'undefined' ? userId : '';
+  if (!uid) return;
+  try {
+    await fetch(`/settings/${uid}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    Object.assign(currentSettings, updates);
+    renderSettings();
+    // Activation 联动
+    if ('activation' in updates) {
+      if (updates.activation === 'hands_free') startHandsFreeMode();
+      else stopHandsFreeMode();
+    }
+  } catch(e) { console.warn('saveSetting failed', e); }
+}
+
+function openVoiceSettings() {
+  loadSettings();
+  document.getElementById('voice-settings-sheet').style.display = '';
+  document.getElementById('voice-settings-overlay').style.display = '';
+}
+
+function closeVoiceSettings() {
+  document.getElementById('voice-settings-sheet').style.display = 'none';
+  document.getElementById('voice-settings-overlay').style.display = 'none';
+}
+
+// ── Hands Free Mode ──
+// 复用 stt-provider.js 中现有的 sttProvider（已内置 AudioVAD），做自动循环
+let handsFreeLoop = false;
+let misfireCount  = 0;
+const MISFIRE_MAX = 3;
+
+function startHandsFreeMode() {
+  if (handsFreeLoop) return;
+  // sttProvider 在 app.js initSTT() 中初始化，若还未就绪则等待
+  if (typeof sttProvider === 'undefined' || !sttProvider) {
+    setTimeout(startHandsFreeMode, 300);
+    return;
+  }
+  // Hands Free：静音 2 秒后直接停止，跳过 3 秒倒计时
+  if (typeof sttProvider.countdownMs !== 'undefined') sttProvider.countdownMs = 0;
+  handsFreeLoop = true;
+  const indicator = document.getElementById('listening-indicator');
+  if (indicator) { indicator.style.display = ''; indicator.textContent = '🎤 Listening...'; }
+  _handsFreeRound();
+}
+
+function _handsFreeRound() {
+  if (!handsFreeLoop) return;
+
+  // 若 push-to-talk 正在录音，等待其完成
+  if (typeof sttState !== 'undefined' && sttState !== 'idle') {
+    setTimeout(_handsFreeRound, 300);
+    return;
+  }
+
+  // 接管 sttState，防止 mic 按钮并发
+  if (typeof sttState !== 'undefined') sttState = 'recording';
+  if (typeof setMicState === 'function') setMicState('recording');
+  const gen = typeof sttGeneration !== 'undefined' ? ++sttGeneration : 0;
+
+  const indicator = document.getElementById('listening-indicator');
+
+  sttProvider.start(
+    // onInterim
+    (interim) => {
+      if (typeof sttGeneration !== 'undefined' && sttGeneration !== gen) return;
+      if (indicator) indicator.textContent = `🎙️ ${interim || '...'}`;
+      if (typeof updateInterim === 'function') updateInterim(interim, true);
+    },
+    // onFinal：识别成功 → 发送 → 自动重启
+    (text) => {
+      if (typeof sttGeneration !== 'undefined' && sttGeneration !== gen) return;
+      if (typeof sttState !== 'undefined') sttState = 'idle';
+      if (typeof setMicState === 'function') setMicState('idle');
+      if (typeof updateInterim === 'function') updateInterim('', false);
+      if (indicator) indicator.textContent = '🎤 Listening...';
+      misfireCount = 0;
+      sendMessage(text);
+      if (handsFreeLoop) setTimeout(_handsFreeRound, 600);
+    },
+    // onError
+    (err) => {
+      if (typeof sttGeneration !== 'undefined' && sttGeneration !== gen) return;
+      if (typeof sttState !== 'undefined') sttState = 'idle';
+      if (typeof setMicState === 'function') setMicState('idle');
+      if (typeof updateInterim === 'function') updateInterim('', false);
+      if (indicator) indicator.textContent = '🎤 Listening...';
+
+      if (err.type === 'PERMISSION_DENIED') {
+        stopHandsFreeMode();
+        if (typeof showToast === 'function') showToast('请在浏览器允许麦克风权限', 'error');
+      } else if (err.type === 'EMPTY') {
+        misfireCount++;
+        if (misfireCount >= MISFIRE_MAX) showMisfireToast();
+        if (handsFreeLoop) setTimeout(_handsFreeRound, 300);
+      } else {
+        if (handsFreeLoop) setTimeout(_handsFreeRound, 500);
+      }
+    }
+  );
+}
+
+function stopHandsFreeMode() {
+  handsFreeLoop = false;
+  // 恢复 Push-to-talk 的 3 秒倒计时
+  if (typeof sttProvider !== 'undefined' && sttProvider &&
+      typeof sttProvider.countdownMs !== 'undefined') {
+    sttProvider.countdownMs = 3000;
+  }
+  // 作废当前录音回调
+  if (typeof sttGeneration !== 'undefined') sttGeneration++;
+  sttProvider?.cancel?.();
+  if (typeof sttState !== 'undefined') sttState = 'idle';
+  if (typeof setMicState === 'function') setMicState('idle');
+  const indicator = document.getElementById('listening-indicator');
+  if (indicator) indicator.style.display = 'none';
+  misfireCount = 0;
+}
+
+function showMisfireToast() {
+  const toast = document.getElementById('misfire-toast');
+  if (toast) {
+    toast.style.display = '';
+    setTimeout(() => { toast.style.display = 'none'; }, 3000);
+  }
+}
+
+// 页面加载完成后初始化设置（只渲染偏好，不自动启动 VAD）
+// BUG-004 修复：页面加载时 VAD 不自动启动，等待用户主动点击"开始对话"
+window.addEventListener('load', () => {
+  setTimeout(async () => {
+    await loadSettings();
+    // 不在此处调用 startHandsFreeMode()
+    // VAD 启动由用户主动点击"开始对话"按钮触发
+  }, 800);  // 等待 initSTT() 完成（DOMContentLoaded 已触发）
+});
+</script>
 
 </body>
 </html>

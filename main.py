@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import create_tables
 from app.routers import chat, stt, tts, history, debug, review
+from app.routers.settings import router as settings_router
+from app.routers.vad import router as vad_router
 
 
 @asynccontextmanager
@@ -29,6 +31,8 @@ app.include_router(tts.router)
 app.include_router(history.router)
 app.include_router(debug.router)
 app.include_router(review.router)
+app.include_router(settings_router)
+app.include_router(vad_router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

@@ -90,6 +90,16 @@ Feature: [功能名称]
 - 所有 Scenario 必须在 Instructions 中有对应测试函数
 - 技术 Step 没有对应 Story 时，标注 `覆盖 Story：TECH`
 
+### 3.4 实时功能的额外要求
+
+凡 Feature 涉及持续运行、状态循环、WebSocket、音视频流，
+除标准 Scenarios 外，必须在 SPEC 对应 UI 规格章节提供状态机图
+（stateDiagram-v2），且每条状态转换箭头必须有对应的 Scenario。
+
+区分"用户偏好"与"会话状态"：
+- 用户偏好（voice/speed/activation）→ 持久化到 DB，页面加载时渲染 UI
+- 会话状态（VAD 是否运行）→ 不持久化，需用户主动触发，页面加载时归零
+
 ---
 
 ## 四、SPEC 文档结构
@@ -125,6 +135,41 @@ Feature: [功能名称]
 
 ## 工作规则
 [见第九章]
+
+## Step 0：文档归档（每个版本固定，位置不可变）
+
+> 覆盖 Story：TECH
+> 技术目标：将本版本文档写入正确路径，确保目录结构符合规范
+
+### 实现
+
+**0.1 确认目录存在，不存在则创建**
+
+```bash
+mkdir -p docs/spec
+mkdir -p .claude
+```
+
+**0.2 将 SPEC 内容写入正确路径**
+
+Human 已提供内容，Claude Code 写入：
+`docs/spec/SPEC_Vxxx.md`
+
+**0.3 将 INSTRUCTIONS 内容写入正确路径**
+
+Human 已提供内容，Claude Code 写入：
+`.claude/INSTRUCTIONS_Vxxx.md`
+
+**0.4 更新 CLAUDE.md 中当前版本状态为"进行中 🔄"**
+
+### 自测
+
+```bash
+test -f docs/spec/SPEC_Vxxx.md       && echo "SPEC ✅"         || echo "SPEC ❌ 缺失"
+test -f .claude/INSTRUCTIONS_Vxxx.md  && echo "INSTRUCTIONS ✅" || echo "INSTRUCTIONS ❌ 缺失"
+```
+
+两行均输出 ✅ 后打印 `✅ Step 0 完成`
 
 ## Step N：[Step 名称]
 > 覆盖 Story：US-N [Story 标题]
@@ -335,6 +380,29 @@ Claude Code 执行版本开发时必须遵守：
 
     目的：从结构上防止 SPEC → Instructions 转化时遗漏功能点（参见 BUG-002 根因）
 
+13. **每个版本开始时，Claude Code 负责创建文档文件**
+
+    接收到启动指令后，Step 0 的第一件事是在正确路径创建文档文件：
+
+    - SPEC 文件    → `docs/spec/SPEC_Vxxx.md`
+    - INSTRUCTIONS → `.claude/INSTRUCTIONS_Vxxx.md`
+
+    文件内容由 Claude（规划者）在对话中与 Human 确认，
+    Claude Code 负责将最终内容写入正确路径，不得自行修改内容。
+
+14. **实时功能必须通过状态机自检**
+
+    对含持续运行逻辑的 Feature（VAD、WebSocket、音视频流等），
+    生成 Scenarios 后，Claude 必须在提交 Human 确认前完成以下自检：
+
+    □ 列出该功能的所有状态，确认无遗漏
+    □ 确认每个状态的"正常退出"路径有 Scenario
+    □ 确认每个状态的"异常退出"路径有 Scenario（网络错误、超时、用户切后台）
+    □ 确认没有状态是"进得去、出不来"的死胡同
+    □ 在 SPEC 对应章节提供 stateDiagram-v2 状态机图
+
+    自检未通过则补充 Scenario 和状态机图后，再提交 Human 确认。
+
 ---
 
 ## 十、测试规范
@@ -418,13 +486,15 @@ Human 启动新版本时使用以下提示词：
 
 前置条件：[上一版本] 已验收完成
 
-请按照 CLAUDE_CODE_DOC_STANDARD.md v2.1：
+请按照 CLAUDE_CODE_DOC_STANDARD.md v2.2：
 1. 将我的需求整理为 User Stories，展示给我确认
 2. 展开 BDD Scenarios，展示给我确认（重点检查有无遗漏场景）
 3. 检查是否有新 ADR 需要创建
 4. 我确认后，生成完整 SPEC 和 Instructions
+5. 将最终确认的 SPEC 和 Instructions 内容发给 Claude Code
+6. Claude Code 执行 Step 0 写入文件，然后从 Step 1 开始执行
 ```
 
 ---
 
-*CLAUDE_CODE_DOC_STANDARD.md V2.1 — 最后更新 2026-03-10*
+*CLAUDE_CODE_DOC_STANDARD.md V2.2 — 最后更新 2026-03-11*
