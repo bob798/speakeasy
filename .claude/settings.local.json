@@ -74,7 +74,13 @@
       "Bash(source venv/bin/activate && pytest tests/test_step5_v031_bugfix.py -v 2>&1)",
       "Bash(source venv/bin/activate && pytest tests/test_step6_v031_bugfix.py -v 2>&1)",
       "Bash(source venv/bin/activate && echo \"=== V0.3.1 全量测试 ===\" && pytest tests/test_step1_v031.py tests/test_step2_v031.py tests/test_step3_v031.py tests/test_step4_v031.py tests/test_step5_v031.py tests/test_step5_v031_bugfix.py tests/test_step6_v031.py tests/test_step6_v031_bugfix.py -v 2>&1)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(source:*)"
     ]
   }
 }

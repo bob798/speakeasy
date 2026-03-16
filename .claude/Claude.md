@@ -134,6 +134,16 @@ speakeasy/
 - Mock 只作用于外部依赖（LLM API），不 Mock 内部服务
 - **涉及前端 UI 的功能必须有对应 e2e 测试**（`tests/test_e2e_[版本号].py`），测试须覆盖"主动操作"和"页面刷新恢复"两类入口
 
+### Prompt 变更规则
+
+- **凡修改 `app/prompts/` 下任意文件，必须运行 `pytest tests/test_alex_behavior.py -v` 全绿才算完成**
+- Prompt 与代码同等对待：改动需有测试覆盖，不能靠主观感觉验收
+
+### 多路径对称性检查规则
+
+- 新增或修改路由时，**列出同一功能的所有路径入口**，确认每条路径均走等价的核心业务逻辑
+- 典型反例：`/chat` 注入了 `build_system_prompt()`，`/chat/stream` 最初没有 —— 两条路径必须对称
+
 ### 完成标志
 
 - 每个 Step 完成后终端打印 `✅ Step N 完成`

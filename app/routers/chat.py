@@ -87,14 +87,22 @@ async def chat_stream(req: ChatRequest, db: AsyncSession = Depends(get_db)):
         await save_message(db, req.session_id, "user", req.message)
         await db.commit()  # release write lock before streaming starts
 
+    # 与 /chat 对齐：注入 grammar_cards 记忆
+    system_prompt = await build_system_prompt(req.user_id or "")
+
     client     = chat_service.get_client()
     history    = [msg.model_dump() for msg in req.history]
     session_id = req.session_id
+    messages   = (
+        [{"role": "system", "content": system_prompt}]
+        + history
+        + [{"role": "user", "content": req.message}]
+    )
 
     async def generate():
         full = []
         try:
-            async for chunk in client.chat_stream(req.message, history):
+            async for chunk in client.chat_stream_messages(messages):
                 full.append(chunk)
                 yield f"data: {json.dumps({'type': 'delta', 'content': chunk})}\n\n"
 

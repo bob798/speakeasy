@@ -15,7 +15,7 @@ import json
 import os
 from datetime import datetime
 from httpx import AsyncClient
-from app.main import app
+from main import app
 from app.services.chat_service import get_client
 
 # ─── Judge Prompts ────────────────────────────────────────────────────────────
@@ -84,15 +84,16 @@ def run(coro):
 
 async def get_alex_response(user_input: str, history: list = None) -> str:
     """调用 /chat 接口，获取 Alex 回复"""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    from httpx import ASGITransport
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.post("/chat", json={
             "user_id": "test_behavior_eval",
             "message": user_input,
             "history": history or []
         })
     data = resp.json()
-    # 兼容流式和非流式返回
-    return data.get("message") or data.get("content") or str(data)
+    return data.get("reply") or data.get("message") or data.get("content") or str(data)
 
 
 async def judge(prompt: str) -> dict:
@@ -406,6 +407,30 @@ class TestD3PersonaConsistency:
         assert passed, f"\nAlex 回复：{alex}\nJudge：{judge_result}"
 
 
+JUDGE_D5 = """
+你是一个英语教学产品的质量评估员。
+
+评估 Alex 的回复是否适合英语水平为 B1（中级）的中国用户阅读理解。
+B1 标准：能理解日常话题，掌握约 3000 高频词，不熟悉习语和学术词汇。
+
+Alex 回复：{alex_response}
+
+评估标准：
+- 词汇：主要使用 3000 高频词，无生僻词/学术词
+- 句式：每句一个主要信息，无多重从句嵌套
+- 习语：不使用对 B1 学习者陌生的固定表达
+
+返回 JSON：
+{{
+  "accessible_b1": true或false,
+  "difficult_words": ["发现的难词列表"],
+  "complex_structures": ["发现的复杂句式"],
+  "reason": "一句话总结"
+}}
+只返回 JSON。
+"""
+
+
 # ─── D4：对抗测试 (P2 ≥60% 通过) ────────────────────────────────────────────
 
 class TestD4AdversarialCases:
@@ -475,6 +500,88 @@ class TestD4AdversarialCases:
         assert passed, f"\nAlex 对重复输入应给出不同回应，实际回复：{alex}"
 
 
+# ─── D5：词汇复杂度测试 (P1 ≥80% 通过) ──────────────────────────────────────
+
+class TestD5VocabularyLevel:
+
+    def test_D5_TC001_everyday_input_b1_accessible(self):
+        """普通日常输入的回复应适合 B1 用户理解"""
+        user_input = "I went to work today and had a meeting"
+
+        alex = run(get_alex_response(user_input))
+
+        judge_result = run(judge(
+            JUDGE_D5.format(alex_response=alex)
+        ))
+
+        passed = judge_result.get("accessible_b1", False)
+        reason = judge_result["reason"] if not passed else "✓"
+        record("D5-TC001", "日常输入回复适合 B1", user_input, alex, passed, reason, "D5")
+
+        assert passed, (
+            f"\nAlex 回复：{alex}"
+            f"\n难词：{judge_result.get('difficult_words')}"
+            f"\n复杂句式：{judge_result.get('complex_structures')}"
+        )
+
+    def test_D5_TC002_emotional_input_b1_accessible(self):
+        """情绪类输入的回复应使用更简单的词汇"""
+        user_input = "I had a really bad day, everything went wrong"
+
+        alex = run(get_alex_response(user_input))
+
+        judge_result = run(judge(
+            JUDGE_D5.format(alex_response=alex)
+        ))
+
+        passed = judge_result.get("accessible_b1", False)
+        reason = judge_result["reason"] if not passed else "✓"
+        record("D5-TC002", "情绪输入回复适合 B1", user_input, alex, passed, reason, "D5")
+
+        assert passed, (
+            f"\nAlex 回复：{alex}"
+            f"\n难词：{judge_result.get('difficult_words')}"
+        )
+
+    def test_D5_TC003_response_sentence_count(self):
+        """任意输入的回复句子数不超过 3 句"""
+        user_input = "tell me about yourself, what do you like to do"
+
+        alex = run(get_alex_response(user_input))
+
+        # 按"句末标点 + 空格 + 大写字母"计算真实句子边界
+        # 避免把 "Oh!" 这类感叹词误算成独立句
+        import re
+        sentence_breaks = re.findall(r'[.!?]+\s+(?=[A-Z])', alex)
+        # 最后一个句子没有后续空格+大写，手动加 1
+        sentences = len(sentence_breaks) + 1
+        passed = sentences <= 3
+
+        reason = f"句子数 {sentences} 超过 3" if not passed else "✓"
+        record("D5-TC003", "回复不超过 3 句", user_input, alex, passed, reason, "D5")
+
+        assert passed, f"\n回复共 {sentences} 句（应 ≤3）：{alex}"
+
+    def test_D5_TC004_high_level_user_still_b1_reply(self):
+        """即使用户展示较高英语水平，Alex 默认仍用 B1 回复"""
+        user_input = "I've been contemplating the existential implications of modern work culture"
+
+        alex = run(get_alex_response(user_input))
+
+        judge_result = run(judge(
+            JUDGE_D5.format(alex_response=alex)
+        ))
+
+        passed = judge_result.get("accessible_b1", False)
+        reason = judge_result["reason"] if not passed else "✓"
+        record("D5-TC004", "高水平输入仍回复 B1", user_input, alex, passed, reason, "D5")
+
+        assert passed, (
+            f"\nAlex 回复：{alex}"
+            f"\n难词：{judge_result.get('difficult_words')}"
+        )
+
+
 # ─── 最终报告输出 ──────────────────────────────────────────────────────────────
 
 def pytest_sessionfinish(session, exitstatus):
@@ -486,6 +593,7 @@ def pytest_sessionfinish(session, exitstatus):
     d2 = [r for r in REPORT if r["dimension"] == "D2"]
     d3 = [r for r in REPORT if r["dimension"] == "D3"]
     d4 = [r for r in REPORT if r["dimension"] == "D4"]
+    d5 = [r for r in REPORT if r["dimension"] == "D5"]
 
     def pass_rate(cases):
         if not cases:
@@ -497,10 +605,12 @@ def pytest_sessionfinish(session, exitstatus):
     d2_p, d2_t, d2_r = pass_rate(d2)
     d3_p, d3_t, d3_r = pass_rate(d3)
     d4_p, d4_t, d4_r = pass_rate(d4)
+    d5_p, d5_t, d5_r = pass_rate(d5)
 
-    gate_d1 = d1_r == 100
+    gate_d1   = d1_r == 100
     gate_d2d3 = (d2_p + d3_p) / max(d2_t + d3_t, 1) * 100 >= 80
-    can_release = gate_d1 and gate_d2d3
+    gate_d5   = d5_r >= 80 if d5_t > 0 else True
+    can_release = gate_d1 and gate_d2d3 and gate_d5
 
     lines = [
         "",
@@ -513,6 +623,7 @@ def pytest_sessionfinish(session, exitstatus):
         f"D2 必须行为（P1）  {d2_p}/{d2_t}  {d2_r}%",
         f"D3 人格一致（P1）  {d3_p}/{d3_t}  {d3_r}%",
         f"D4 对抗测试（P2）  {d4_p}/{d4_t}  {d4_r}%",
+        f"D5 词汇复杂度（P1）{d5_p}/{d5_t}  {d5_r}%  {'✅' if gate_d5 else '❌ <80%'}",
         "",
         f"上线门槛评估：{'✅ 通过，可以上线' if can_release else '❌ 未通过，禁止上线'}",
         "",

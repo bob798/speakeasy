@@ -1,232 +1,164 @@
-# Speakeasy 🌿
+# Speakeasy
 
-> 一个无评判的 AI 英语口语练习伙伴，让你在不知不觉中变得更流利。
+> 你的英语水平够用。卡住你的不是知识，是开口的那一秒。
 
 [English](./README_EN.md)
 
 ---
 
-## 为什么做这个
+## 这个产品在解决什么
 
-市面上的英语学习 App 有两个核心问题：
+中国职场人的英语卡壳，通常不是因为不会——是因为怕。
 
-1. **内容脱节** — 练的都是教材场景，和真实生活严重脱节
-2. **评判压力** — 发音评分、语法纠错，让人开口前就紧张
+怕说错被人笑，怕发音不标准，怕语法出错显得不专业。市面上的学习 App 在这件事上反而帮了倒忙：评分、纠错、失去爱心，让人开口前先紧张。练得越多，越怕开口。
 
-**Speakeasy 的思路不同**：AI 扮演一个英语母语朋友 Alex，和你聊你真实生活里的事，永远不显性纠错，而是在对话中自然示范更好的表达方式。
+**Speakeasy 的切入点不是"教你英语"，而是"帮你不再怕开口"。**
+
+---
+
+## Speakeasy 是什么
+
+一个有记忆的英语母语朋友，叫 Alex。
+
+你们聊你真实生活里的事——今天的会议、遇到的麻烦、周末去了哪里。Alex 永远不纠错你，但你不知不觉说得越来越准。Alex 记得你说过的事，下次自然续接。Alex 知道你在练什么，话题和词汇开始贴合你的工作和生活。
+
+不是课程，不是练习题，不是 AI 老师。**是朋友。**
+
+---
+
+## 和直接用 ChatGPT 练英语有什么区别
+
+| | ChatGPT | Speakeasy（Alex） |
+|---|---|---|
+| 记得你说过什么？ | 不记得，下次重头开始 | 记得。会追问上次那件事后来怎样了 |
+| 记得你的语法习惯？ | 不记得 | 记得，会在对话中自然多用正确表达 |
+| 知道你是做什么的？ | 不知道 | 知道，话题会往你的职业场景靠 |
+| 会纠错吗？ | 会，而且很直接 | 不会。他用自然示范代替纠错 |
+| 适合练什么？ | 什么都行，但没有积累 | 长期口语习惯养成，尤其是职场英语 |
 
 ---
 
 ## 核心机制
 
 ```
-用户说："Yesterday I go to a meeting..."
-                ↓
+你说："Yesterday I go to a meeting with my boss..."
+                        ↓
 Alex 不纠错，自然回应：
-"Oh nice! How did the meeting go? I went to one last week too..."
-                ↓
-对话结束，推送今日一句：
-"试试用 'went' 替换 'go'，过去式让你听起来更自然"
+"Oh that sounds tough — how did the meeting go?
+ I went to a really long one last week too..."
+                        ↓
+对话结束，Alex 生成复盘：
+  - 今天说得地道的表达（你做对了什么）
+  - 可以更自然的地方（不是"你错了"，是"更好的说法"）
+                        ↓
+下次对话，Alex 记得：
+  - 你有过去时态的问题（悄悄在对话里多用 went/had/was）
+  - 你上次和老板开会很紧张（可能自然问一句"那次会后来怎么样了？"）
+  - 你是产品经理，话题往产品、团队、用户研究方向靠
 ```
 
 **三个设计原则：**
 
-| 原则 | 说明 |
+| 原则 | 是什么 | 不是什么 |
+|---|---|---|
+| **零评判** | 没有评分、没有标注、没有"你应该说..." | 不是"宽松版老师" |
+| **自然习得** | Alex 在回复里植入正确表达，你在接收中吸收 | 不是隐藏的语法课 |
+| **Alex 记住你** | 错误历史 + 你的生活事件 + 你的职业画像 | 不只是对话历史 |
+
+---
+
+## Alex 的记忆是怎么工作的
+
+```
+每次对话之后：
+  对话内容
+     │
+     ├─► grammar_cards   反复出现的语法错误
+     │   （FSRS 算法调度：什么时候在对话里重点强化）
+     │
+     ├─► user_facts      发生了什么事
+     │   LLM 提取 2-3 条："用户本周有重要演示"
+     │
+     └─► user_profile    你是谁
+         职业背景 / 学习目标 / 话题偏好 / 英语水平
+
+下次对话开始时，三层记忆注入 Alex 的上下文：
+Alex 知道你犯过什么错、上周发生了什么、你在练什么目标
+```
+
+这不是技术设计，是"Alex 认识你"的实现方式。
+
+---
+
+## 当前状态
+
+| 版本 | 功能 |
 |---|---|
-| 🚫 零评判 | 没有评分，没有红色标注，没有"你应该说..." |
-| 🌱 自然习得 | AI 在回复中植入正确表达，用户不知不觉吸收 |
-| ✨ 一句收获 | 每次对话结束只给一条建议，轻松，不构成压力 |
-
----
-
-## 技术架构
-
-```
-前端              后端              AI 层
-──────────        ──────────        ──────────────────────
-HTML/CSS/JS  ───► FastAPI      ───► Claude Sonnet / Haiku
-                  (Python)          DeepSeek V3
-                                    火山方舟豆包
-                                    智谱 GLM-4-Flash
-```
-
-**核心技术选型：**
-- **FastAPI** — 异步高性能，自动生成 API 文档
-- **多模型兼容** — 一行配置切换四家模型提供商
-- **服务端无状态** — 对话历史由前端维护，架构简单易扩展
-- **Prompt Engineering** — 核心差异化在 System Prompt 设计
-
----
-
-## 项目结构
-
-```
-speakeasy/
-├── main.py                  # FastAPI 入口
-├── index.html               # 前端聊天界面
-├── requirements.txt
-├── .env.example             # 环境变量模板
-│
-├── app/
-│   ├── api/
-│   │   └── chat.py          # 路由层
-│   ├── services/
-│   │   └── model_client.py  # 多模型客户端
-│   └── prompts/
-│       ├── system.py        # Alex 人设 Prompt
-│       └── summary.py       # 今日一句 Prompt
-```
+| V0.1 ✅ | 文本对话（Alex 角色）+ 今日一句 + 多模型支持 |
+| V0.2a ✅ | 语音输入 STT + 语音输出 TTS + 流式输出 + 对话历史持久化 |
+| V0.2b ✅ | 对话复盘（错误分析 + 亮点）+ FSRS 错误调度 + 点击追问 UI |
+| V0.3 🔧 | 用户画像 + Level 评估 + 跨会话事实记忆 + 记忆管理页面 |
 
 ---
 
 ## 快速启动
 
-### 1. 克隆项目
-
 ```bash
+# 1. 克隆
 git clone https://github.com/your-username/speakeasy.git
 cd speakeasy
-```
 
-### 2. 安装依赖
-
-```bash
+# 2. 安装依赖
 python3 -m venv venv
-source venv/bin/activate        
-# Windows: venv\Scripts\activate
+source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-```
 
-### 3. 配置环境变量
-
-```bash
+# 3. 配置 API Key
 cp .env.example .env
-```
-
-编辑 `.env`，选择一个模型提供商填入 Key：
-
-```bash
-# 四选一
-MODEL_PROVIDER=anthropic        # or: deepseek / volcengine / zhipu
-ANTHROPIC_API_KEY=your_key_here
+# 编辑 .env，四选一：
+# MODEL_PROVIDER=anthropic / deepseek / volcengine / zhipu
 ```
 
 | 提供商 | 获取 Key | 推荐场景 |
 |---|---|---|
 | Anthropic | https://console.anthropic.com | 最佳英文质量 |
 | DeepSeek | https://platform.deepseek.com | 性价比首选 |
-| 火山方舟 | https://console.volcengine.com/ark | 国内稳定 |
+| 火山方舟 | https://console.volcengine.com/ark | 国内稳定访问 |
 | 智谱 GLM | https://bigmodel.cn | 免费调试 |
 
-### 4. 启动服务
-
 ```bash
-# 终端 1 — 后端
-uvicorn main:app --reload --port 8000
-
-# 终端 2 — 前端
-python3 -m http.server 3000
+# 4. 启动
+uvicorn app.main:app --reload
+# 打开 http://localhost:8000
 ```
-
-打开浏览器访问 **http://localhost:3000/index.html**
 
 ---
 
-## FAQ
-
-### Q：启动服务后调用 API 报 httpx 连接错误，但我没有设置代理？
-
-**原因**
-
-终端没有设置代理 ≠ 系统没有代理。httpx 默认会读取系统级代理配置（`trust_env=True`），如果本机运行着 Clash / V2Ray / Surge 等代理软件并开启了"系统代理"，Python 的网络请求会被自动转发到代理端口，进而导致连接失败。
-
-验证是否存在系统代理：
-
-```bash
-networksetup -getwebproxy Wi-Fi
-networksetup -getsecurewebproxy Wi-Fi
-# 若显示 Enabled: Yes，说明系统代理开着
-```
-
-**解决方法（三选一）**
-
-方法一：代码层面忽略系统代理（推荐，一劳永逸）
-
-在 `OpenAICompatibleClient.__init__` 中加入 `trust_env=False`：
-
-```python
-import httpx
-
-self.client = OpenAI(
-    api_key=_get_api_key(provider),
-    base_url=PROVIDER_CONFIG[provider]["base_url"],
-    timeout=30.0,
-    http_client=httpx.Client(trust_env=False),
-)
-```
-
-方法二：启动服务前临时清除代理环境变量
-
-```bash
-unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY
-uvicorn main:app --reload --port 8000
-```
-
-方法三：在代理软件中将国内 API 域名加入直连规则
+## 技术架构
 
 ```
-ark.cn-beijing.volces.com   # 火山方舟
-api.deepseek.com            # DeepSeek
-open.bigmodel.cn            # 智谱 GLM
+前端                     后端                     AI 层
+─────────────           ─────────────           ──────────────────
+HTML / CSS / JS  ──────► FastAPI (Python)  ─────► Claude / DeepSeek
+（Vanilla）              SQLAlchemy 2.0           Doubao / GLM
+                         SQLite + aiosqlite       （via OpenRouter）
+                              │
+                         STT: faster-whisper（本地推理）
+                         TTS: edge-tts（本地，无 API 费用）
+                         记忆: py-fsrs (FSRS 6 算法)
 ```
-
-国内服务本不需要走代理，直连规则既能解决问题，也能降低延迟。
-
-## 模型价格参考
-
-| 模型 | 输入 | 输出 | 推荐阶段 |
-|---|---|---|---|
-| GLM-4-Flash | 免费 | 免费 | 调试 |
-| DeepSeek V3 | ¥2/百万 | ¥8/百万 | 开发验收 |
-| Claude Haiku 4.5 | $1/百万 | $5/百万 | 上线 |
-| Claude Sonnet 4.6 | $3/百万 | $15/百万 | 高质量场景 |
 
 ---
 
-## API 接口
+## 常见问题
 
-启动后访问 **http://localhost:8000/docs** 查看完整交互式文档。
+**httpx 报 SOCKS 代理错误**
 
-| 接口 | 说明 |
-|---|---|
-| `GET /health` | 服务健康检查 |
-| `POST /chat` | 发送消息，获取 AI 回复 |
-| `POST /chat/summary` | 结束对话，生成今日一句 |
-| `GET /debug/status` | 查看当前模型配置 |
+macOS 上 Clash / Surge 等开启"系统代理"后，httpx 默认读取系统代理配置。代码里已加 `trust_env=False`，若仍报错检查是否有多处 httpx 初始化未处理。
 
----
+**STT 没有转录结果**
 
-## 产品路线图
-
-- [x] V1 — 文本对话 + 今日一句
-- [ ] V2 — 语音输入输出（Whisper + TTS）
-- [ ] V2 — 跨 session 记忆（记住用户习惯性错误）
-- [ ] V3 — 场景解锁（职场、旅行、面试模式）
-- [ ] V3 — 进步可视化（表达变化轨迹）
-
----
-
-## 产品洞察
-
-这个项目的核心不是技术，而是**对用户心理的洞察**：
-
-> 大多数中国成年人英语水平足够，但一开口就卡壳——不是不会，是**怕**。
-> 现有产品都在优化"学得更快"，没有人认真解决"敢开口"这个问题。
-
-Speakeasy 的差异化不在于功能，而在于**消除这种心理障碍**。
-
-这也是我做这个产品的起点——我自己就是这个用户。
-
+首次运行会自动下载 faster-whisper 模型文件（约 150MB），需等待完成。
 
 ---
 

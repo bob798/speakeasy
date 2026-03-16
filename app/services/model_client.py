@@ -72,6 +72,10 @@ class BaseModelClient:
     async def chat_stream(self, message: str, history: list[dict]) -> AsyncGenerator[str, None]:
         raise NotImplementedError
 
+    async def chat_stream_messages(self, messages: list[dict]) -> AsyncGenerator[str, None]:
+        """接收完整 messages 列表（含 system），流式输出。与 complete() 接口设计一致。"""
+        raise NotImplementedError
+
     def generate_summary(self, history: list[dict]) -> str:
         raise NotImplementedError
 
@@ -137,6 +141,17 @@ class AnthropicClient(BaseModelClient):
             model=MODEL_NAME, max_tokens=MAX_TOKENS, system=SYSTEM_PROMPT,
             messages=messages
         ) as stream:
+            for text in stream.text_stream:
+                yield text
+
+    async def chat_stream_messages(self, messages: list[dict]) -> AsyncGenerator[str, None]:
+        logger.info("调用 Anthropic chat_stream_messages model=%s", MODEL_NAME)
+        system = next((m["content"] for m in messages if m.get("role") == "system"), None)
+        user_messages = [m for m in messages if m.get("role") != "system"]
+        kwargs = {"model": MODEL_NAME, "max_tokens": MAX_TOKENS, "messages": user_messages}
+        if system:
+            kwargs["system"] = system
+        with self.client.messages.stream(**kwargs) as stream:
             for text in stream.text_stream:
                 yield text
 
@@ -214,6 +229,17 @@ class OpenAICompatibleClient(BaseModelClient):
             + history
             + [{"role": "user", "content": message}]
         )
+        resp = self.client.chat.completions.create(
+            model=MODEL_NAME, max_tokens=MAX_TOKENS, stream=True,
+            messages=messages
+        )
+        for chunk in resp:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
+
+    async def chat_stream_messages(self, messages: list[dict]) -> AsyncGenerator[str, None]:
+        logger.info("调用 %s chat_stream_messages model=%s", self.provider, MODEL_NAME)
         resp = self.client.chat.completions.create(
             model=MODEL_NAME, max_tokens=MAX_TOKENS, stream=True,
             messages=messages
