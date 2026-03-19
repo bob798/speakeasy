@@ -76,6 +76,29 @@ class UserSettings(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class UserProfile(Base):
+    __tablename__ = "user_profile"
+
+    user_id           = Column(String, primary_key=True)
+    cefr_level        = Column(String, nullable=True)          # A1/A2/B1/B2/C1
+    profession        = Column(String, nullable=True)
+    industry          = Column(String, nullable=True)
+    topic_preferences = Column(String, nullable=True)          # comma-separated
+    learning_goal     = Column(String, nullable=True)
+    personality_note  = Column(String, nullable=True)          # humor/direct/etc.
+    updated_at        = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class UserFact(Base):
+    __tablename__ = "user_facts"
+
+    id                = Column(Integer, primary_key=True, autoincrement=True)
+    user_id           = Column(String, nullable=False, index=True)
+    content           = Column(String, nullable=False)
+    source_session_id = Column(String, nullable=True, index=True)
+    created_at        = Column(DateTime, default=datetime.utcnow)
+
+
 # Sync engine for ORM operations (tests, memory_service, review_service)
 engine = create_engine(
     "sqlite:///./speakeasy.db",

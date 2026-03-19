@@ -796,6 +796,7 @@ body {
       </div>
       <span id="hands-free-badge" style="display:none;font-size:11px;color:var(--accent);font-weight:500;">· Hands free 🟢</span>
       <button id="settings-btn" onclick="openVoiceSettings()" title="Voice Settings" style="font-size:18px;background:none;border:none;cursor:pointer;padding:2px 4px;color:var(--text-2);transition:color 0.15s;" onmouseover="this.style.color='var(--text-1)'" onmouseout="this.style.color='var(--text-2)'">⚙️</button>
+      <a href="/memory" title="记忆管理" style="font-size:18px;text-decoration:none;padding:2px 4px;color:var(--text-2);transition:color 0.15s;" onmouseover="this.style.color='var(--text-1)'" onmouseout="this.style.color='var(--text-2)'">🧠</a>
     </div>
   </header>
 
@@ -1522,7 +1523,51 @@ window.addEventListener('load', () => {
     // VAD 启动由用户主动点击"开始对话"按钮触发
   }, 800);  // 等待 initSTT() 完成（DOMContentLoaded 已触发）
 });
+
+// ── V0.3 Step 6: Level 评估引导弹窗 ──────────────────────────────────────────
+(function initAssessmentPrompt() {
+  const USER_ID = localStorage.getItem('speakeasy_user_id') || 'default_user';
+  const done = localStorage.getItem('speakeasy_assessment_done');
+  const skipped = localStorage.getItem('speakeasy_assessment_skipped');
+  if (done || skipped) return;
+
+  // Check if user already has a cefr_level
+  fetch('/memory/profile?user_id=' + USER_ID)
+    .then(r => r.json())
+    .then(d => {
+      if (d.cefr_level) {
+        localStorage.setItem('speakeasy_assessment_done', '1');
+        return;
+      }
+      // Show assessment prompt after 1.5s
+      setTimeout(showAssessmentBanner, 1500);
+    })
+    .catch(() => {});
+})();
+
+function showAssessmentBanner() {
+  const banner = document.getElementById('assessment-banner');
+  if (banner) banner.style.display = 'flex';
+}
+
+function dismissAssessmentBanner() {
+  const banner = document.getElementById('assessment-banner');
+  if (banner) banner.style.display = 'none';
+  localStorage.setItem('speakeasy_assessment_skipped', '1');
+}
 </script>
+
+<!-- ── V0.3 Step 6: Assessment banner ── -->
+<div id="assessment-banner" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:50;background:var(--elevated);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 20px;box-shadow:0 4px 20px rgba(0,0,0,0.12);max-width:400px;width:calc(100% - 40px);align-items:center;gap:14px;">
+  <div style="flex:1;">
+    <div style="font-size:14px;font-weight:600;color:var(--text-1);margin-bottom:4px;">告诉 Alex 你的英语水平 👋</div>
+    <div style="font-size:12px;color:var(--text-2);">5 道自评题，让 Alex 更懂你</div>
+  </div>
+  <div style="display:flex;gap:8px;flex-shrink:0;">
+    <a href="/memory" style="padding:7px 14px;background:var(--accent);color:#fff;border-radius:var(--r-full);font-size:13px;font-weight:500;text-decoration:none;">去评估</a>
+    <button onclick="dismissAssessmentBanner()" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-full);font-size:13px;color:var(--text-2);">跳过</button>
+  </div>
+</div>
 
 </body>
 </html>

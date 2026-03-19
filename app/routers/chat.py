@@ -13,6 +13,7 @@ from app.schemas.chat import ChatRequest, ChatResponse, SummaryRequest
 import app.services.chat_service as chat_service
 from app.services.review_service import analyze_conversation
 from app.services.memory_service import update_grammar_cards, mark_errors_not_appeared, build_system_prompt
+from app.services.facts_service import extract_and_save_facts
 from app.logger import get_logger
 
 router = APIRouter()
@@ -142,6 +143,12 @@ async def chat_summary(request: SummaryRequest):
         appeared_keys = [e["key"] for e in result.get("errors", [])]
         await update_grammar_cards(request.user_id, result.get("errors", []))
         await mark_errors_not_appeared(request.user_id, appeared_keys)
+        # V0.3 Step 3 addition: async facts extraction (non-blocking)
+        asyncio.create_task(extract_and_save_facts(
+            user_id=request.user_id,
+            session_id=request.session_id,
+            history=history,
+        ))
         return {"type": "review", **result}
     else:
         tip = await get_daily_tip()

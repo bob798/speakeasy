@@ -1,11 +1,11 @@
 import json
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 
 from fsrs import FSRS, Card, Rating
 from sqlalchemy.orm import Session
 
-from app.models.db import engine, GrammarCard
+from app.models.db import engine, GrammarCard, UserProfile, UserFact
 from app.prompts.system import SYSTEM_PROMPT
 from app.logger import get_logger
 
@@ -106,18 +106,116 @@ async def get_injectable_cards(user_id: str, limit: int = 3) -> List[GrammarCard
     return [row for _, row in result[:limit]]
 
 
-async def build_system_prompt(user_id: str) -> str:
-    """
-    根据到期的 grammar_cards 构建注入记忆的 system prompt。
-    """
-    cards = await get_injectable_cards(user_id, limit=3)
-    if not cards:
-        return SYSTEM_PROMPT
+def _get_profile(user_id: str) -> Optional[UserProfile]:
+    with Session(engine) as s:
+        return s.query(UserProfile).filter_by(user_id=user_id).first()
 
-    memory_lines = [
+
+def _build_profile_block(profile: UserProfile) -> str:
+    lines = []
+    if profile.profession:
+        industry_suffix = f", {profile.industry}" if profile.industry else ""
+        lines.append(f"- Profession: {profile.profession}{industry_suffix}")
+    if profile.cefr_level:
+        lines.append(f"- English level: {profile.cefr_level}")
+    if profile.topic_preferences:
+        lines.append(f"- Topic preferences: {profile.topic_preferences}")
+    if profile.learning_goal:
+        lines.append(f"- Learning goal: {profile.learning_goal}")
+    if profile.personality_note:
+        lines.append(f"- Style: {profile.personality_note}")
+    if not lines:
+        return ""
+    return "[Profile]\n" + "\n".join(lines)
+
+
+def _get_recent_facts(user_id: str, limit: int = 20) -> List[UserFact]:
+    with Session(engine) as s:
+        facts = (
+            s.query(UserFact)
+            .filter_by(user_id=user_id)
+            .order_by(UserFact.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        for f in facts:
+            s.expunge(f)
+        return facts
+
+
+def _build_facts_block(facts: List[UserFact], token_budget: int = 400) -> str:
+    lines = []
+    used = 0
+    for f in facts:
+        estimated_tokens = len(f.content) // 4
+        # Always include at least the first fact; then enforce budget
+        if lines and used + estimated_tokens > token_budget:
+            break
+        lines.append(f"- {f.content}")
+        used += estimated_tokens
+    if not lines:
+        return ""
+    return "[Facts Alex Remembers]（自然融入对话，不要直接引用原话）\n" + "\n".join(lines)
+
+
+def _build_cards_block(cards: List[GrammarCard]) -> str:
+    lines = [
         f"该用户有一个待改善的语法习惯：{card.content}。"
         f"在对话中自然多使用正确形式即可，绝对不要直接指出或提及这条记录。"
         for card in cards
     ]
-    return SYSTEM_PROMPT + "\n\n## About This User（私有上下文，绝对不要直接提及）\n" + \
-           "\n".join(f"- {l}" for l in memory_lines)
+    return "\n".join(f"- {l}" for l in lines)
+
+
+async def build_system_prompt(user_id: str) -> str:
+    """
+    三层记忆注入：
+      层1 user_profile（各字段独立 guard）
+      层2 user_facts（Step 4 追加）
+      层3 grammar_cards（现有逻辑，完全不变）
+    """
+    sections = [SYSTEM_PROMPT]
+
+    # 层1：user_profile
+    if user_id:
+        profile = _get_profile(user_id)
+        if profile:
+            block = _build_profile_block(profile)
+            if block:
+                header = (
+                    "## About This User（私有上下文，绝对不要直接提及）\n"
+                    "Adapt your vocabulary, examples and topics naturally based on the following — "
+                    "never quote or reference these notes directly.\n"
+                )
+                sections.append(header + block)
+
+    # 层2：user_facts（最近20条，token budget=400）
+    if user_id:
+        facts = _get_recent_facts(user_id, limit=20)
+        if facts:
+            block = _build_facts_block(facts, token_budget=400)
+            if block:
+                # 追加到已有 About This User block 或新建
+                if len(sections) > 1 and "About This User" in sections[-1]:
+                    sections[-1] += "\n\n" + block
+                else:
+                    sections.append(
+                        "## About This User（私有上下文，绝对不要直接提及）\n"
+                        "Use these facts naturally in conversation — never quote them directly.\n\n"
+                        + block
+                    )
+
+    # 层3：grammar_cards（现有逻辑完全不变）
+    cards = await get_injectable_cards(user_id, limit=3)
+    if cards:
+        block = _build_cards_block(cards)
+        if sections[-1] != SYSTEM_PROMPT and "About This User" in sections[-1]:
+            # 追加到已有 About This User block
+            sections[-1] += "\n\n[Grammar Habits to Reinforce]\n" + block
+        else:
+            sections.append(
+                "## About This User（私有上下文，绝对不要直接提及）\n"
+                + "[Grammar Habits to Reinforce]\n" + block
+            )
+
+    return "\n\n".join(sections)

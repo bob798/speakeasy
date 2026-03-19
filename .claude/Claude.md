@@ -9,10 +9,14 @@
 
 ### 产品定位
 
-**Speakeasy** — 职场人的英语练习伙伴。
+**Speakeasy** — AI 陪伴式私教，越聊越懂你。
 
-AI 扮演英语母语朋友 Alex，和用户聊真实生活里的事。
-**核心原则：永远不显性纠错，在对话中自然示范更好的表达方式。**
+AI 扮演英语私教朋友 Alex，在真实对话中持续积累对用户的认知，动态调整话题、难度与强化方向。
+**核心原则：私教级的洞察，包裹在朋友式的对话里；隐式引导 + 显式复盘，双路径同步习得。**
+
+- **认识你**：职业画像 + 语法习惯 + 生活事件，三层记忆持续更新
+- **带你走**：FSRS 调度强化点，LLM 动态调整话题与难度，越用越精准
+- **陪着你**：跨 session 无终点，学习退入背景，习得自然发生
 
 ### 团队分工
 
@@ -55,6 +59,7 @@ speakeasy/
 │       ├── chat.py            # /chat · /chat/summary
 │       └── review.py          # /review（V0.2b+）
 ├── docs/
+│   ├── spec/                  # 产品规格文档
 │   ├── adr/
 │   │   ├── ADR-001-sqlite-over-postgresql.md
 │   │   ├── ADR-002-fsrs-pending-active-states.md
@@ -66,11 +71,12 @@ speakeasy/
 │   └── src/
 │       └── components/        # 前端组件
 ├── tests/                     # 所有测试文件
-├── CLAUDE.md                  # 本文件
+├── .claude/
+│   ├── CLAUDE.md                  # 本文件
+│   └── CLAUDE_CODE_V02B_INSTRUCTIONS.md       # 各开发版本执行指令
 ├── ROADMAP.md                 # 产品路线图
 ├── BUG_LOG.md
 ├── ALEX_BEHAVIOR_TEST_STANDARD.md
-├── SPEC_V02B.md               # V0.2b 规格文档（当前版本）
 ├── CLAUDE_CODE_DOC_STANDARD.md # 开发计划文档规范
 ├── requirements.txt
 └── .env                       # API Keys（不提交 git）
@@ -84,15 +90,24 @@ speakeasy/
 | messages | V0.2a | 消息历史，含 role/content |
 | grammar_cards | V0.2b | FSRS 管理的语法错误卡片 |
 | session_reviews | V0.2b | 每次对话的复盘数据 |
+| user_profile | V0.3 | 用户画像（CEFR/职业/目标/风格） |
+| user_facts | V0.3 | LLM 提取的跨会话事实记忆 |
 
 ### API 接口清单
 
 | 接口 | 方法 | 引入版本 | 说明 |
 |---|---|---|---|
-| `/chat` | POST | V0.1 | 主对话，V0.2b 起注入 grammar_cards |
-| `/chat/summary` | POST | V0.1 | V0.2b 升级为返回复盘数据 |
+| `/chat` | POST | V0.1 | 主对话，V0.2b 起注入 grammar_cards，V0.3 起注入三层记忆 |
+| `/chat/summary` | POST | V0.1 | V0.2b 升级为复盘，V0.3 起异步触发 facts 提取 |
 | `/review/{session_id}` | GET | V0.2b | 获取复盘数据 |
 | `/review/{session_id}/rate` | POST | V0.2b | 用户评分，更新 FSRS |
+| `/assessment/self` | POST | V0.3 | 5 题 CEFR 自评，保存到 user_profile |
+| `/memory/profile` | GET/PUT | V0.3 | 用户画像读写 |
+| `/memory/facts` | GET | V0.3 | 事实记忆分页查询 |
+| `/memory/facts/{id}` | DELETE | V0.3 | 物理删除一条 fact |
+| `/memory/cards` | GET | V0.3 | 语法卡列表（active/pending） |
+| `/memory/cards/{id}` | DELETE | V0.3 | 软删除语法卡（status='deleted'） |
+| `/memory` | GET | V0.3 | 返回 memory.html 管理页面 |
 
 ---
 
@@ -105,26 +120,6 @@ speakeasy/
 3. **遇到文档未覆盖的情况：停下来问 Human，不自行决策**
 4. **不修改已完成版本的代码和测试**（除非 Human 明确要求）
 5. **所有 pip install 在激活的 venv 中执行**
-6. **涉及前端与现有 JS 集成的 Step，实现前必须先读 `static/js/` 下相关文件**，确认现有能力后再决定实现方式，禁止重复造轮子
-7. **涉及持久化状态的功能，实现前列出所有激活入口，每个入口单独实现并在测试中覆盖**
-
-### 持久化状态入口检查模板
-
-凡是功能涉及"保存到 DB / localStorage 的状态"，实现前必须填写：
-
-```
-功能：___________
-激活入口：
-  □ 用户主动操作（如点击按钮）
-  □ 页面加载时恢复（load / DOMContentLoaded）
-  □ 新对话 / 路由跳转时恢复
-  □ 其他：___________
-测试覆盖：
-  □ 单元/API 测试：验证存取逻辑
-  □ e2e 测试：验证每个入口的 UI 表现
-```
-
-未打勾的入口不允许进入"完成"状态。
 
 ### 测试规范
 
@@ -132,17 +127,6 @@ speakeasy/
 - 每个测试有 `autouse fixture` 保证前后清理
 - 断言必须用具体值，禁止模糊断言（如 `assert result is not None`）
 - Mock 只作用于外部依赖（LLM API），不 Mock 内部服务
-- **涉及前端 UI 的功能必须有对应 e2e 测试**（`tests/test_e2e_[版本号].py`），测试须覆盖"主动操作"和"页面刷新恢复"两类入口
-
-### Prompt 变更规则
-
-- **凡修改 `app/prompts/` 下任意文件，必须运行 `pytest tests/test_alex_behavior.py -v` 全绿才算完成**
-- Prompt 与代码同等对待：改动需有测试覆盖，不能靠主观感觉验收
-
-### 多路径对称性检查规则
-
-- 新增或修改路由时，**列出同一功能的所有路径入口**，确认每条路径均走等价的核心业务逻辑
-- 典型反例：`/chat` 注入了 `build_system_prompt()`，`/chat/stream` 最初没有 —— 两条路径必须对称
 
 ### 完成标志
 
@@ -184,18 +168,19 @@ Human 维护（Claude Code 不代劳）：
 
 > ⚠️ 此部分每次版本迭代后由 Human / Claude 更新
 
-### 当前版本：V0.3（待规划）
+### 当前版本：V0.3（已完成）
 
 **已完成版本功能：**
 ```
 V0.1  ✅  文本对话 · 今日一句 · 多模型支持
 V0.2a ✅  语音输入 STT · 语音输出 TTS · 流式输出 · 对话历史持久化
 V0.2b ✅  对话复盘 · FSRS 记忆调度 · 点击提问 UI
+V0.3  ✅  三层记忆系统 · Level评估 · user_facts · 记忆管理页面
 ```
 
-**下一版本预告：V0.3**
+**下一版本预告：V0.4**
 ```
-Level 评估 · Preference 提取 · 记忆管理页面
+场景模式（职场/旅行/面试） · 进度可视化 · 学习连续天数
 ```
 
 ---
@@ -226,4 +211,5 @@ pytest tests/test_stepN.py -v
 | V0.1 | ✅ 完成 | 文本对话 · 今日一句 |
 | V0.2a | ✅ 完成 | STT · TTS · 流式输出 · 历史持久化 |
 | V0.2b | ✅ 完成 | 复盘 · FSRS · 点击提问 |
-| V0.3 | ⏳ 规划中 | Level评估 · Preference · 记忆管理 |
+| V0.3 | ✅ 完成 | 三层记忆 · Level评估 · user_facts · 记忆管理页 |
+| V0.4 | ⏳ 待规划 | 场景模式 · 进度可视化 · 连续天数 |

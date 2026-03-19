@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>记忆管理 - Speakeasy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+button { cursor: pointer; font-family: inherit; border: none; background: none; }
+
+:root {
+  --bg:        #ede8de;
+  --surface:   #e4ddd2;
+  --elevated:  #ffffff;
+  --overlay:   #f7f4ef;
+  --border:       rgba(0,0,0,0.08);
+  --border-hover: rgba(0,0,0,0.16);
+  --accent:      #3d6b4f;
+  --accent-light:#4e8963;
+  --accent-dim:  rgba(61,107,79,0.1);
+  --accent-glow: rgba(61,107,79,0.2);
+  --rec:     #c0392b;
+  --text-1: #2c2820;
+  --text-2: #7a7060;
+  --text-3: #b5aa9a;
+  --r-sm:   8px;
+  --r-md:   14px;
+  --r-lg:   20px;
+  --r-full: 9999px;
+}
+
+html, body {
+  min-height: 100%;
+  background: var(--bg);
+  font-family: 'Sora', sans-serif;
+  font-size: 14px;
+  color: var(--text-1);
+  -webkit-font-smoothing: antialiased;
+}
+
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 20px 80px;
+}
+
+/* ── Header ── */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--border);
+  background: var(--elevated);
+  transition: all 0.15s;
+}
+.back-link:hover { color: var(--text-1); border-color: var(--border-hover); }
+
+.page-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+/* ── Tabs ── */
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--surface);
+  border-radius: var(--r-full);
+  padding: 4px;
+  margin-bottom: 24px;
+}
+.tab-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: var(--r-full);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  transition: all 0.2s;
+  text-align: center;
+}
+.tab-btn.active {
+  background: var(--elevated);
+  color: var(--accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+/* ── Tab panels ── */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Profile form ── */
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 12px;
+}
+.form-group {
+  margin-bottom: 16px;
+}
+.form-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  margin-bottom: 6px;
+}
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-1);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.form-input:focus { border-color: var(--accent); }
+
+.cefr-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-glow);
+  border-radius: var(--r-full);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+.btn-primary {
+  padding: 10px 20px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--r-full);
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+.btn-primary:hover { background: var(--accent-light); }
+
+.btn-secondary {
+  padding: 8px 16px;
+  background: var(--elevated);
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.btn-secondary:hover { border-color: var(--border-hover); color: var(--text-1); }
+
+.save-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 4px;
+}
+.save-feedback {
+  font-size: 13px;
+  color: var(--accent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.save-feedback.show { opacity: 1; }
+
+/* ── Cards / Facts list ── */
+.list-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-3);
+  font-size: 14px;
+}
+
+.item-card {
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.item-card:hover { border-color: var(--border-hover); }
+
+.item-content { flex: 1; }
+.item-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-1);
+  margin-bottom: 4px;
+}
+.item-meta {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.item-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  font-size: 11px;
+  font-weight: 500;
+  margin-right: 6px;
+}
+.badge-active { background: var(--accent-dim); color: var(--accent); }
+.badge-pending { background: #f5f0e8; color: var(--text-2); }
+
+.delete-btn {
+  padding: 4px 8px;
+  color: var(--text-3);
+  font-size: 16px;
+  border-radius: var(--r-sm);
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.delete-btn:hover { color: var(--rec); background: rgba(192,57,43,0.07); }
+
+.load-more-btn {
+  width: 100%;
+  padding: 10px;
+  text-align: center;
+  color: var(--text-2);
+  font-size: 13px;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  margin-top: 8px;
+  transition: all 0.15s;
+}
+.load-more-btn:hover { border-color: var(--accent); color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Top bar -->
+  <div class="top-bar">
+    <a href="/" class="back-link">← 返回对话</a>
+    <span class="page-title">🧠 记忆管理</span>
+    <div style="width:90px"></div><!-- spacer -->
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs" role="tablist">
+    <button class="tab-btn active" data-tab="profile" onclick="switchTab('profile')">语言档案</button>
+    <button class="tab-btn" data-tab="facts" onclick="switchTab('facts')">Alex 记得的事</button>
+    <button class="tab-btn" data-tab="cards" onclick="switchTab('cards')">语法强化</button>
+  </div>
+
+  <!-- Tab 1: Profile -->
+  <div class="tab-panel active" id="tab-profile">
+    <div class="form-group">
+      <div class="section-title">English 水平</div>
+      <div id="cefr-display" class="cefr-badge" style="display:none">
+        <span>当前水平：</span><span id="cefr-value">B1</span>
+        <button class="btn-secondary" style="margin-left:8px;padding:4px 12px;font-size:12px;" onclick="openAssessment()" id="reassess-btn">重新评估</button>
+      </div>
+      <div id="cefr-empty" style="margin-bottom:12px;">
+        <span style="color:var(--text-3);font-size:13px;">尚未评估 —— </span>
+        <button class="btn-secondary" style="padding:4px 12px;font-size:13px;" onclick="openAssessment()">开始评估</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="input-profession">职业 / 角色</label>
+      <input class="form-input" id="input-profession" type="text" placeholder="例如：产品经理、软件工程师、学生…">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="input-industry">行业</label>
+      <input class="form-input" id="input-industry" type="text" placeholder="例如：互联网、金融、教育…">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="input-topics">话题偏好</label>
+      <input class="form-input" id="input-topics" type="text" placeholder="例如：职场沟通、科技、旅行…">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="input-goal">学习目标</label>
+      <input class="form-input" id="input-goal" type="text" placeholder="例如：流利的职场英语、准备英文面试…">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="input-style">对话风格偏好</label>
+      <input class="form-input" id="input-style" type="text" placeholder="例如：幽默轻松、直接高效、耐心详细…">
+    </div>
+
+    <div class="save-row">
+      <button class="btn-primary" onclick="saveProfile()">保存画像</button>
+      <span class="save-feedback" id="profile-feedback">✓ 已保存</span>
+    </div>
+  </div>
+
+  <!-- Tab 2: Facts -->
+  <div class="tab-panel" id="tab-facts">
+    <div id="facts-list"></div>
+    <button class="load-more-btn" id="facts-load-more" style="display:none" onclick="loadMoreFacts()">加载更多</button>
+  </div>
+
+  <!-- Tab 3: Cards -->
+  <div class="tab-panel" id="tab-cards">
+    <div id="cards-list"></div>
+  </div>
+
+</div>
+
+<!-- ── Assessment Modal ── -->
+<div id="assessment-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:100;display:none;align-items:flex-end;justify-content:center;">
+  <div style="background:var(--elevated);border-radius:var(--r-lg) var(--r-lg) 0 0;width:100%;max-width:640px;padding:28px 24px 40px;max-height:80vh;overflow-y:auto;">
+    <div style="font-size:16px;font-weight:600;margin-bottom:6px;">English 水平自评</div>
+    <div style="font-size:13px;color:var(--text-2);margin-bottom:20px;">5 道题，每题约 30 秒，结果自动保存</div>
+
+    <div id="assessment-questions"></div>
+
+    <div style="display:flex;gap:10px;margin-top:20px;">
+      <button class="btn-primary" onclick="submitAssessment()" id="assess-submit-btn">确认提交</button>
+      <button class="btn-secondary" onclick="closeAssessment()">跳过</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ──────────────────────────────────────────────────────────────────
+const USER_ID = localStorage.getItem('speakeasy_user_id') || 'default_user';
+
+const ASSESSMENT_QUESTIONS = [
+  "我能理解日常问候和简单指令（如 "Please sit down", "Open the book"）",
+  "我能用简单句子介绍自己，说出名字、职业、兴趣",
+  "我能理解工作邮件的主要意思（不查字典）",
+  "我能在会议或电话中用英语表达观点，对方能理解",
+  "我能流利地讨论抽象话题（如趋势、策略），几乎不需要停顿想词",
+];
+
+let assessmentAnswers = new Array(5).fill(null);
+let factsOffset = 0;
+const FACTS_PAGE = 20;
+
+// ── Tab switch ───────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name === 'facts') loadFacts(true);
+  if (name === 'cards') loadCards();
+}
+
+// ── Profile ──────────────────────────────────────────────────────────────────
+async function loadProfile() {
+  try {
+    const r = await fetch(`/memory/profile?user_id=${USER_ID}`);
+    const d = await r.json();
+    if (d.cefr_level) {
+      document.getElementById('cefr-value').textContent = d.cefr_level;
+      document.getElementById('cefr-display').style.display = 'inline-flex';
+      document.getElementById('cefr-empty').style.display = 'none';
+    } else {
+      document.getElementById('cefr-display').style.display = 'none';
+      document.getElementById('cefr-empty').style.display = 'block';
+    }
+    if (d.profession) document.getElementById('input-profession').value = d.profession;
+    if (d.industry) document.getElementById('input-industry').value = d.industry;
+    if (d.topic_preferences) document.getElementById('input-topics').value = d.topic_preferences;
+    if (d.learning_goal) document.getElementById('input-goal').value = d.learning_goal;
+    if (d.personality_note) document.getElementById('input-style').value = d.personality_note;
+  } catch(e) { console.error('loadProfile error:', e); }
+}
+
+async function saveProfile() {
+  const body = {
+    profession: document.getElementById('input-profession').value.trim() || null,
+    industry: document.getElementById('input-industry').value.trim() || null,
+    topic_preferences: document.getElementById('input-topics').value.trim() || null,
+    learning_goal: document.getElementById('input-goal').value.trim() || null,
+    personality_note: document.getElementById('input-style').value.trim() || null,
+  };
+  // Remove null fields
+  Object.keys(body).forEach(k => { if (!body[k]) delete body[k]; });
+  try {
+    await fetch(`/memory/profile?user_id=${USER_ID}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const fb = document.getElementById('profile-feedback');
+    fb.classList.add('show');
+    setTimeout(() => fb.classList.remove('show'), 2000);
+  } catch(e) { alert('保存失败：' + e.message); }
+}
+
+// ── Assessment ────────────────────────────────────────────────────────────────
+function openAssessment() {
+  assessmentAnswers = new Array(5).fill(null);
+  const container = document.getElementById('assessment-questions');
+  container.innerHTML = ASSESSMENT_QUESTIONS.map((q, i) => `
+    <div style="margin-bottom:20px;">
+      <div style="font-size:14px;font-weight:500;margin-bottom:10px;">${i+1}. ${q}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${[['can','能做到','var(--accent)'],['partially','部分能','var(--warning,#b8860b)'],['cannot','还不能','var(--text-3)']].map(([v,label,col]) => `
+          <button onclick="setAnswer(${i},'${v}',this)" data-q="${i}" data-v="${v}"
+            style="padding:6px 14px;border-radius:var(--r-full);border:1px solid var(--border);font-size:13px;transition:all 0.15s;">
+            ${label}
+          </button>`).join('')}
+      </div>
+    </div>
+  `).join('');
+  const overlay = document.getElementById('assessment-overlay');
+  overlay.style.display = 'flex';
+}
+
+function setAnswer(qIdx, val, btn) {
+  assessmentAnswers[qIdx] = val;
+  // Highlight selected
+  document.querySelectorAll(`[data-q="${qIdx}"]`).forEach(b => {
+    const active = b.dataset.v === val;
+    b.style.background = active ? 'var(--accent)' : '';
+    b.style.color = active ? '#fff' : '';
+    b.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+  });
+}
+
+function closeAssessment() {
+  document.getElementById('assessment-overlay').style.display = 'none';
+  // Mark as skipped in localStorage
+  localStorage.setItem('speakeasy_assessment_skipped', '1');
+}
+
+async function submitAssessment() {
+  if (assessmentAnswers.some(a => a === null)) {
+    alert('请回答所有题目');
+    return;
+  }
+  try {
+    const r = await fetch('/assessment/self', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: USER_ID, answers: assessmentAnswers }),
+    });
+    const d = await r.json();
+    document.getElementById('cefr-value').textContent = d.cefr_level;
+    document.getElementById('cefr-display').style.display = 'inline-flex';
+    document.getElementById('cefr-empty').style.display = 'none';
+    document.getElementById('assessment-overlay').style.display = 'none';
+    localStorage.setItem('speakeasy_assessment_done', '1');
+  } catch(e) { alert('提交失败：' + e.message); }
+}
+
+// ── Facts ────────────────────────────────────────────────────────────────────
+async function loadFacts(reset = false) {
+  if (reset) {
+    factsOffset = 0;
+    document.getElementById('facts-list').innerHTML = '';
+  }
+  try {
+    const r = await fetch(`/memory/facts?user_id=${USER_ID}&limit=${FACTS_PAGE}&offset=${factsOffset}`);
+    const d = await r.json();
+    const list = document.getElementById('facts-list');
+
+    if (d.total === 0 && factsOffset === 0) {
+      list.innerHTML = '<div class="list-empty">Alex 还没有记住任何事 🌱<br>多聊几次，Alex 会慢慢了解你</div>';
+      document.getElementById('facts-load-more').style.display = 'none';
+      return;
+    }
+
+    d.facts.forEach(f => {
+      const el = document.createElement('div');
+      el.className = 'item-card';
+      el.dataset.factId = f.id;
+      el.innerHTML = `
+        <div class="item-content">
+          <div class="item-title">${escHtml(f.content)}</div>
+          <div class="item-meta">${f.created_at ? f.created_at.substring(0,10) : ''}</div>
+        </div>
+        <button class="delete-btn" onclick="deleteFact(${f.id})" title="删除">✕</button>
+      `;
+      list.appendChild(el);
+    });
+
+    factsOffset += d.facts.length;
+    const more = document.getElementById('facts-load-more');
+    more.style.display = factsOffset < d.total ? 'block' : 'none';
+  } catch(e) { console.error('loadFacts error:', e); }
+}
+
+async function loadMoreFacts() { await loadFacts(false); }
+
+async function deleteFact(id) {
+  if (!confirm('删除这条记忆？')) return;
+  try {
+    const r = await fetch(`/memory/facts/${id}?user_id=${USER_ID}`, { method: 'DELETE' });
+    if (r.ok) {
+      const el = document.querySelector(`[data-fact-id="${id}"]`);
+      if (el) el.remove();
+      // Reload if list is empty
+      if (!document.querySelector('.item-card')) loadFacts(true);
+    }
+  } catch(e) { alert('删除失败：' + e.message); }
+}
+
+// ── Cards ────────────────────────────────────────────────────────────────────
+async function loadCards() {
+  try {
+    const r = await fetch(`/memory/cards?user_id=${USER_ID}`);
+    const d = await r.json();
+    const list = document.getElementById('cards-list');
+
+    if (!d.cards.length) {
+      list.innerHTML = '<div class="list-empty">暂无语法强化卡 🎉<br>继续对话，Alex 会悄悄记录你的语法习惯</div>';
+      return;
+    }
+
+    list.innerHTML = d.cards.map(c => `
+      <div class="item-card" data-card-id="${c.id}">
+        <div class="item-content">
+          <div class="item-title">
+            <span class="item-badge ${c.status === 'active' ? 'badge-active' : 'badge-pending'}">${c.status === 'active' ? '强化中' : '观察中'}</span>
+            ${escHtml(c.key)}
+          </div>
+          <div class="item-meta" style="margin-top:4px;">${escHtml(c.content)}</div>
+          ${c.example_wrong ? `<div style="margin-top:6px;font-size:12px;color:var(--text-3);">
+            <span style="color:#c0392b;">✗</span> ${escHtml(c.example_wrong)}&nbsp;&nbsp;
+            <span style="color:var(--accent);">✓</span> ${escHtml(c.example_right)}
+          </div>` : ''}
+          <div class="item-meta" style="margin-top:4px;">出现 ${c.frequency} 次</div>
+        </div>
+        <button class="delete-btn" onclick="deleteCard(${c.id})" title="删除">✕</button>
+      </div>
+    `).join('');
+  } catch(e) { console.error('loadCards error:', e); }
+}
+
+async function deleteCard(id) {
+  if (!confirm('删除这个语法卡片？')) return;
+  try {
+    const r = await fetch(`/memory/cards/${id}?user_id=${USER_ID}`, { method: 'DELETE' });
+    if (r.ok) {
+      const el = document.querySelector(`[data-card-id="${id}"]`);
+      if (el) el.remove();
+      if (!document.querySelector('.item-card')) loadCards();
+    }
+  } catch(e) { alert('删除失败：' + e.message); }
+}
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadProfile();
+</script>
+</body>
+</html>

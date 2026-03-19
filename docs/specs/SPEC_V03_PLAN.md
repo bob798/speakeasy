@@ -4,7 +4,7 @@
 > 状态：规划中
 > 前置条件：V0.2b 全部验收通过
 > 负责人：Claude（规划）+ Claude Code（执行）
-> 最后更新：2026-03-16
+> 最后更新：2026-03-18
 
 ---
 
@@ -286,7 +286,108 @@ grammar_cards 注入（V0.2b 已有）
 
 ---
 
-## 四、Step 拆解
+## 四、User Stories
+
+> 格式：`US-[编号] As a [角色], I want [目标] so that [价值]`
+> 每条 US 对应一个可验证的用户可感知变化。
+
+### Epic A：Alex 知道你是谁（user_profile + Level 评估）
+
+| ID | User Story | 对应 Step | 验收信号 |
+|---|---|---|---|
+| US-01 | 作为**首次使用的用户**，我想通过 5 分钟问卷告诉 Alex 我的英语水平，让 Alex 从第一句话起就用对难度 | Step 1, 6 | 首次进入弹窗出现，完成后 cefr_level 写入，不再弹 |
+| US-02 | 作为**中级用户（B1）**，我希望 Alex 在用 idiom 时顺带解释一下，不让我听懵 | Step 2 | B1 用户 system prompt 含水平标注，LLM 回复风格对应调整 |
+| US-03 | 作为**产品经理**，我希望 Alex 举的例子是开会、写邮件、跨部门协作，不是买菜烹饪 | Step 2 | system prompt 含职业注入，对话话题贴近职场 |
+| US-04 | 作为**学习目标明确的用户**，我想设置"我要准备英文面试"，让 Alex 知道我在练什么方向 | Step 1, 2 | learning_goal 写入并注入 system prompt |
+| US-05 | 作为**已设置画像的用户**，我想随时回来修改职业或偏好，保持 Alex 的认知是最新的 | Step 5 | 记忆管理页语言档案 Tab 可编辑，保存后 Alex 对话即生效 |
+
+### Epic B：Alex 记得发生的事（user_facts 自动提取）
+
+| ID | User Story | 对应 Step | 验收信号 |
+|---|---|---|---|
+| US-06 | 作为**持续使用的用户**，我希望对话结束后 Alex 自动记下"我上周有重要演示"，不用我手动记 | Step 3 | /chat/summary 后 user_facts 表新增 0-3 条，无感进行 |
+| US-07 | 作为**回到 Alex 的用户**，我希望 Alex 开场时能自然说"你上次提到的那个演示，后来怎样了？"，感受到被记得 | Step 4 | user_facts 注入 system prompt，LLM 能自然续接历史事件 |
+| US-08 | 作为**注重隐私的用户**，我想删掉 Alex 记住的某件事，不让它再出现在对话里 | Step 5 | 记忆管理页 Alex 记得的事 Tab，删除后不再注入 |
+
+### Epic C：你能看到自己的积累（记忆管理页面）
+
+| ID | User Story | 对应 Step | 验收信号 |
+|---|---|---|---|
+| US-09 | 作为**使用 3 个月的用户**，我想看到一张"Alex 对我的认知画像"，感受到积累带来的成就感 | Step 5 | 记忆管理页语言档案 Tab 正确展示 profile |
+| US-10 | 作为**关注语法进步的用户**，我想看到 Alex 正在帮我强化哪些语法点，知道自己哪里在被悄悄纠正 | Step 5 | 错误 Tab 展示 grammar_cards，含错误类型 / 出现次数 |
+| US-11 | 作为**不想被某条规则烦扰的用户**，我想删掉一个语法卡片，让它不再在对话里出现 | Step 5 | 删除 grammar_card 后不再注入 system prompt |
+
+---
+
+## 五、开发计划
+
+### 5.1 依赖关系图
+
+```
+Step 1（数据层）
+    │
+    ├─► Step 2（profile 注入）── 独立可并行
+    │
+    └─► Step 3（user_facts 表 + 提取）
+            │
+            └─► Step 4（facts 注入）── 依赖 Step 3
+                    │
+                    └─► Step 5（记忆管理前端）── 依赖 Steps 1+3+4
+                            │
+                            └─► Step 6（Level 评估引导 UI）── 依赖 Step 1+5
+```
+
+**可并行执行：** Step 2 和 Step 3 均依赖 Step 1，可在 Step 1 完成后同时开发。
+
+### 5.2 开发序列
+
+| 阶段 | Step | 核心交付 | 依赖 | 测试文件 |
+|---|---|---|---|---|
+| 阶段一：数据基础 | Step 1 | user_profile 表 + GET/PUT /memory/profile + POST /assessment/self | 无 | test_v03_step1.py |
+| 阶段二：后端注入 | Step 2 | profile 注入 system prompt | Step 1 | test_v03_step2.py |
+| 阶段二：后端注入 | Step 3 | user_facts 表 + /chat/summary 后自动提取 + GET/DELETE /memory/facts | Step 1 | test_v03_step3.py |
+| 阶段三：整合注入 | Step 4 | facts 注入 system prompt + 三层注入完整联调 | Steps 2+3 | test_v03_step4.py |
+| 阶段四：前端呈现 | Step 5 | 记忆管理页（三 Tab：画像 / 错误 / 记忆） | Step 4 | test_v03_e2e.py |
+| 阶段四：前端呈现 | Step 6 | Level 评估引导弹窗（首次进入触发） | Step 5 | test_v03_e2e.py（追加）|
+
+### 5.3 User Story → Step 覆盖矩阵
+
+| US | Step 1 | Step 2 | Step 3 | Step 4 | Step 5 | Step 6 |
+|---|---|---|---|---|---|---|
+| US-01 Level 评估问卷 | ✅ API | | | | | ✅ UI |
+| US-02 水平难度自适应 | | ✅ | | | | |
+| US-03 职业话题匹配 | | ✅ | | | | |
+| US-04 学习目标注入 | ✅ | ✅ | | | | |
+| US-05 画像可随时编辑 | | | | | ✅ | |
+| US-06 对话后自动提取事实 | | | ✅ | | | |
+| US-07 续接历史事件 | | | | ✅ | | |
+| US-08 删除 Alex 记住的事 | | | ✅ | | ✅ | |
+| US-09 查看认知画像 | | | | | ✅ | |
+| US-10 查看正在强化的语法点 | | | | | ✅ | |
+| US-11 删除语法卡片 | | | | | ✅ | |
+
+### 5.4 MVP 定义
+
+**V0.3 MVP（必须交付）：** Steps 1 → 2 → 3 → 4（全后端完成）
+
+用户可感知的核心变化：Alex 开始知道你是谁，开始记得发生了什么。不需要记忆管理页，用户通过对话本身能感受到个性化。
+
+**V0.3 完整版（Full）：** MVP + Steps 5 + 6
+
+增加可见性：用户能看到积累，能控制画像和记忆。完整达成"越聊越懂你"的用户感知。
+
+### 5.5 风险点
+
+| 风险 | 影响 | 缓解措施 |
+|---|---|---|
+| LLM 提取 user_facts 质量不稳定（提取出无意义内容） | US-07 体验差，Alex "乱"续接 | Prompt 加严格过滤规则；允许返回空数组；管理页面可手动删除 |
+| user_profile 字段为空时 system prompt 注入乱码 | Alex 行为异常 | Step 2 测试覆盖"部分字段为空"case；build_system_prompt 各层独立 guard |
+| Playwright e2e 测试在 CI 中不稳定 | Step 5/6 验收困难 | Step 5/6 优先手动验收，e2e 作辅助；API 层测试保证后端正确性 |
+| system prompt 过长导致 token 超限 | 对话失败 | 三层注入有 token 估算截断逻辑（Section 3.4 已设计） |
+
+---
+
+## 六、Step 拆解
 
 ### Step 1：数据层 — user_profile 表 + Level 评估接口
 
@@ -445,7 +546,7 @@ grammar_cards 注入（V0.2b 已有）
 
 ---
 
-## 五、上线版本建议
+## 七、上线版本建议
 
 ### 结论
 

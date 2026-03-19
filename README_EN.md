@@ -1,6 +1,6 @@
 # Speakeasy
 
-> Your English is good enough. What stops you is that first second before you speak.
+> Your AI companion tutor. The more you talk, the better it knows you.
 
 [中文文档](./README.md)
 
@@ -8,21 +8,31 @@
 
 ## What problem does this solve
 
-Chinese professionals don't freeze in English because they don't know the language. They freeze because they're afraid — afraid of making mistakes, afraid of sounding unprofessional, afraid of judgment.
+People who want to practice English don't lack resources. They lack a practice partner that **actually knows them**.
 
-Most language apps make this worse: pronunciation scores, grammar corrections, losing hearts. The more you practice, the more you fear speaking.
+Flashcards, drills, courses — the moment you stop, you start forgetting. And every app treats you like a stranger: it doesn't know what you do for work, doesn't remember what you said last time, doesn't know where you're weak or where you've already improved. After three months of practice, the system knows you exactly as well as it did on day one.
 
-**Speakeasy's bet isn't "teach you English." It's "help you stop being afraid to speak."**
+General AI (ChatGPT) can chat, but the same problem applies: when the conversation ends, everything resets. It doesn't accumulate, doesn't adapt, doesn't know you.
+
+**Speakeasy's premise: a language tutor that genuinely builds up its understanding of you over time.**
 
 ---
 
 ## What Speakeasy is
 
-An English-speaking friend with memory, named Alex.
+An AI companion tutor, named Alex.
 
-You talk about your real life — today's meeting, something that went sideways at work, where you went last weekend. Alex never corrects you explicitly. But you gradually speak more naturally. Alex remembers what you've told him and picks up the thread next time. He knows what you do for work and steers topics toward your context.
+You talk about your real life — today's meeting, something that went sideways, where you went last weekend. Alex continuously builds a picture of you: what you do for work, where your language habits are, what's happening in your life. Every conversation, Alex knows you a little better — topics become more relevant, guidance more targeted, reinforcement more precise.
 
-Not a course. Not a drill. Not an AI teacher. **A friend.**
+Alex has two ways to help you improve:
+
+**Implicit (you don't notice, but it's happening)**
+During conversation, Alex naturally plants the expressions you need to work on in his replies. You think you're chatting. Alex knows you're improving.
+
+**Explicit (after the conversation, when you choose to review)**
+At the end of each session, Alex generates a review: what you expressed well today, and where there's a more natural way to say it. You can dig in with follow-up questions, or just come back next time.
+
+Not a course. Not a drill. Not an AI teacher. **A tutor that knows you better every time.**
 
 ---
 
@@ -31,60 +41,63 @@ Not a course. Not a drill. Not an AI teacher. **A friend.**
 | | ChatGPT | Speakeasy (Alex) |
 |---|---|---|
 | Remembers what you said? | No — starts fresh every time | Yes. Will ask how that thing you mentioned turned out |
-| Remembers your grammar patterns? | No | Yes — reinforces correct forms naturally in conversation |
+| Remembers your grammar patterns? | No | Yes — continuously reinforces them through natural conversation |
 | Knows what you do for work? | No | Yes — adjusts topics and vocabulary to your context |
-| Will it correct you? | Yes, directly | Never. Uses natural modeling instead |
-| Good for? | Anything, but nothing accumulates | Long-term spoken fluency, especially workplace English |
+| Evolves over time? | No — same every session | Yes — gets more calibrated the more you talk |
+| How does it help you improve? | You have to drive it | Implicit guidance + explicit review, both running in parallel |
 
 ---
 
-## How it works
+## How Alex gets to know you
+
+```
+After each conversation:
+  What you talked about
+         │
+         ├─► grammar_cards    Your recurring grammar patterns
+         │   (FSRS schedules when to reinforce them in future conversations)
+         │
+         ├─► user_facts       What's happening in your life
+         │   LLM extracts 2-3 facts: "User has an important presentation this week"
+         │
+         └─► user_profile     Who you are
+             Profession / English level / topic preferences / learning goals
+
+Next conversation: all three layers are injected into Alex's context.
+Alex knows your language habits, what happened last week, where you're heading.
+```
+
+This isn't just a technical design — it's how Alex actually comes to know you.
+
+---
+
+## How it works in practice
 
 ```
 You say: "Yesterday I go to a meeting with my boss..."
-                            ↓
-Alex responds naturally (no correction):
+
+Alex responds naturally (implicit guidance, happening in the background):
 "Oh that sounds tough — how did the meeting go?
  I went to a really long one last week too..."
-                            ↓
-Session ends. Alex generates a review:
-  - Expressions you used well (what you did right)
-  - More natural alternatives (not "you were wrong" — "here's a better way")
-                            ↓
-Next session, Alex remembers:
-  - You have a past tense habit (quietly uses went/had/was more often)
-  - You had a stressful meeting last week (might ask "how did that work out?")
-  - You're a product manager (steers toward products, teams, user research)
+  ↑ used "went" — your weak point, modeled without comment
+
+Session ends. Alex generates a review (explicit, when you're ready):
+  ✓ Expressions you used well today
+  → More natural alternatives (not "you were wrong" — "here's a better way")
+
+Next session, Alex has updated its understanding of you:
+  · Uses more past tense forms, targeting your go/went pattern
+  · Remembers the meeting with your boss, may naturally follow up
+  · Knows you're a product manager, steers toward products, teams, users
 ```
 
 **Three design principles:**
 
 | Principle | What it is | What it isn't |
 |---|---|---|
-| **Zero judgment** | No scores, no red marks, no "you should say..." | Not a lenient teacher |
-| **Natural modeling** | Alex plants correct expressions in replies; you absorb them | Not a hidden grammar lesson |
-| **Alex remembers you** | Error history + life events + your profile | Not just conversation history |
-
----
-
-## How Alex's memory works
-
-```
-After each conversation:
-  What you talked about
-         │
-         ├─► grammar_cards    Recurring grammar errors
-         │   (FSRS schedules when to reinforce them in future conversations)
-         │
-         ├─► user_facts       What happened in your life
-         │   LLM extracts 2-3 facts: "User has an important presentation this week"
-         │
-         └─► user_profile     Who you are
-             Profession / learning goal / topic preferences / English level
-
-Next conversation: all three layers are injected into Alex's context.
-Alex knows your recurring mistakes, last week's events, what you're working toward.
-```
+| **Knows you** | Profession + grammar habits + life events, continuously updated | Not just conversation history |
+| **Guides you** | Topics, difficulty, reinforcement targets — dynamically adjusted, implicit + explicit | Not a fixed curriculum |
+| **Stays with you** | Cross-session, no end point, becomes more yours over time | Not a one-off tool |
 
 ---
 
