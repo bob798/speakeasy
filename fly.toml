@@ -1,5 +1,5 @@
 # Fly.io 部署配置
-app = "speakeasy-english"
+app = "speakeasy-yes"
 primary_region = "nrt"  # 东京（离中国最近）
 
 [build]
