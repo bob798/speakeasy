@@ -1,4 +1,4 @@
-# Fly.io 部署配置
+# LEGACY: Fly.io 部署配置，已被 docker-compose + Caddy 替代。计划在后续 PR 中移除。
 app = "speakeasy-yes"
 primary_region = "nrt"  # 东京（离中国最近）
 

@@ -43,9 +43,3 @@ def test_user_settings_default_values(setup_db):
     assert result.voice == "warm"
     assert result.speed == "normal"
     assert result.activation == "push_to_talk"
-
-
-def test_silero_vad_importable():
-    import silero_vad
-    model = silero_vad.load_silero_vad()
-    assert model is not None

@@ -12,3 +12,6 @@ dist/
 *.db-shm
 *.db-wal
 .obsidian/
+.env.production
+static/tts_cache/
+static/audio_cache/
