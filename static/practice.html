@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Speakeasy - 发音练习</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+button { cursor: pointer; font-family: inherit; border: none; background: none; }
+textarea, input { font-family: inherit; }
+
+:root {
+  --bg:        #ede8de;
+  --surface:   #e4ddd2;
+  --elevated:  #ffffff;
+  --overlay:   #f7f4ef;
+  --border:       rgba(0,0,0,0.08);
+  --border-hover: rgba(0,0,0,0.16);
+  --accent:      #3d6b4f;
+  --accent-light:#4e8963;
+  --accent-dim:  rgba(61,107,79,0.1);
+  --rec:     #c0392b;
+  --rec-dim: rgba(192,57,43,0.1);
+  --rec-glow:rgba(192,57,43,0.25);
+  --text-1: #2c2820;
+  --text-2: #7a7060;
+  --text-3: #b5aa9a;
+  --radius: 12px;
+  --shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+body { font-family:'Sora','PingFang SC','Noto Sans SC',system-ui,sans-serif; background:var(--bg); color:var(--text-1); min-height:100vh; }
+
+/* ── Header ── */
+.header { display:flex; align-items:center; justify-content:space-between; padding:10px 20px; background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; }
+.header-left { display:flex; align-items:center; gap:12px; }
+.header-left .brand { font-size:16px; font-weight:600; color:var(--text-1); text-decoration:none; }
+.header-right { display:flex; align-items:center; gap:8px; }
+.header-right a { font-size:18px; text-decoration:none; padding:2px 4px; color:var(--text-2); transition:color 0.15s; }
+.header-right a:hover { color:var(--text-1); }
+.badge { background:var(--rec); color:#fff; font-size:11px; min-width:18px; height:18px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; padding:0 5px; margin-left:-4px; vertical-align:top; }
+
+/* ── Container ── */
+.container { max-width:1100px; margin:0 auto; padding:20px 16px; }
+
+/* ── Cards ── */
+.card { background:var(--elevated); border-radius:var(--radius); box-shadow:var(--shadow); padding:20px; margin-bottom:16px; }
+.card h3 { font-size:14px; font-weight:600; color:var(--text-2); margin-bottom:12px; }
+
+/* ── Top Bar (review + history) ── */
+.top-bar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+.review-entry { display:none; }
+.review-entry.show { display:block; }
+.review-card { display:flex; align-items:center; gap:10px; padding:10px 16px; background:linear-gradient(135deg, var(--accent-dim), var(--overlay)); border-radius:var(--radius); cursor:pointer; transition:all 0.15s; }
+.review-card:hover { box-shadow:0 4px 16px rgba(61,107,79,0.15); }
+.review-left { display:flex; align-items:center; gap:8px; }
+.review-left span:first-child { font-size:18px; }
+.review-left span:last-child { font-size:13px; font-weight:500; color:var(--accent); }
+.history-dropdown { position:relative; }
+.history-toggle { padding:8px 14px; border:1px solid var(--border); border-radius:8px; font-size:13px; color:var(--text-2); background:var(--elevated); display:flex; align-items:center; gap:6px; }
+.history-toggle:hover { border-color:var(--accent); color:var(--accent); }
+.history-panel { display:none; position:absolute; top:100%; left:0; margin-top:6px; min-width:320px; max-height:250px; overflow-y:auto; background:var(--elevated); border-radius:var(--radius); box-shadow:0 8px 32px rgba(0,0,0,0.12); z-index:50; padding:8px; }
+.history-panel.show { display:block; }
+.history-item { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; margin:2px 0; border-radius:6px; background:var(--overlay); cursor:pointer; font-size:13px; transition:all 0.15s; }
+.history-item:hover { background:var(--accent-dim); }
+.history-item .hi-title { flex:1; color:var(--text-1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.history-item .hi-meta { font-size:11px; color:var(--text-3); margin-left:8px; flex-shrink:0; }
+
+/* ── Input Area ── */
+.url-row { display:flex; gap:8px; margin-bottom:12px; }
+.url-row input { flex:1; padding:10px 14px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--elevated); outline:none; transition:border-color 0.15s; }
+.url-row input:focus { border-color:var(--accent); }
+
+.btn { padding:8px 16px; border-radius:8px; font-size:13px; font-weight:500; transition:all 0.15s; }
+.btn-primary { background:var(--accent); color:#fff; }
+.btn-primary:hover { background:var(--accent-light); }
+.btn-primary:disabled { opacity:0.5; cursor:not-allowed; }
+.btn-outline { border:1px solid var(--border); color:var(--text-2); background:var(--elevated); }
+.btn-outline:hover { border-color:var(--accent); color:var(--accent); }
+.btn-sm { padding:6px 12px; font-size:12px; }
+
+.toggle-manual { font-size:12px; color:var(--text-3); cursor:pointer; text-decoration:underline; margin-bottom:8px; display:inline-block; }
+.manual-area { display:none; }
+.manual-area.show { display:block; }
+.manual-area textarea { width:100%; min-height:100px; padding:10px 14px; border:1px solid var(--border); border-radius:8px; font-size:13px; resize:vertical; outline:none; }
+.manual-area textarea:focus { border-color:var(--accent); }
+
+.status-msg { font-size:12px; color:var(--text-2); margin-top:8px; padding:6px 10px; border-radius:6px; background:var(--overlay); display:none; }
+.status-msg.show { display:block; }
+.status-msg.error { color:var(--rec); background:var(--rec-dim); }
+
+/* ── Two-column Layout ── */
+.practice-layout { display:none; }
+.practice-layout.show { display:grid; grid-template-columns:1.5fr 1fr; gap:16px; }
+
+/* ── Left Panel: Subtitle Lines ── */
+.left-panel .subtitle-lines { max-height:calc(100vh - 280px); overflow-y:auto; }
+.sub-line { padding:10px 14px; margin:3px 0; border-radius:8px; font-size:14px; line-height:1.6; cursor:pointer; transition:all 0.15s; border:2px solid transparent; user-select:none; }
+.sub-line:hover { background:var(--overlay); }
+.sub-line.active { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); font-weight:500; }
+.sub-line.practiced { position:relative; }
+.sub-line.practiced::after { content:''; position:absolute; right:10px; top:50%; transform:translateY(-50%); width:8px; height:8px; border-radius:50%; background:var(--accent); opacity:0.4; }
+.sub-line .word { cursor:text; border-radius:3px; transition:background 0.1s; }
+.sub-line .word::selection { background:var(--accent); color:#fff; }
+.sub-line .word:hover { background:rgba(61,107,79,0.08); }
+
+/* ── Right Panel: Controls ── */
+.right-panel { position:sticky; top:70px; align-self:start; }
+.controls-card { background:var(--elevated); border-radius:var(--radius); box-shadow:var(--shadow); padding:24px; }
+.controls-card h3 { font-size:14px; font-weight:600; color:var(--text-2); margin-bottom:16px; text-align:center; }
+
+.current-text { font-size:20px; font-weight:500; line-height:1.5; text-align:center; margin-bottom:6px; min-height:60px; display:flex; align-items:center; justify-content:center; padding:8px; color:var(--text-1); }
+.current-context { font-size:12px; color:var(--text-3); text-align:center; margin-bottom:16px; min-height:18px; }
+
+/* ── Word Picker ── */
+.word-picker { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin-bottom:14px; padding:8px; min-height:36px; }
+.word-chip { padding:4px 10px; border-radius:16px; font-size:13px; border:1px solid var(--border); background:var(--elevated); color:var(--text-1); cursor:pointer; transition:all 0.15s; }
+.word-chip:hover { border-color:var(--accent); background:var(--accent-dim); }
+.word-chip.selected { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+/* ── TTS Provider Selector ── */
+.provider-row { display:flex; gap:6px; justify-content:center; margin-bottom:18px; flex-wrap:wrap; }
+.provider-btn { padding:6px 14px; border-radius:20px; font-size:12px; font-weight:500; border:1px solid var(--border); background:var(--elevated); color:var(--text-2); transition:all 0.15s; }
+.provider-btn:hover { border-color:var(--accent); color:var(--accent); }
+.provider-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.provider-btn .sub-label { font-size:10px; color:var(--text-3); display:block; margin-top:1px; }
+.provider-btn.active .sub-label { color:rgba(255,255,255,0.7); }
+
+/* ── Audio Controls ── */
+.audio-controls { display:flex; justify-content:center; gap:16px; margin-bottom:20px; flex-wrap:wrap; }
+.audio-btn { width:56px; height:56px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:24px; transition:all 0.2s; }
+.audio-btn.tts { background:var(--accent-dim); color:var(--accent); }
+.audio-btn.tts:hover { background:var(--accent); color:#fff; }
+.audio-btn.tts.playing { background:var(--accent); color:#fff; }
+.audio-btn.record { background:var(--rec-dim); color:var(--rec); }
+.audio-btn.record:hover { background:var(--rec); color:#fff; }
+.audio-btn.record.recording { background:var(--rec); color:#fff; animation:pulse 1s infinite; }
+.audio-btn.playback { background:var(--overlay); color:var(--text-2); }
+.audio-btn.playback:hover { background:var(--surface); color:var(--text-1); }
+.audio-btn:disabled { opacity:0.3; cursor:not-allowed; }
+
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 var(--rec-glow)} 50%{box-shadow:0 0 0 12px transparent} }
+
+/* ── Speed Control ── */
+.speed-row { display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:18px; font-size:12px; color:var(--text-3); }
+.speed-row select { padding:4px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--elevated); color:var(--text-1); outline:none; }
+
+/* ── Rating ── */
+.rating-btns { display:flex; justify-content:center; gap:8px; flex-wrap:wrap; }
+.rating-btn { padding:10px 18px; border-radius:8px; font-size:13px; font-weight:500; border:1px solid var(--border); background:var(--elevated); color:var(--text-2); transition:all 0.15s; }
+.rating-btn:hover { border-color:var(--accent); color:var(--accent); }
+.rating-btn.again { border-color:var(--rec); color:var(--rec); }
+.rating-btn.again:hover { background:var(--rec-dim); }
+
+/* ── Progress Indicator ── */
+.progress-bar { height:4px; background:var(--surface); border-radius:2px; margin-bottom:18px; overflow:hidden; }
+.progress-bar .fill { height:100%; background:var(--accent); border-radius:2px; transition:width 0.3s; }
+
+/* ── No Selection Placeholder ── */
+.no-selection { text-align:center; padding:40px 20px; color:var(--text-3); font-size:13px; }
+
+/* ── Summary ── */
+.summary-area { display:none; text-align:center; padding:24px; }
+.summary-area.show { display:block; }
+.summary-area h3 { font-size:18px; margin-bottom:16px; color:var(--accent); }
+.summary-stats { display:flex; justify-content:center; gap:24px; margin-bottom:20px; }
+.stat-item { text-align:center; }
+.stat-num { font-size:28px; font-weight:600; color:var(--accent); }
+.stat-label { font-size:11px; color:var(--text-3); margin-top:2px; }
+
+/* ── Loading ── */
+.spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.6s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  .practice-layout.show { grid-template-columns:1fr; }
+  .right-panel { position:static; }
+  .left-panel .subtitle-lines { max-height:200px; }
+  .history-panel { min-width:280px; right:0; left:auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-left">
+    <a href="/" class="brand">Speakeasy</a>
+    <span style="font-size:13px;color:var(--text-3)">发音练习</span>
+  </div>
+  <div class="header-right">
+    <a href="/" title="首页">💬</a>
+    <a href="/practice" title="发音练习" style="color:var(--text-1)">🎙️</a>
+    <a href="/memory" title="记忆管理">🧠</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Top Bar: Review + History -->
+  <div class="top-bar">
+    <div class="review-entry" id="reviewEntry">
+      <div class="review-card" onclick="startReview()">
+        <div class="review-left">
+          <span>🔄</span>
+          <span>今日复习</span>
+        </div>
+        <span class="badge" id="dueBadge">0</span>
+      </div>
+    </div>
+    <div class="history-dropdown">
+      <button class="history-toggle" onclick="toggleHistoryPanel()">📚 历史记录 <span id="historyCount"></span></button>
+      <div class="history-panel" id="historyPanel">
+        <div id="historyList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input Area -->
+  <div class="card" id="inputCard">
+    <h3>📥 加载学习内容</h3>
+    <div class="url-row">
+      <input type="text" id="urlInput" placeholder="粘贴 B站 或 YouTube 视频链接..." />
+      <button class="btn btn-primary" id="fetchBtn" onclick="fetchSubtitles()">提取字幕</button>
+    </div>
+    <span class="toggle-manual" onclick="toggleManual()">或手动粘贴文本 ▾</span>
+    <div class="manual-area" id="manualArea">
+      <textarea id="manualText" placeholder="每行一句，粘贴字幕文本..."></textarea>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="loadManualText()">加载文本</button>
+    </div>
+    <div class="status-msg" id="statusMsg"></div>
+  </div>
+
+  <!-- Two-column Practice Layout -->
+  <div class="practice-layout" id="practiceLayout">
+    <!-- Left: Subtitle Lines -->
+    <div class="left-panel">
+      <div class="card">
+        <h3>📝 字幕内容 <span style="font-size:11px;color:var(--text-3);font-weight:400">（点击选择练习句子）</span></h3>
+        <div class="subtitle-lines" id="subtitleLines"></div>
+      </div>
+    </div>
+
+    <!-- Right: Controls -->
+    <div class="right-panel">
+      <div class="controls-card">
+        <div id="noSelection" class="no-selection">
+          点击左侧字幕选择要练习的句子
+        </div>
+        <div id="controlsContent" style="display:none;">
+          <div class="progress-bar"><div class="fill" id="progressFill" style="width:0%"></div></div>
+
+          <div class="current-text" id="practiceText"></div>
+          <div class="word-picker" id="wordPicker"></div>
+          <div class="current-context" id="practiceContext"></div>
+
+          <!-- TTS Provider Selector -->
+          <div class="provider-row" id="providerRow">
+            <button class="provider-btn active" data-provider="edge" onclick="selectProvider('edge', this)">Edge TTS</button>
+            <button class="provider-btn" data-provider="openai" onclick="selectProvider('openai', this)">OpenAI TTS</button>
+            <button class="provider-btn" data-provider="original" id="originalBtn" style="display:none;" onclick="selectProvider('original', this)">原始音频</button>
+          </div>
+
+          <!-- Speed Control -->
+          <div class="speed-row">
+            <span>语速</span>
+            <select id="speedSelect" onchange="onSpeedChange()">
+              <option value="-30%">0.7x</option>
+              <option value="-15%">0.85x</option>
+              <option value="+0%" selected>1x</option>
+              <option value="+15%">1.15x</option>
+              <option value="+30%">1.3x</option>
+            </select>
+          </div>
+
+          <!-- Audio Controls -->
+          <div class="audio-controls">
+            <button class="audio-btn tts" id="ttsBtn" onclick="playTTS()" title="播放标准发音">🔊</button>
+            <button class="audio-btn record" id="recordBtn" onclick="toggleRecord()" title="录音">🎙️</button>
+            <button class="audio-btn playback" id="playbackBtn" onclick="playRecording()" disabled title="回放录音">▶️</button>
+          </div>
+
+          <!-- Rating -->
+          <div class="rating-btns" id="ratingBtns">
+            <button class="rating-btn again" onclick="rate('again')">Again</button>
+            <button class="rating-btn" onclick="rate('hard')">Hard</button>
+            <button class="rating-btn" onclick="rate('good')">Good</button>
+            <button class="rating-btn" onclick="rate('easy')">Easy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Practice Summary -->
+  <div class="card summary-area" id="summaryArea">
+    <h3>练习完成!</h3>
+    <div class="summary-stats" id="summaryStats"></div>
+    <button class="btn btn-primary" onclick="resetAll()">继续练习</button>
+    <button class="btn btn-outline" style="margin-left:8px;" onclick="startReview()" id="summaryReviewBtn">复习到期卡片</button>
+  </div>
+
+</div>
+
+<script>
+const USER_ID = localStorage.getItem('speakeasy_user_id') || 'default_user';
+
+// ── State ──
+let segments = [];
+let markedIndices = new Set();
+let practiceQueue = [];  // [{text, context, cardId, segIdx}]
+let currentIdx = 0;
+let isRecording = false;
+let mediaRecorder = null;
+let audioChunks = [];
+let recordingUrl = null;
+let recordingAudio = null;
+let ttsAudio = null;
+let originalAudio = null;  // Audio element for original video audio
+let originalAudioTimer = null;
+let ratingResults = { again:0, hard:0, good:0, easy:0 };
+let isReviewMode = false;
+let selectedWord = null;  // 右侧选中的单词（null = 整句）
+
+let currentTitle = '';
+let audioFile = null;       // URL to cached original audio (from whisper source)
+let currentProvider = 'edge';
+let currentSpeed = '+0%';
+let selectedSegIdx = null;  // Currently selected line index in left panel
+let practicedIndices = new Set();  // Lines that have been rated
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', () => { checkDueCards(); loadHistory(); });
+
+// Close history panel on outside click
+document.addEventListener('click', (e) => {
+  const panel = document.getElementById('historyPanel');
+  const dropdown = e.target.closest('.history-dropdown');
+  if (!dropdown && panel.classList.contains('show')) {
+    panel.classList.remove('show');
+  }
+});
+
+// ── Due Cards ──
+async function checkDueCards() {
+  try {
+    const resp = await fetch(`/practice/due?user_id=${USER_ID}&limit=50`);
+    const data = await resp.json();
+    const badge = document.getElementById('dueBadge');
+    const entry = document.getElementById('reviewEntry');
+    if (data.count > 0) {
+      badge.textContent = data.count;
+      entry.classList.add('show');
+    } else {
+      entry.classList.remove('show');
+    }
+  } catch(e) { console.warn('checkDueCards error:', e); }
+}
+
+// ── History ──
+function toggleHistoryPanel() {
+  document.getElementById('historyPanel').classList.toggle('show');
+}
+
+async function loadHistory() {
+  try {
+    const resp = await fetch(`/practice/subtitles?user_id=${USER_ID}&limit=10`);
+    const data = await resp.json();
+    const list = document.getElementById('historyList');
+    const countEl = document.getElementById('historyCount');
+    if (data.count === 0) { list.innerHTML = '<div style="padding:12px;color:var(--text-3);font-size:12px;text-align:center;">暂无记录</div>'; countEl.textContent = ''; return; }
+    const typeIcon = { bilibili:'📺', youtube:'▶️', manual:'📝' };
+    countEl.textContent = `(${data.count})`;
+    list.innerHTML = data.items.map(it => {
+      const icon = typeIcon[it.source_type] || '📄';
+      const date = it.created_at ? new Date(it.created_at).toLocaleDateString() : '';
+      return `<div class="history-item" onclick="loadFromHistory(${it.id})">
+        <span class="hi-title">${icon} ${it.title || it.source_id}</span>
+        <span class="hi-meta">${date}</span>
+      </div>`;
+    }).join('');
+  } catch(e) { console.warn('loadHistory error:', e); }
+}
+
+async function loadFromHistory(sourceId) {
+  showStatus('加载中...', false, true);
+  try {
+    const resp = await fetch(`/practice/subtitles/${sourceId}?user_id=${USER_ID}`);
+    const data = await resp.json();
+    if (!resp.ok) { showStatus('加载失败', true); return; }
+    segments = data.segments || [];
+    currentTitle = data.title || '';
+    audioFile = data.audio_file || null;
+    showStatus(`已加载 ${segments.length} 句`, false);
+    enterTwoColumnMode();
+    document.getElementById('historyPanel').classList.remove('show');
+  } catch(e) { showStatus('网络错误', true); }
+}
+
+// ── Subtitle Fetch ──
+async function fetchSubtitles() {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) return;
+  showStatus('提取中...', false, true);
+  document.getElementById('fetchBtn').disabled = true;
+
+  try {
+    const resp = await fetch('/practice/subtitles', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ url, user_id: USER_ID }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) { showStatus(data.detail || '请求失败', true); return; }
+    if (data.error) {
+      showStatus(data.error, true);
+      document.getElementById('manualArea').classList.add('show');
+      return;
+    }
+    segments = data.segments || [];
+    currentTitle = data.title || '';
+    audioFile = data.audio_file || null;
+    if (segments.length === 0) { showStatus('未找到字幕内容', true); return; }
+    showStatus(`成功提取 ${segments.length} 句字幕`, false);
+    enterTwoColumnMode();
+    loadHistory();
+  } catch(e) {
+    showStatus('网络错误，请手动粘贴', true);
+    document.getElementById('manualArea').classList.add('show');
+  } finally {
+    document.getElementById('fetchBtn').disabled = false;
+  }
+}
+
+function loadManualText() {
+  const text = document.getElementById('manualText').value.trim();
+  if (!text) return;
+  segments = text.split('\n').filter(l => l.trim()).map(l => ({from:0, to:0, content:l.trim()}));
+  currentTitle = '手动粘贴';
+  audioFile = null;
+  if (segments.length === 0) { showStatus('请输入内容', true); return; }
+  showStatus(`已加载 ${segments.length} 行文本`, false);
+  enterTwoColumnMode();
+  loadHistory();
+}
+
+function toggleManual() {
+  document.getElementById('manualArea').classList.toggle('show');
+}
+
+function showStatus(msg, isError, loading) {
+  const el = document.getElementById('statusMsg');
+  el.innerHTML = loading ? `<span class="spinner"></span> ${msg}` : msg;
+  el.className = 'status-msg show' + (isError ? ' error' : '');
+}
+
+// ── Enter Two-Column Mode ──
+function enterTwoColumnMode() {
+  markedIndices.clear();
+  practicedIndices.clear();
+  selectedSegIdx = null;
+  practiceQueue = [];
+  currentIdx = 0;
+  ratingResults = { again:0, hard:0, good:0, easy:0 };
+  isReviewMode = false;
+
+  renderSubtitles();
+  document.getElementById('practiceLayout').classList.add('show');
+
+  // Show/hide original audio button
+  const origBtn = document.getElementById('originalBtn');
+  if (audioFile) {
+    origBtn.style.display = '';
+    // Preload original audio — 确保加载完成后才可用
+    if (originalAudio) { try { originalAudio.pause(); } catch(e){} }
+    originalAudio = new Audio(audioFile);
+    originalAudio.preload = 'auto';
+    originalAudio.addEventListener('error', (e) => {
+      console.error('Original audio load error:', e, originalAudio.error);
+      origBtn.style.display = 'none';
+    });
+    originalAudio.addEventListener('canplaythrough', () => {
+      console.log('Original audio ready, duration:', originalAudio.duration);
+    });
+    originalAudio.load();
+  } else {
+    origBtn.style.display = 'none';
+    originalAudio = null;
+  }
+
+  // Reset right panel to no-selection state
+  document.getElementById('noSelection').style.display = '';
+  document.getElementById('controlsContent').style.display = 'none';
+
+  // Reset provider
+  selectProvider('edge', document.querySelector('.provider-btn[data-provider="edge"]'));
+}
+
+// ── Subtitle Rendering ──
+function renderSubtitles() {
+  const container = document.getElementById('subtitleLines');
+  container.innerHTML = '';
+  segments.forEach((seg, i) => {
+    const div = document.createElement('div');
+    div.className = 'sub-line';
+    div.dataset.idx = i;
+    // 将每个单词渲染为可选择的 span（鼠标框选单词后可单独播放）
+    const words = seg.content.split(/(\s+)/);
+    words.forEach(w => {
+      if (/^\s+$/.test(w)) { div.appendChild(document.createTextNode(w)); return; }
+      const span = document.createElement('span');
+      span.className = 'word';
+      span.textContent = w;
+      div.appendChild(span);
+    });
+    div.onclick = (e) => {
+      // 如果用户正在框选文字（选单词），不触发整行选择
+      const sel = window.getSelection();
+      if (sel && sel.toString().trim().length > 0) return;
+      selectLine(i);
+    };
+    container.appendChild(div);
+  });
+}
+
+function selectLine(idx) {
+  // Deselect previous
+  const lines = document.querySelectorAll('.sub-line');
+  lines.forEach(l => l.classList.remove('active'));
+
+  // Select new
+  selectedSegIdx = idx;
+  lines[idx].classList.add('active');
+
+  // Scroll into view
+  lines[idx].scrollIntoView({ behavior:'smooth', block:'nearest' });
+
+  // Create card for this line if not already done
+  ensureCardForLine(idx);
+
+  // Show controls
+  showControlsForLine(idx);
+}
+
+async function ensureCardForLine(idx) {
+  const seg = segments[idx];
+  const srcUrl = document.getElementById('urlInput').value.trim() || null;
+
+  // Check if we already have a card for this text
+  if (practiceQueue.find(q => q.segIdx === idx)) return;
+
+  const item = {
+    text: seg.content,
+    context: _getContext(idx),
+    source_url: srcUrl,
+    source_title: currentTitle || null,
+  };
+
+  // Create card in background
+  try {
+    await fetch('/practice/cards', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ user_id: USER_ID, items: [item] }),
+    });
+  } catch(e) { console.warn('create card error:', e); }
+
+  // Get card ID
+  let cardId = null;
+  try {
+    const resp = await fetch(`/practice/cards?user_id=${USER_ID}&limit=200`);
+    const data = await resp.json();
+    const normalizedText = seg.content.trim().toLowerCase().replace(/\s+/g,' ');
+    const card = data.cards.find(c => c.text === normalizedText);
+    if (card) cardId = card.id;
+  } catch(e) {}
+
+  practiceQueue.push({
+    text: seg.content,
+    context: _getContext(idx),
+    cardId,
+    segIdx: idx,
+  });
+}
+
+function showControlsForLine(idx) {
+  document.getElementById('noSelection').style.display = 'none';
+  document.getElementById('controlsContent').style.display = '';
+
+  const seg = segments[idx];
+  document.getElementById('practiceText').textContent = seg.content;
+  document.getElementById('practiceContext').textContent = _getContext(idx);
+
+  // 渲染单词选择器（点击单词可单独播放）
+  selectedWord = null;
+  const picker = document.getElementById('wordPicker');
+  const words = seg.content.split(/\s+/).filter(w => w.length > 0);
+  picker.innerHTML = '';
+  // 整句按钮
+  const allChip = document.createElement('span');
+  allChip.className = 'word-chip selected';
+  allChip.textContent = '🔈 整句';
+  allChip.onclick = () => {
+    selectedWord = null;
+    picker.querySelectorAll('.word-chip').forEach(c => c.classList.remove('selected'));
+    allChip.classList.add('selected');
+  };
+  picker.appendChild(allChip);
+  // 每个单词
+  words.forEach(w => {
+    const chip = document.createElement('span');
+    chip.className = 'word-chip';
+    chip.textContent = w;
+    chip.onclick = () => {
+      selectedWord = w;
+      picker.querySelectorAll('.word-chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+    };
+    picker.appendChild(chip);
+  });
+
+  updateProgress();
+
+  // Reset audio state
+  stopAllAudio();
+  if (recordingUrl) { URL.revokeObjectURL(recordingUrl); recordingUrl = null; }
+  recordingAudio = null;
+  document.getElementById('playbackBtn').disabled = true;
+  document.getElementById('recordBtn').classList.remove('recording');
+  isRecording = false;
+}
+
+function updateProgress() {
+  const total = segments.length;
+  const done = practicedIndices.size;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+function _getContext(idx) {
+  const parts = [];
+  if (idx > 0) parts.push(segments[idx-1].content);
+  parts.push(segments[idx].content);
+  if (idx < segments.length - 1) parts.push(segments[idx+1].content);
+  return parts.join(' ');
+}
+
+// ── Provider Selection ──
+function selectProvider(provider, btnEl) {
+  currentProvider = provider;
+  document.querySelectorAll('.provider-btn').forEach(b => b.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
+}
+
+function onSpeedChange() {
+  currentSpeed = document.getElementById('speedSelect').value;
+}
+
+// ── TTS ──
+// 播放选中的文本（右侧 word chip 选中的单词，或整句）
+function getPlayText() {
+  if (selectedWord) return selectedWord;
+  if (selectedSegIdx !== null) return segments[selectedSegIdx].content;
+  return '';
+}
+
+async function playTTS() {
+  const text = getPlayText();
+  if (!text) { console.warn('No text to play'); return; }
+
+  const btn = document.getElementById('ttsBtn');
+  btn.disabled = true;
+  btn.classList.add('playing');
+  stopAllAudio();
+
+  try {
+    // 原始音频：按时间戳播放选中句子的片段
+    if (currentProvider === 'original' && audioFile && originalAudio && selectedSegIdx !== null) {
+      const seg = segments[selectedSegIdx];
+      const startTime = seg.from || 0;
+      const endTime = seg.to || (startTime + 5);
+      console.log(`Playing original audio: ${startTime}s → ${endTime}s`);
+
+      // 确保音频已加载
+      const playSegment = () => {
+        originalAudio.currentTime = startTime;
+        originalAudio.play().then(() => {
+          if (originalAudioTimer) clearTimeout(originalAudioTimer);
+          originalAudioTimer = setTimeout(() => {
+            originalAudio.pause();
+            btn.disabled = false;
+            btn.classList.remove('playing');
+          }, (endTime - startTime) * 1000);
+        }).catch(e => {
+          console.error('Original audio play error:', e);
+          btn.disabled = false;
+          btn.classList.remove('playing');
+        });
+      };
+
+      if (originalAudio.readyState >= 2) {
+        playSegment();
+      } else {
+        // 等待加载
+        originalAudio.addEventListener('canplay', playSegment, { once: true });
+        originalAudio.load();
+      }
+      return;
+    }
+
+    // Edge / OpenAI TTS
+    const resp = await fetch('/practice/tts', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        text: text,
+        provider: currentProvider,
+        voice: currentProvider === 'openai' ? 'alloy' : 'jenny',
+        speed: currentSpeed,
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      alert('TTS 失败: ' + (err.detail || resp.statusText));
+      btn.disabled = false; btn.classList.remove('playing');
+      return;
+    }
+
+    const blob = await resp.blob();
+    if (blob.size < 100) {
+      alert('TTS 返回空音频'); btn.disabled = false; btn.classList.remove('playing');
+      return;
+    }
+    // 销毁旧的 ttsAudio
+    if (ttsAudio) { try { ttsAudio.pause(); } catch(e){} ttsAudio = null; }
+    const url = URL.createObjectURL(blob);
+    ttsAudio = new Audio(url);
+    ttsAudio.onended = () => {
+      URL.revokeObjectURL(url);
+      ttsAudio = null;
+      btn.disabled = false;
+      btn.classList.remove('playing');
+    };
+    ttsAudio.onerror = (e) => {
+      console.error('Audio playback error:', e);
+      ttsAudio = null;
+      btn.disabled = false;
+      btn.classList.remove('playing');
+    };
+    await ttsAudio.play();
+  } catch(e) {
+    console.error('TTS error:', e);
+    alert('TTS 错误: ' + e.message);
+    btn.disabled = false;
+    btn.classList.remove('playing');
+  }
+}
+
+function stopAllAudio() {
+  // 先清 timer
+  if (originalAudioTimer) { clearTimeout(originalAudioTimer); originalAudioTimer = null; }
+  // pause 但不销毁 ttsAudio（onended 会自己清理）
+  if (ttsAudio) { try { ttsAudio.pause(); ttsAudio.currentTime = 0; } catch(e){} }
+  if (originalAudio && !originalAudio.paused) { try { originalAudio.pause(); } catch(e){} }
+  if (recordingAudio && !recordingAudio.paused) { try { recordingAudio.pause(); } catch(e){} }
+  // 确保按钮可用
+  const btn = document.getElementById('ttsBtn');
+  if (btn) { btn.disabled = false; btn.classList.remove('playing'); }
+}
+
+// ── Recording ──
+async function toggleRecord() {
+  if (isRecording) { stopRecording(); }
+  else { await startRecording(); }
+}
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
+    mediaRecorder = new MediaRecorder(stream, { mimeType });
+    mediaRecorder.ondataavailable = e => { if(e.data.size>0) audioChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      if (audioChunks.length > 0) {
+        const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+        if (recordingUrl) URL.revokeObjectURL(recordingUrl);
+        recordingUrl = URL.createObjectURL(blob);
+        recordingAudio = new Audio(recordingUrl);
+        document.getElementById('playbackBtn').disabled = false;
+      }
+    };
+    mediaRecorder.start();
+    isRecording = true;
+    document.getElementById('recordBtn').classList.add('recording');
+  } catch(e) {
+    console.warn('Recording error:', e);
+    alert('无法访问麦克风');
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+  isRecording = false;
+  document.getElementById('recordBtn').classList.remove('recording');
+}
+
+function playRecording() {
+  if (!recordingAudio) return;
+  recordingAudio.currentTime = 0;
+  recordingAudio.play();
+}
+
+// ── Rating ──
+async function rate(rating) {
+  if (selectedSegIdx === null) return;
+
+  ratingResults[rating]++;
+  practicedIndices.add(selectedSegIdx);
+
+  // Mark line as practiced in left panel
+  const lines = document.querySelectorAll('.sub-line');
+  if (lines[selectedSegIdx]) lines[selectedSegIdx].classList.add('practiced');
+
+  // Find card for this line and submit review
+  const queueItem = practiceQueue.find(q => q.segIdx === selectedSegIdx);
+  if (queueItem && queueItem.cardId) {
+    try {
+      await fetch(`/practice/cards/${queueItem.cardId}/review`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ user_id: USER_ID, rating }),
+      });
+    } catch(e) { console.warn('review error:', e); }
+  }
+
+  stopAllAudio();
+  updateProgress();
+
+  // Auto-advance to next unrated line
+  const nextIdx = findNextUnpracticed(selectedSegIdx);
+  if (nextIdx !== null) {
+    selectLine(nextIdx);
+  } else {
+    // All done or user can keep clicking
+    if (practicedIndices.size >= segments.length) {
+      showSummary();
+    }
+  }
+}
+
+function findNextUnpracticed(fromIdx) {
+  // Look forward first
+  for (let i = fromIdx + 1; i < segments.length; i++) {
+    if (!practicedIndices.has(i)) return i;
+  }
+  // Then from beginning
+  for (let i = 0; i < fromIdx; i++) {
+    if (!practicedIndices.has(i)) return i;
+  }
+  return null;
+}
+
+// ── Start Review (due cards) ──
+async function startReview() {
+  try {
+    const resp = await fetch(`/practice/due?user_id=${USER_ID}&limit=20`);
+    const data = await resp.json();
+    if (data.count === 0) { alert('没有到期的复习卡片'); return; }
+
+    // Build virtual segments from due cards
+    segments = data.cards.map(c => ({ from:0, to:0, content:c.text }));
+    currentTitle = '复习模式';
+    audioFile = null;
+    isReviewMode = true;
+
+    // Build practiceQueue with cardIds
+    practiceQueue = data.cards.map((c, i) => ({ text:c.text, context:c.context, cardId:c.id, segIdx:i }));
+
+    enterTwoColumnMode();
+    // Override: in review mode, auto-select first line
+    if (segments.length > 0) selectLine(0);
+  } catch(e) { console.warn('startReview error:', e); }
+}
+
+// ── Start Practice (batch from marks — kept for backward compat) ──
+async function startPractice() {
+  // In the new design, lines are practiced individually via click
+  // This function remains for review mode
+}
+
+// ── Summary ──
+function showSummary() {
+  document.getElementById('practiceLayout').classList.remove('show');
+  const total = Object.values(ratingResults).reduce((a,b)=>a+b, 0);
+  if (total === 0) return;  // nothing to summarize
+  const statsHtml = [
+    { label:'总计', num: total },
+    { label:'Again', num: ratingResults.again },
+    { label:'Hard', num: ratingResults.hard },
+    { label:'Good', num: ratingResults.good },
+    { label:'Easy', num: ratingResults.easy },
+  ].map(s => `<div class="stat-item"><div class="stat-num">${s.num}</div><div class="stat-label">${s.label}</div></div>`).join('');
+  document.getElementById('summaryStats').innerHTML = statsHtml;
+  document.getElementById('summaryArea').classList.add('show');
+  checkDueCards();
+}
+
+// ── Reset ──
+function resetAll() {
+  document.getElementById('summaryArea').classList.remove('show');
+  document.getElementById('practiceLayout').classList.remove('show');
+  document.getElementById('inputCard').style.display = 'block';
+  segments = [];
+  markedIndices.clear();
+  practicedIndices.clear();
+  practiceQueue = [];
+  currentIdx = 0;
+  selectedSegIdx = null;
+  audioFile = null;
+  originalAudio = null;
+  document.getElementById('urlInput').value = '';
+  document.getElementById('manualText').value = '';
+  document.getElementById('statusMsg').className = 'status-msg';
+  checkDueCards();
+  loadHistory();
+}
+</script>
+</body>
+</html>

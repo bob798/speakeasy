@@ -9,6 +9,7 @@ from app.routers import chat, stt, tts, history, debug, review
 from app.routers.settings import router as settings_router
 from app.routers.vad import router as vad_router
 from app.routers.memory import router as memory_router
+from app.routers.practice import router as practice_router
 
 
 @asynccontextmanager
@@ -35,6 +36,7 @@ app.include_router(review.router)
 app.include_router(settings_router)
 app.include_router(vad_router)
 app.include_router(memory_router)
+app.include_router(practice_router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -58,3 +60,8 @@ async def review_page():
 @app.get("/memory")
 async def memory_page():
     return FileResponse("static/memory.html")
+
+
+@app.get("/practice")
+async def practice_page():
+    return FileResponse("static/practice.html")

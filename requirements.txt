@@ -11,3 +11,5 @@ groq
 edge-tts
 python-multipart
 fsrs
+youtube-transcript-api
+yt-dlp

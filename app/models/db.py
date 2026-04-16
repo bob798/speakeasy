@@ -99,9 +99,45 @@ class UserFact(Base):
     created_at        = Column(DateTime, default=datetime.utcnow)
 
 
+# ── V0.4 发音练习 ──────────────────────────────────────────
+
+class PronunciationCard(Base):
+    __tablename__ = "pronunciation_cards"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    user_id        = Column(String, nullable=False, index=True)
+    text           = Column(String, nullable=False)
+    context        = Column(String, nullable=False, default="")
+    source_url     = Column(String, nullable=True)
+    source_title   = Column(String, nullable=True)
+    fsrs_card_data = Column(String, nullable=False, default="")
+    status         = Column(String, nullable=False, default="active")   # active | deleted
+    practice_count = Column(Integer, nullable=False, default=0)
+    created_at     = Column(DateTime, default=datetime.utcnow)
+    updated_at     = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("user_id", "text"),)
+
+
+class SubtitleSource(Base):
+    __tablename__ = "subtitle_sources"
+
+    id            = Column(Integer, primary_key=True, autoincrement=True)
+    user_id       = Column(String, nullable=False, index=True)
+    source_id     = Column(String, nullable=False, index=True)  # BV号 / YouTube video_id / md5(text)
+    source_type   = Column(String, nullable=False, default="bilibili")  # bilibili / youtube / manual
+    title         = Column(String, nullable=True)
+    subtitle_json = Column(String, nullable=False)
+    created_at    = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("user_id", "source_id"),)
+
+
 # Sync engine for ORM operations (tests, memory_service, review_service)
+import os as _os
+_DB_PATH = _os.environ.get("SPEAKEASY_DB_PATH", "./speakeasy.db")
 engine = create_engine(
-    "sqlite:///./speakeasy.db",
+    f"sqlite:///{_DB_PATH}",
     connect_args={"check_same_thread": False},
 )
 Base.metadata.create_all(engine)

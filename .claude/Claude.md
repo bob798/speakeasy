@@ -52,12 +52,16 @@ speakeasy/
 │   ├── services/
 │   │   ├── chat_service.py    # LLM 调用、System Prompt 构建
 │   │   ├── review_service.py  # 对话分析（V0.2b+）
-│   │   └── memory_service.py  # FSRS 记忆调度（V0.2b+）
+│   │   ├── memory_service.py  # FSRS 记忆调度（V0.2b+）
+│   │   ├── fsrs_utils.py      # FSRS 共享工具（V0.4+）
+│   │   ├── subtitle_service.py # B站字幕提取（V0.4+）
+│   │   └── practice_service.py # 发音练习卡片管理（V0.4+）
 │   ├── prompts/
 │   │   └── review.py          # 分析用 Prompt（V0.2b+）
 │   └── routers/
 │       ├── chat.py            # /chat · /chat/summary
-│       └── review.py          # /review（V0.2b+）
+│       ├── review.py          # /review（V0.2b+）
+│       └── practice.py        # /practice/*（V0.4+）
 ├── docs/
 │   ├── spec/                  # 产品规格文档
 │   ├── adr/
@@ -92,6 +96,8 @@ speakeasy/
 | session_reviews | V0.2b | 每次对话的复盘数据 |
 | user_profile | V0.3 | 用户画像（CEFR/职业/目标/风格） |
 | user_facts | V0.3 | LLM 提取的跨会话事实记忆 |
+| pronunciation_cards | V0.4 | FSRS 管理的发音练习卡片 |
+| subtitle_sources | V0.4 | B站字幕缓存 |
 
 ### API 接口清单
 
@@ -108,6 +114,13 @@ speakeasy/
 | `/memory/cards` | GET | V0.3 | 语法卡列表（active/pending） |
 | `/memory/cards/{id}` | DELETE | V0.3 | 软删除语法卡（status='deleted'） |
 | `/memory` | GET | V0.3 | 返回 memory.html 管理页面 |
+| `/practice/subtitles` | POST | V0.4 | B站字幕提取或手动文本解析 |
+| `/practice/cards` | POST | V0.4 | 批量创建发音练习卡片 |
+| `/practice/cards` | GET | V0.4 | 发音卡列表（支持分页/状态过滤） |
+| `/practice/cards/{id}/review` | POST | V0.4 | FSRS 评分更新 |
+| `/practice/cards/{id}` | DELETE | V0.4 | 软删除发音卡 |
+| `/practice/due` | GET | V0.4 | 获取到期复习卡 |
+| `/practice` | GET | V0.4 | 返回 practice.html 练习页面 |
 
 ---
 
@@ -168,7 +181,7 @@ Human 维护（Claude Code 不代劳）：
 
 > ⚠️ 此部分每次版本迭代后由 Human / Claude 更新
 
-### 当前版本：V0.3（已完成）
+### 当前版本：V0.4（已完成）
 
 **已完成版本功能：**
 ```
@@ -176,9 +189,10 @@ V0.1  ✅  文本对话 · 今日一句 · 多模型支持
 V0.2a ✅  语音输入 STT · 语音输出 TTS · 流式输出 · 对话历史持久化
 V0.2b ✅  对话复盘 · FSRS 记忆调度 · 点击提问 UI
 V0.3  ✅  三层记忆系统 · Level评估 · user_facts · 记忆管理页面
+V0.4  ✅  发音练习 · B站字幕提取 · 录音对比 · FSRS 复习闭环
 ```
 
-**下一版本预告：V0.4**
+**下一版本预告：V0.5**
 ```
 场景模式（职场/旅行/面试） · 进度可视化 · 学习连续天数
 ```
@@ -212,4 +226,5 @@ pytest tests/test_stepN.py -v
 | V0.2a | ✅ 完成 | STT · TTS · 流式输出 · 历史持久化 |
 | V0.2b | ✅ 完成 | 复盘 · FSRS · 点击提问 |
 | V0.3 | ✅ 完成 | 三层记忆 · Level评估 · user_facts · 记忆管理页 |
-| V0.4 | ⏳ 待规划 | 场景模式 · 进度可视化 · 连续天数 |
+| V0.4 | ✅ 完成 | 发音练习 · B站字幕提取 · 录音对比 · FSRS 复习闭环 |
+| V0.5 | ⏳ 待规划 | 场景模式 · 进度可视化 · 连续天数 |

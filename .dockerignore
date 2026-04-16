@@ -1,0 +1,16 @@
+venv/
+__pycache__/
+*.pyc
+.env
+.claude/
+.omc/
+.git/
+*.db
+*.db-shm
+*.db-wal
+static/tts_cache/
+static/audio_cache/
+tests/
+docs/
+*.md
+!requirements.txt

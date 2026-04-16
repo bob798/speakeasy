@@ -1,7 +1,5 @@
-import torch
 import numpy as np
 from enum import Enum
-from silero_vad import load_silero_vad
 
 SAMPLE_RATE = 16000
 SILENCE_THRESHOLD_SECONDS = 2.0
@@ -19,6 +17,9 @@ class VADState(Enum):
 
 class VADService:
     def __init__(self):
+        import torch as _torch
+        from silero_vad import load_silero_vad
+        self._torch = _torch
         self.model = load_silero_vad()
         self.misfire_count = 0
         self.state = VADState.IDLE  # 初始为待机，BUG-003/004 修复
@@ -40,7 +41,7 @@ class VADService:
 
     def is_speech(self, audio_chunk: np.ndarray) -> bool:
         """判断音频块是否包含语音"""
-        tensor = torch.FloatTensor(audio_chunk)
+        tensor = self._torch.FloatTensor(audio_chunk)
         confidence = self.model(tensor, SAMPLE_RATE).item()
         return confidence > 0.5
 
