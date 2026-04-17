@@ -1,14 +1,12 @@
 services:
   app:
-    build: .
+    image: ghcr.io/bob798/speakeasy:latest
     restart: unless-stopped
     env_file: .env.production
+    ports:
+      - "127.0.0.1:8600:8000"
     volumes:
       - speakeasy_data:/data
-    networks:
-      - speakeasy_net
-    expose:
-      - "8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -16,26 +14,5 @@ services:
       retries: 3
       start_period: 10s
 
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      - speakeasy_net
-    depends_on:
-      app:
-        condition: service_healthy
-
 volumes:
   speakeasy_data:
-  caddy_data:
-  caddy_config:
-
-networks:
-  speakeasy_net:

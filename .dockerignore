@@ -15,5 +15,9 @@ docs/
 *.md
 !requirements.txt
 fly.toml
+docker-compose*.yml
+.env*
+!.env.example
+.github/
 test_report.txt
 speakeasy_memory_research_summary.md

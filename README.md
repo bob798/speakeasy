@@ -108,7 +108,8 @@ Alex 自然回应（隐式引导，对话中无感发生）：
 | V0.1 ✅ | 文本对话（Alex 角色）+ 今日一句 + 多模型支持 |
 | V0.2a ✅ | 语音输入 STT + 语音输出 TTS + 流式输出 + 对话历史持久化 |
 | V0.2b ✅ | 对话复盘（错误分析 + 亮点）+ FSRS 错误调度 + 点击追问 UI |
-| V0.3 🔧 | 用户画像 + Level 评估 + 跨会话事实记忆 + 记忆管理页面 |
+| V0.3 ✅ | 用户画像 + Level 评估 + 跨会话事实记忆 + 记忆管理页面 |
+| V0.4 ✅ | 发音练习 + B站字幕提取 + 录音对比 + FSRS 复习闭环 |
 
 ---
 
@@ -143,6 +144,107 @@ uvicorn app.main:app --reload
 # 打开 http://localhost:8000
 ```
 
+### 部署到 VPS（Docker）
+
+推送到 main 分支后，GitHub Actions 自动构建镜像并推送到 GHCR（GitHub Container Registry）。
+
+#### 手动部署
+
+```bash
+# 1. VPS 上安装 Docker（如已安装跳过）
+curl -fsSL https://get.docker.com | sh
+
+# 2. 克隆项目（只需首次）
+git clone https://github.com/bob798/speakeasy.git
+cd speakeasy
+
+# 3. 配置环境变量
+cp .env.production.example .env.production
+vim .env.production   # 填入 API Key
+
+# 4. 拉取镜像 & 启动
+docker compose pull
+docker compose up -d
+
+# 5. 后续更新
+docker compose pull && docker compose up -d
+```
+
+#### 自动部署（CI/CD）
+
+推送到 main 后自动构建镜像 → 推到 GHCR → SSH 到 VPS 拉取并重启。
+
+在 GitHub 仓库 `Settings → Secrets and variables → Actions` 中配置：
+
+| Secret | 值 | 说明 |
+|---|---|---|
+| `VPS_HOST` | VPS IP 或域名 | SSH 连接地址 |
+| `VPS_USER` | SSH 用户名（如 `root`） | 登录用户 |
+| `VPS_SSH_KEY` | SSH 私钥内容 | 建议使用专用部署密钥 |
+| `VPS_APP_DIR` | 项目目录（如 `/root/speakeasy`） | docker compose 执行路径 |
+
+**安全说明：** GitHub Secrets 使用 libsodium sealed box 加密存储，运行时仅在 Actions runner 内存中解密，日志自动脱敏。建议为 CI 创建专用密钥对，不复用日常登录密钥：
+
+```bash
+# 生成专用部署密钥
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/deploy_key
+
+# VPS 上限制该密钥只能执行部署命令（可选，更严格）
+# 在 ~/.ssh/authorized_keys 中添加：
+command="cd /root/speakeasy && docker compose pull && docker compose up -d",no-port-forwarding,no-agent-forwarding ssh-ed25519 AAAA... github-actions-deploy
+```
+
+#### 国内 VPS 网络问题
+
+国内服务器访问 `ghcr.io` 可能超时。两种解决方案：
+
+**方案 A：配置 Docker 镜像加速（推荐）**
+
+```bash
+# VPS 上编辑 Docker daemon 配置
+sudo mkdir -p /etc/docker
+sudo tee /etc/docker/daemon.json <<'EOF'
+{
+  "registry-mirrors": [
+    "https://docker.1ms.run",
+    "https://docker.xuanyuan.me"
+  ]
+}
+EOF
+sudo systemctl restart docker
+```
+
+> 镜像加速站可能变动，如失效可搜索"docker 镜像加速 最新"替换。
+
+**方案 B：VPS 上本地构建（无需拉取 GHCR）**
+
+```bash
+cd ~/speakeasy
+git pull origin main
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
+#### 反向代理
+
+应用监听 `127.0.0.1:8600`，通过 VPS 上已有的 Caddy/Nginx 反代并配置 HTTPS。
+
+Caddy 示例：
+```
+speak.example.com {
+    reverse_proxy 127.0.0.1:8600
+    encode gzip
+}
+```
+
+#### 常用运维命令
+
+```bash
+docker compose logs -f          # 查看日志
+docker compose ps               # 查看状态
+docker compose down             # 停止服务
+docker compose up -d            # 重新启动
+```
+
 ---
 
 ## 技术架构
@@ -154,8 +256,8 @@ HTML / CSS / JS  ──────► FastAPI (Python)  ─────► Clau
 （Vanilla）              SQLAlchemy 2.0           Doubao / GLM
                          SQLite + aiosqlite       （via OpenRouter）
                               │
-                         STT: faster-whisper（本地推理）
-                         TTS: edge-tts（本地，无 API 费用）
+                         STT: Groq Whisper API（快速转录）
+                         TTS: edge-tts（免费，无 API 费用）
                          记忆: py-fsrs (FSRS 6 算法)
 ```
 
@@ -169,7 +271,7 @@ macOS 上 Clash / Surge 等开启"系统代理"后，httpx 默认读取系统代
 
 **STT 没有转录结果**
 
-首次运行会自动下载 faster-whisper 模型文件（约 150MB），需等待完成。
+STT 使用 Groq Whisper API，需要在 `.env` 中配置 `GROQ_API_KEY`。未配置时会降级到浏览器 WebSpeech API。
 
 ---
 

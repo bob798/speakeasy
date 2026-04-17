@@ -1,4 +1,0 @@
-:80 {
-    reverse_proxy app:8000
-    encode gzip
-}

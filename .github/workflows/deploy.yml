@@ -9,7 +9,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-deploy:
+  build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,6 +35,12 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: ${{ vars.AUTO_DEPLOY == 'true' }}
+
+    steps:
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1
         with:
@@ -43,5 +49,4 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd ${{ secrets.VPS_APP_DIR }}
-            docker compose pull app
-            docker compose up -d
+            docker compose pull app && docker compose up -d
