@@ -34,8 +34,6 @@ jobs:
           tags: |
             ${{ env.IMAGE_PATH }}:latest
             ${{ env.IMAGE_PATH }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   deploy:
     needs: build-and-push
