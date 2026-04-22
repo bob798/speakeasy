@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/bob798/speakeasy:latest
+    image: ${APP_IMAGE:-speakeasy:local}
     restart: unless-stopped
     env_file: .env.production
     ports:

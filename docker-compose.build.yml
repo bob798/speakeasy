@@ -1,4 +1,4 @@
-# 国内 VPS 本地构建覆盖：跳过 GHCR 拉取，直接从源码构建
+# 国内 VPS 本地构建覆盖：跳过远端镜像拉取，直接从源码构建
 # 用法：docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 services:
   app:
