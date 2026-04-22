@@ -5,9 +5,11 @@ import hashlib
 import os
 from typing import Optional, List
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import Response
 from pydantic import BaseModel
+
+from app.routers.auth import get_current_user_id, get_current_user_id_optional
 
 from app.services.subtitle_service import (
     extract_bvid, extract_page_num, fetch_bilibili_subtitles, parse_manual_text,
@@ -37,7 +39,6 @@ router = APIRouter()
 class SubtitleRequest(BaseModel):
     url: Optional[str] = None
     text: Optional[str] = None
-    user_id: Optional[str] = None
     cookies: Optional[str] = None   # Netscape 格式 B 站 cookies；抓取失败时前端兜底用
 
 
@@ -49,17 +50,14 @@ class CardItem(BaseModel):
 
 
 class CreateCardsRequest(BaseModel):
-    user_id: str
     items: List[CardItem]
 
 
 class ReviewRequest(BaseModel):
-    user_id: str
     rating: str   # again | hard | good | easy
 
 
 class ExplainRequest(BaseModel):
-    user_id: str
     text: str
     kind: str                     # 'sentence' | 'word'
     context: Optional[str] = ""   # word 模式下可提供所在句子
@@ -98,13 +96,16 @@ def _cache_subtitles(user_id: str, source_id: str, source_type: str,
 # ── 字幕提取 ──────────────────────────────────────────────
 
 @router.post("/practice/subtitles")
-async def get_subtitles(req: SubtitleRequest):
+async def get_subtitles(
+    req: SubtitleRequest,
+    user_id: Optional[str] = Depends(get_current_user_id_optional),
+):
     if req.text:
         segments = parse_manual_text(req.text)
         # 缓存手动粘贴（用 md5 作为 source_id）
-        if req.user_id and segments:
+        if user_id and segments:
             text_hash = hashlib.md5(req.text.strip().encode()).hexdigest()[:12]
-            _cache_subtitles(req.user_id, f"manual_{text_hash}", "manual",
+            _cache_subtitles(user_id, f"manual_{text_hash}", "manual",
                              "手动粘贴", segments)
         return {"title": "手动粘贴", "segments": segments}
 
@@ -141,8 +142,8 @@ async def get_subtitles(req: SubtitleRequest):
             result = await fetch_audio_subtitles(resolved_url, cookies_text=req.cookies)
 
     # 统一缓存（成功时）
-    if result and "error" not in result and req.user_id and result.get("segments"):
-        _cache_subtitles(req.user_id, source_id, source_type,
+    if result and "error" not in result and user_id and result.get("segments"):
+        _cache_subtitles(user_id, source_id, source_type,
                          result.get("title", ""), result["segments"],
                          audio_file=result.get("audio_file"))
 
@@ -153,7 +154,7 @@ async def get_subtitles(req: SubtitleRequest):
 
 @router.get("/practice/subtitles")
 async def list_subtitle_history(
-    user_id: str = Query(...),
+    user_id: str = Depends(get_current_user_id),
     limit: int = Query(20, ge=1, le=100),
 ):
     """获取用户之前提取过的字幕列表"""
@@ -183,7 +184,7 @@ async def list_subtitle_history(
 @router.get("/practice/subtitles/{source_id}")
 async def get_cached_subtitles(
     source_id: int,
-    user_id: str = Query(...),
+    user_id: str = Depends(get_current_user_id),
 ):
     """读取缓存的字幕内容"""
     with OrmSession(engine) as s:
@@ -211,15 +212,18 @@ async def get_cached_subtitles(
 # ── 卡片 CRUD ────────────────────────────────────────────
 
 @router.post("/practice/cards", status_code=201)
-async def create_cards(req: CreateCardsRequest):
+async def create_cards(
+    req: CreateCardsRequest,
+    user_id: str = Depends(get_current_user_id),
+):
     items = [item.dict() for item in req.items]
-    result = create_pronunciation_cards(req.user_id, items)
+    result = create_pronunciation_cards(user_id, items)
     return result
 
 
 @router.get("/practice/cards")
 async def list_cards(
-    user_id: str = Query(...),
+    user_id: str = Depends(get_current_user_id),
     status: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -229,15 +233,22 @@ async def list_cards(
 
 
 @router.post("/practice/cards/{card_id}/review")
-async def review_card_endpoint(card_id: int, req: ReviewRequest):
-    result = review_pronunciation_card(card_id, req.user_id, req.rating)
+async def review_card_endpoint(
+    card_id: int,
+    req: ReviewRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    result = review_pronunciation_card(card_id, user_id, req.rating)
     if result is None:
         raise HTTPException(404, "卡片不存在或评分无效")
     return result
 
 
 @router.delete("/practice/cards/{card_id}")
-async def delete_card(card_id: int, user_id: str = Query(...)):
+async def delete_card(
+    card_id: int,
+    user_id: str = Depends(get_current_user_id),
+):
     ok = delete_pronunciation_card(card_id, user_id)
     if not ok:
         raise HTTPException(404, "卡片不存在")
@@ -248,7 +259,7 @@ async def delete_card(card_id: int, user_id: str = Query(...)):
 
 @router.get("/practice/due")
 async def get_due_cards(
-    user_id: str = Query(...),
+    user_id: str = Depends(get_current_user_id),
     limit: int = Query(10, ge=1, le=50),
 ):
     cards = get_due_pronunciation_cards(user_id, limit=limit)
@@ -258,12 +269,15 @@ async def get_due_cards(
 # ── 句子/单词解读 ─────────────────────────────────────────
 
 @router.post("/practice/explain")
-async def practice_explain(req: ExplainRequest):
+async def practice_explain(
+    req: ExplainRequest,
+    user_id: str = Depends(get_current_user_id),
+):
     try:
         result = await explain_text(
             text=req.text,
             kind=req.kind,
-            user_id=req.user_id,
+            user_id=user_id,
             context=req.context or "",
         )
     except ValueError as e:

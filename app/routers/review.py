@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 
 from fsrs import FSRS, Card, Rating
 
@@ -12,6 +12,7 @@ from app.services.review_service import (
     update_card_fsrs,
     mark_session_user_rated,
 )
+from app.routers.auth import get_current_user_id
 from app.logger import get_logger
 
 router = APIRouter()
@@ -21,7 +22,7 @@ _scheduler = FSRS()
 
 
 @router.get("/review/{session_id}")
-async def get_review(session_id: str):
+async def get_review(session_id: str, user_id: str = Depends(get_current_user_id)):
     review = await get_session_review(session_id)
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
@@ -34,10 +35,14 @@ async def get_review(session_id: str):
 
 
 @router.post("/review/{session_id}/rate")
-async def rate_review(session_id: str, request: RateRequest):
+async def rate_review(
+    session_id: str,
+    request: RateRequest,
+    user_id: str = Depends(get_current_user_id),
+):
     rating = Rating.Good if request.rating == "good" else Rating.Again
 
-    card_row = await get_card_by_key(request.user_id, request.card_key)
+    card_row = await get_card_by_key(user_id, request.card_key)
     if not card_row:
         raise HTTPException(status_code=404, detail="Card not found")
 

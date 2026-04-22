@@ -1303,11 +1303,10 @@ async function onEndChat() {
   if (endBtn) { endBtn.disabled = true; endBtn.textContent = '分析中...'; }
 
   try {
-    await fetch('/chat/summary', {
+    await authFetch('/chat/summary', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        user_id:    uid,
         session_id: sid,
         history:    typeof chatHistory !== 'undefined' ? chatHistory : [],
       })
@@ -1328,6 +1327,11 @@ async function onEndChat() {
     endBtn.onclick = () => { window.location.href = reviewUrl; };
   }
 }
+</script>
+<script src="/static/js/auth.js"></script>
+<script>
+if (!window.SpeakeasyAuth.getToken()) { location.replace('/login'); }
+SpeakeasyAuth.requireAuth();
 </script>
 <script src="/static/js/config.js?v=6"></script>
 <script src="/static/js/utils.js?v=6"></script>
@@ -1528,13 +1532,12 @@ window.addEventListener('load', () => {
 
 // ── V0.3 Step 6: Level 评估引导弹窗 ──────────────────────────────────────────
 (function initAssessmentPrompt() {
-  const USER_ID = localStorage.getItem('speakeasy_user_id') || 'default_user';
   const done = localStorage.getItem('speakeasy_assessment_done');
   const skipped = localStorage.getItem('speakeasy_assessment_skipped');
   if (done || skipped) return;
 
   // Check if user already has a cefr_level
-  fetch('/memory/profile?user_id=' + USER_ID)
+  authFetch('/memory/profile')
     .then(r => r.json())
     .then(d => {
       if (d.cefr_level) {

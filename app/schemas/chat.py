@@ -21,12 +21,12 @@ class ChatResponse(BaseModel):
 
 
 class SummaryRequest(BaseModel):
-    user_id:    str
+    user_id:    Optional[str] = None   # 保留字段做兼容，实际从 JWT 取
     session_id: str
     history:    list[HistoryMessage] = []
 
 
 class RateRequest(BaseModel):
-    user_id:  str
+    user_id:  Optional[str] = None     # 保留字段做兼容，实际从 JWT 取
     card_key: str
     rating:   str  # "good" | "again"

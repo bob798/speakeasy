@@ -1,4 +1,10 @@
 function getUserId() {
+    // 优先从 SpeakeasyAuth 取登录用户 ID（V0.6 起）
+    if (window.SpeakeasyAuth) {
+        const u = window.SpeakeasyAuth.getUser();
+        if (u && u.id) return u.id;
+    }
+    // 兼容兜底：匿名 uid
     let id = localStorage.getItem('speakeasy_uid');
     if (!id) { id = crypto.randomUUID(); localStorage.setItem('speakeasy_uid', id); }
     return id;

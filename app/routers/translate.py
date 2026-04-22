@@ -1,8 +1,8 @@
-"""翻译路由 — 双向翻译 + 生词本 CRUD"""
+"""翻译路由 — 双向翻译 + 生词本 CRUD（生词本需要登录）"""
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 
 from app.services.translate_service import (
@@ -11,6 +11,7 @@ from app.services.translate_service import (
     list_vocabulary,
     delete_vocabulary,
 )
+from app.routers.auth import get_current_user_id
 from app.logger import get_logger
 
 logger = get_logger("translate")
@@ -26,7 +27,6 @@ class TranslateRequest(BaseModel):
 
 
 class VocabularyCreate(BaseModel):
-    user_id: str
     source_text: str
     translated_text: str
     direction: str
@@ -44,7 +44,7 @@ class VocabularyResponse(BaseModel):
     created_at: Optional[str]
 
 
-# ── 翻译 ──────────────────────────────────────────────────
+# ── 翻译（匿名可用）──────────────────────────────────────
 
 @router.post("/translate/text")
 async def do_translate(req: TranslateRequest):
@@ -64,13 +64,16 @@ async def do_translate(req: TranslateRequest):
     return {"translated_text": translated}
 
 
-# ── 生词本 CRUD ───────────────────────────────────────────
+# ── 生词本 CRUD（登录才能用）──────────────────────────────
 
 @router.post("/translate/vocabulary", status_code=201)
-async def create_vocabulary(req: VocabularyCreate):
+async def create_vocabulary(
+    req: VocabularyCreate,
+    user_id: str = Depends(get_current_user_id),
+):
     try:
         item = save_vocabulary(
-            user_id=req.user_id,
+            user_id=user_id,
             source_text=req.source_text,
             translated_text=req.translated_text,
             direction=req.direction,
@@ -83,7 +86,7 @@ async def create_vocabulary(req: VocabularyCreate):
 
 @router.get("/translate/vocabulary")
 async def get_vocabulary(
-    user_id: str = Query(...),
+    user_id: str = Depends(get_current_user_id),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
@@ -92,7 +95,10 @@ async def get_vocabulary(
 
 
 @router.delete("/translate/vocabulary/{vocab_id}")
-async def remove_vocabulary(vocab_id: int, user_id: str = Query(...)):
+async def remove_vocabulary(
+    vocab_id: int,
+    user_id: str = Depends(get_current_user_id),
+):
     ok = delete_vocabulary(vocab_id, user_id)
     if not ok:
         raise HTTPException(404, "生词本条目不存在")

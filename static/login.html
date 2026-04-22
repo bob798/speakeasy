@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Speakeasy - 登录</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+button { cursor:pointer; font-family:inherit; border:none; background:none; }
+input { font-family:inherit; }
+
+:root {
+  --bg:#ede8de; --surface:#e4ddd2; --elevated:#ffffff; --overlay:#f7f4ef;
+  --border:rgba(0,0,0,0.08); --border-hover:rgba(0,0,0,0.16);
+  --accent:#3d6b4f; --accent-light:#4e8963; --accent-dim:rgba(61,107,79,0.1);
+  --rec:#c0392b; --rec-dim:rgba(192,57,43,0.1);
+  --text-1:#2c2820; --text-2:#7a7060; --text-3:#b5aa9a;
+  --radius:12px; --shadow:0 8px 32px rgba(0,0,0,0.1);
+}
+
+body {
+  font-family:'Sora','PingFang SC','Noto Sans SC',system-ui,sans-serif;
+  background:var(--bg); color:var(--text-1); min-height:100vh;
+  display:flex; align-items:center; justify-content:center; padding:20px;
+}
+
+.auth-card {
+  width:100%; max-width:400px; background:var(--elevated);
+  border-radius:var(--radius); box-shadow:var(--shadow); padding:32px 28px;
+}
+
+.brand { text-align:center; margin-bottom:24px; }
+.brand .logo { font-size:32px; margin-bottom:6px; }
+.brand .name { font-size:20px; font-weight:600; color:var(--text-1); }
+.brand .tagline { font-size:12px; color:var(--text-3); margin-top:4px; }
+
+.tab-row { display:flex; gap:4px; background:var(--overlay); padding:4px; border-radius:8px; margin-bottom:20px; }
+.tab { flex:1; padding:8px 14px; font-size:13px; font-weight:500; color:var(--text-2); border-radius:6px; transition:all 0.15s; text-align:center; }
+.tab.active { background:var(--elevated); color:var(--text-1); box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+
+.field { margin-bottom:14px; }
+.field label { display:block; font-size:12px; color:var(--text-2); font-weight:500; margin-bottom:6px; }
+.field input { width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--overlay); color:var(--text-1); outline:none; transition:border-color 0.15s; }
+.field input:focus { border-color:var(--accent); background:var(--elevated); }
+
+.submit-btn { width:100%; padding:11px 18px; background:var(--accent); color:#fff; border-radius:8px; font-size:14px; font-weight:500; margin-top:6px; transition:background 0.15s; }
+.submit-btn:hover { background:var(--accent-light); }
+.submit-btn:disabled { opacity:0.6; cursor:not-allowed; }
+
+.hint { font-size:11px; color:var(--text-3); margin-top:-4px; margin-bottom:14px; }
+.msg { margin-top:12px; padding:10px 12px; border-radius:6px; font-size:13px; display:none; }
+.msg.show { display:block; }
+.msg.error { background:var(--rec-dim); color:var(--rec); }
+.msg.success { background:var(--accent-dim); color:var(--accent); }
+
+.spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,0.4); border-top-color:#fff; border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; margin-right:6px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="auth-card">
+  <div class="brand">
+    <div class="logo">🗣️</div>
+    <div class="name">Speakeasy</div>
+    <div class="tagline">AI 陪伴式英语私教</div>
+  </div>
+
+  <div class="tab-row">
+    <div class="tab active" id="tabLogin"    onclick="switchTab('login')">登录</div>
+    <div class="tab"        id="tabRegister" onclick="switchTab('register')">注册</div>
+  </div>
+
+  <form id="authForm" onsubmit="return submitForm(event)">
+    <div class="field">
+      <label for="email">邮箱</label>
+      <input type="email" id="email" required autocomplete="email" placeholder="you@example.com">
+    </div>
+
+    <div class="field">
+      <label for="password">密码</label>
+      <input type="password" id="password" required autocomplete="current-password" placeholder="至少 8 位">
+    </div>
+
+    <div class="field" id="displayNameField" style="display:none;">
+      <label for="displayName">昵称（可选）</label>
+      <input type="text" id="displayName" autocomplete="nickname" placeholder="随便取一个">
+    </div>
+
+    <button type="submit" class="submit-btn" id="submitBtn">登录</button>
+  </form>
+
+  <div class="msg" id="msg"></div>
+</div>
+
+<script src="/static/js/auth.js"></script>
+<script>
+let mode = 'login';
+
+// 已登录则直接跳首页
+if (window.SpeakeasyAuth.getToken()) {
+  location.replace('/');
+}
+
+function switchTab(which) {
+  mode = which;
+  document.getElementById('tabLogin').classList.toggle('active', which === 'login');
+  document.getElementById('tabRegister').classList.toggle('active', which === 'register');
+  document.getElementById('submitBtn').textContent = which === 'login' ? '登录' : '注册并登录';
+  document.getElementById('displayNameField').style.display = which === 'register' ? 'block' : 'none';
+  document.getElementById('password').setAttribute('autocomplete', which === 'login' ? 'current-password' : 'new-password');
+  hideMsg();
+}
+
+async function submitForm(e) {
+  e.preventDefault();
+  const email    = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const display  = document.getElementById('displayName').value.trim();
+
+  if (mode === 'register' && password.length < 8) {
+    showMsg('密码至少 8 位', 'error');
+    return false;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>' + (mode === 'login' ? '登录中…' : '注册中…');
+
+  try {
+    const url = mode === 'login' ? '/auth/login' : '/auth/register';
+    const body = mode === 'login'
+      ? { email, password }
+      : { email, password, display_name: display || null };
+
+    const resp = await fetch(url, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || `HTTP ${resp.status}`);
+
+    window.SpeakeasyAuth.setAuth(data.token, data.user);
+    showMsg(mode === 'login' ? '登录成功，正在跳转…' : '注册成功，正在跳转…', 'success');
+    setTimeout(() => { location.href = '/'; }, 400);
+  } catch(err) {
+    showMsg(err.message || '请求失败', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+  return false;
+}
+
+function showMsg(text, type) {
+  const el = document.getElementById('msg');
+  el.className = 'msg show ' + (type || '');
+  el.textContent = text;
+}
+
+function hideMsg() {
+  document.getElementById('msg').classList.remove('show');
+}
+</script>
+</body>
+</html>

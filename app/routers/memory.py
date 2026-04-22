@@ -1,11 +1,12 @@
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as OrmSession
 
 from app.models.db import engine, UserProfile, UserFact, GrammarCard
 from app.services.profile_service import get_profile, upsert_profile, assess_cefr
+from app.routers.auth import get_current_user_id
 from app.logger import get_logger
 
 router = APIRouter()
@@ -24,14 +25,13 @@ class ProfileUpdate(BaseModel):
 
 
 class AssessmentRequest(BaseModel):
-    user_id: str
     answers: list  # list of "can" | "partially" | "cannot", length 5
 
 
 # ── Profile endpoints ──────────────────────────────────────────────────────
 
 @router.get("/memory/profile")
-async def get_memory_profile(user_id: str = Query(...)):
+async def get_memory_profile(user_id: str = Depends(get_current_user_id)):
     profile = get_profile(user_id)
     if not profile:
         return {
@@ -55,7 +55,10 @@ async def get_memory_profile(user_id: str = Query(...)):
 
 
 @router.put("/memory/profile")
-async def update_memory_profile(user_id: str = Query(...), body: ProfileUpdate = ...):
+async def update_memory_profile(
+    body: ProfileUpdate,
+    user_id: str = Depends(get_current_user_id),
+):
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     profile = upsert_profile(user_id, updates)
     return {
@@ -72,7 +75,10 @@ async def update_memory_profile(user_id: str = Query(...), body: ProfileUpdate =
 # ── Assessment endpoint ────────────────────────────────────────────────────
 
 @router.post("/assessment/self")
-async def self_assessment(req: AssessmentRequest):
+async def self_assessment(
+    req: AssessmentRequest,
+    user_id: str = Depends(get_current_user_id),
+):
     if len(req.answers) != 5:
         raise HTTPException(status_code=400, detail="answers must have exactly 5 items")
     valid = {"can", "partially", "cannot"}
@@ -81,15 +87,15 @@ async def self_assessment(req: AssessmentRequest):
             raise HTTPException(status_code=400, detail=f"invalid answer: {a}")
 
     cefr = assess_cefr(req.answers)
-    profile = upsert_profile(req.user_id, {"cefr_level": cefr})
-    return {"cefr_level": cefr, "user_id": req.user_id}
+    profile = upsert_profile(user_id, {"cefr_level": cefr})
+    return {"cefr_level": cefr, "user_id": user_id}
 
 
 # ── Facts endpoints ────────────────────────────────────────────────────────
 
 @router.get("/memory/facts")
 async def get_memory_facts(
-    user_id: str = Query(...),
+    user_id: str = Depends(get_current_user_id),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
@@ -118,7 +124,7 @@ async def get_memory_facts(
 
 
 @router.delete("/memory/facts/{fact_id}")
-async def delete_memory_fact(fact_id: int, user_id: str = Query(...)):
+async def delete_memory_fact(fact_id: int, user_id: str = Depends(get_current_user_id)):
     with OrmSession(engine) as s:
         fact = s.query(UserFact).filter_by(id=fact_id, user_id=user_id).first()
         if not fact:
@@ -132,7 +138,7 @@ async def delete_memory_fact(fact_id: int, user_id: str = Query(...)):
 
 @router.get("/memory/cards")
 async def get_memory_cards(
-    user_id: str = Query(...),
+    user_id: str = Depends(get_current_user_id),
     status: Optional[str] = Query(None),
 ):
     with OrmSession(engine) as s:
@@ -161,7 +167,7 @@ async def get_memory_cards(
 
 
 @router.delete("/memory/cards/{card_id}")
-async def delete_memory_card(card_id: int, user_id: str = Query(...)):
+async def delete_memory_card(card_id: int, user_id: str = Depends(get_current_user_id)):
     # V0.3 Step 5: soft-delete grammar card (status='deleted')
     with OrmSession(engine) as s:
         card = s.query(GrammarCard).filter_by(id=card_id, user_id=user_id).first()

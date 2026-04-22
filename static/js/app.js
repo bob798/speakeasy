@@ -157,11 +157,10 @@ async function sendMessage(text) {
   const bubbleId = appendBubble('ai', '', false);
 
   try {
-    const res = await fetch(CONFIG.CHAT_STREAM, {
+    const res = await authFetch(CONFIG.CHAT_STREAM, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        user_id:    userId,
         session_id: sessionId,
         message:    text,
         history:    chatHistory.slice(-10),  // 最近 10 轮上下文
@@ -364,7 +363,7 @@ async function loadHistory() {
   _historyTotal   = 0;
   _historyLoading = false;
   try {
-    const data = await fetch(`${CONFIG.HISTORY}/${userId}?limit=${HISTORY_PAGE}&offset=0`).then(r => r.json());
+    const data = await authFetch(`${CONFIG.HISTORY}?limit=${HISTORY_PAGE}&offset=0`).then(r => r.json());
     _historyOffset = data.sessions?.length || 0;
     _historyTotal  = data.total || 0;
     renderHistoryList(data.sessions || [], false);
@@ -377,7 +376,7 @@ async function _loadMoreHistory() {
   if (_historyLoading || _historyOffset >= _historyTotal) return;
   _historyLoading = true;
   try {
-    const data = await fetch(`${CONFIG.HISTORY}/${userId}?limit=${HISTORY_PAGE}&offset=${_historyOffset}`).then(r => r.json());
+    const data = await authFetch(`${CONFIG.HISTORY}?limit=${HISTORY_PAGE}&offset=${_historyOffset}`).then(r => r.json());
     const sessions = data.sessions || [];
     _historyOffset += sessions.length;
     _historyTotal   = data.total || 0;
@@ -403,7 +402,7 @@ async function onHistoryClick(sid) {
   }
 
   try {
-    const data = await fetch(`${CONFIG.HISTORY}/${sid}/messages`).then(r => r.json());
+    const data = await authFetch(`${CONFIG.HISTORY}/${sid}/messages`).then(r => r.json());
     renderReadonlyChat(data.messages, sid);
 
     // 顶部「回到当前对话」按钮
@@ -417,7 +416,7 @@ async function onHistoryClick(sid) {
 
     // 检查是否有复盘数据，有则在右上角渲染「查看复盘」按钮
     try {
-      const reviewRes = await fetch(`${CONFIG.REVIEW}/${sid}`);
+      const reviewRes = await authFetch(`${CONFIG.REVIEW}/${sid}`);
       if (reviewRes.ok) {
         showReviewBtn(sid);
       } else {

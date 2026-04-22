@@ -393,8 +393,11 @@ body { font-family:'Sora','PingFang SC','Noto Sans SC',system-ui,sans-serif; bac
 
 </div>
 
+<script src="/static/js/auth.js"></script>
 <script>
-const USER_ID = localStorage.getItem('speakeasy_user_id') || 'default_user';
+if (!window.SpeakeasyAuth.getToken()) { location.replace('/login'); }
+SpeakeasyAuth.requireAuth();
+const USER_ID = (SpeakeasyAuth.getUser() || {}).id || '';
 
 // ── State ──
 let segments = [];
@@ -435,7 +438,7 @@ document.addEventListener('click', (e) => {
 // ── Due Cards ──
 async function checkDueCards() {
   try {
-    const resp = await fetch(`/practice/due?user_id=${USER_ID}&limit=50`);
+    const resp = await authFetch(`/practice/due?limit=50`);
     const data = await resp.json();
     const badge = document.getElementById('dueBadge');
     const entry = document.getElementById('reviewEntry');
@@ -455,7 +458,7 @@ function toggleHistoryPanel() {
 
 async function loadHistory() {
   try {
-    const resp = await fetch(`/practice/subtitles?user_id=${USER_ID}&limit=10`);
+    const resp = await authFetch(`/practice/subtitles?limit=10`);
     const data = await resp.json();
     const list = document.getElementById('historyList');
     const countEl = document.getElementById('historyCount');
@@ -476,7 +479,7 @@ async function loadHistory() {
 async function loadFromHistory(sourceId) {
   showStatus('加载中...', false, true);
   try {
-    const resp = await fetch(`/practice/subtitles/${sourceId}?user_id=${USER_ID}`);
+    const resp = await authFetch(`/practice/subtitles/${sourceId}`);
     const data = await resp.json();
     if (!resp.ok) { showStatus('加载失败', true); return; }
     segments = data.segments || [];
@@ -506,9 +509,9 @@ async function fetchSubtitles(useCookies = false) {
   document.getElementById('fetchBtn').disabled = true;
 
   try {
-    const body = { url, user_id: USER_ID };
+    const body = { url, };
     if (cookies) body.cookies = cookies;
-    const resp = await fetch('/practice/subtitles', {
+    const resp = await authFetch('/practice/subtitles', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(body),
     });
@@ -697,16 +700,16 @@ async function ensureCardForLine(idx) {
 
   // Create card in background
   try {
-    await fetch('/practice/cards', {
+    await authFetch('/practice/cards', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ user_id: USER_ID, items: [item] }),
+      body: JSON.stringify({ items: [item] }),
     });
   } catch(e) { console.warn('create card error:', e); }
 
   // Get card ID
   let cardId = null;
   try {
-    const resp = await fetch(`/practice/cards?user_id=${USER_ID}&limit=200`);
+    const resp = await authFetch(`/practice/cards?limit=200`);
     const data = await resp.json();
     const normalizedText = seg.content.trim().toLowerCase().replace(/\s+/g,' ');
     const card = data.cards.find(c => c.text === normalizedText);
@@ -847,7 +850,7 @@ async function playTTS() {
     }
 
     // Edge / OpenAI TTS
-    const resp = await fetch('/practice/tts', {
+    const resp = await authFetch('/practice/tts', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         text: text,
@@ -978,9 +981,9 @@ async function explainSelected() {
   renderExplainLoading();
 
   try {
-    const resp = await fetch('/practice/explain', {
+    const resp = await authFetch('/practice/explain', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ user_id: USER_ID, ...target }),
+      body: JSON.stringify({ ...target }),
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || `HTTP ${resp.status}`);
@@ -1077,11 +1080,10 @@ async function saveExplainToVocab() {
   const btn = document.getElementById('explainSaveBtn');
   btn.disabled = true;
   try {
-    const resp = await fetch('/translate/vocabulary', {
+    const resp = await authFetch('/translate/vocabulary', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        user_id: USER_ID,
-        source_text: target.text,
+                source_text: target.text,
         translated_text: translated,
         direction: 'en2zh',
         context: target.kind === 'word' ? target.context : null,
@@ -1124,9 +1126,9 @@ async function rate(rating) {
   const queueItem = practiceQueue.find(q => q.segIdx === selectedSegIdx);
   if (queueItem && queueItem.cardId) {
     try {
-      await fetch(`/practice/cards/${queueItem.cardId}/review`, {
+      await authFetch(`/practice/cards/${queueItem.cardId}/review`, {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ user_id: USER_ID, rating }),
+        body: JSON.stringify({ rating }),
       });
     } catch(e) { console.warn('review error:', e); }
   }
@@ -1168,7 +1170,7 @@ function findNextUnpracticed(fromIdx) {
 // ── Start Review (due cards) ──
 async function startReview() {
   try {
-    const resp = await fetch(`/practice/due?user_id=${USER_ID}&limit=20`);
+    const resp = await authFetch(`/practice/due?limit=20`);
     const data = await resp.json();
     if (data.count === 0) { alert('没有到期的复习卡片'); return; }
 

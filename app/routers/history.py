@@ -1,22 +1,23 @@
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.db import Session, Message
+from app.routers.auth import get_current_user_id
 
 router = APIRouter()
 STALE = timedelta(hours=2)
 
 
-@router.get("/history/{user_id}")
+@router.get("/history")
 async def get_history(
-    user_id: str,
     limit:   int = Query(default=20, ge=1, le=100),
     offset:  int = Query(default=0,  ge=0),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
 ):
     # 懒更新：超 2 小时的活跃 session 补齐 ended_at
     stale_result = await db.execute(
@@ -71,7 +72,8 @@ async def get_history(
 @router.get("/history/{session_id}/messages")
 async def get_session_messages(
     session_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
 ):
     result = await db.execute(
         select(Session)
@@ -81,6 +83,9 @@ async def get_session_messages(
     session = result.scalar_one_or_none()
     if not session:
         return {"session_id": session_id, "messages": []}
+    # 鉴权：session 必须属于当前用户
+    if session.user_id != user_id:
+        raise HTTPException(403, "无权访问该会话")
 
     return {
         "session_id": session_id,

@@ -14,6 +14,7 @@ import app.services.chat_service as chat_service
 from app.services.review_service import analyze_conversation
 from app.services.memory_service import update_grammar_cards, mark_errors_not_appeared, build_system_prompt
 from app.services.facts_service import extract_and_save_facts
+from app.routers.auth import get_current_user_id
 from app.logger import get_logger
 
 router = APIRouter()
@@ -53,16 +54,20 @@ async def get_daily_tip() -> str:
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)):
+async def chat(
+    req: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
     rid = _new_request_id()
-    logger.info("POST /chat session=%s", req.session_id)
+    logger.info("POST /chat user=%s session=%s", user_id, req.session_id)
 
-    if req.user_id and req.session_id:
-        await upsert_session(db, req.session_id, req.user_id)
+    if req.session_id:
+        await upsert_session(db, req.session_id, user_id)
         await save_message(db, req.session_id, "user", req.message)
 
     try:
-        system_prompt = await build_system_prompt(req.user_id or "")
+        system_prompt = await build_system_prompt(user_id)
         client = chat_service.get_client()
         history = [msg.model_dump() for msg in req.history]
         messages = (
@@ -82,14 +87,18 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/chat/stream")
-async def chat_stream(req: ChatRequest, db: AsyncSession = Depends(get_db)):
-    if req.user_id and req.session_id:
-        await upsert_session(db, req.session_id, req.user_id)
+async def chat_stream(
+    req: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    if req.session_id:
+        await upsert_session(db, req.session_id, user_id)
         await save_message(db, req.session_id, "user", req.message)
         await db.commit()  # release write lock before streaming starts
 
     # 与 /chat 对齐：注入 grammar_cards 记忆
-    system_prompt = await build_system_prompt(req.user_id or "")
+    system_prompt = await build_system_prompt(user_id)
 
     client     = chat_service.get_client()
     history    = [msg.model_dump() for msg in req.history]
@@ -129,23 +138,26 @@ async def chat_stream(req: ChatRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/chat/summary")
-async def chat_summary(request: SummaryRequest):
-    logger.info("POST /chat/summary session=%s", request.session_id)
+async def chat_summary(
+    request: SummaryRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    logger.info("POST /chat/summary user=%s session=%s", user_id, request.session_id)
     history = [msg.model_dump() for msg in request.history]
 
     result = await analyze_conversation(
         session_id=request.session_id,
-        user_id=request.user_id,
+        user_id=user_id,
         history=history
     )
 
     if result is not None:
         appeared_keys = [e["key"] for e in result.get("errors", [])]
-        await update_grammar_cards(request.user_id, result.get("errors", []))
-        await mark_errors_not_appeared(request.user_id, appeared_keys)
+        await update_grammar_cards(user_id, result.get("errors", []))
+        await mark_errors_not_appeared(user_id, appeared_keys)
         # V0.3 Step 3 addition: async facts extraction (non-blocking)
         asyncio.create_task(extract_and_save_facts(
-            user_id=request.user_id,
+            user_id=user_id,
             session_id=request.session_id,
             history=history,
         ))

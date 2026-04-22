@@ -240,8 +240,12 @@ body { font-family:'Sora','PingFang SC','Noto Sans SC',system-ui,sans-serif; bac
 
 <script src="/static/js/config.js"></script>
 <script src="/static/js/tts-provider.js"></script>
+<script src="/static/js/auth.js"></script>
 <script>
-const USER_ID = 'default_user';
+// 未登录直接跳转 /login
+if (!window.SpeakeasyAuth.getToken()) { location.replace('/login'); }
+SpeakeasyAuth.requireAuth();
+const USER_ID = (SpeakeasyAuth.getUser() || {}).id || '';
 const MAX_LEN = 1000;
 const ttsProvider = new ServerTTSProvider();
 let vocabOpen = false;
@@ -374,11 +378,10 @@ class TranslatePane {
     if (!this.currentSource || !this.currentResult) return;
     this.saveBtn.disabled = true;
     try {
-      const resp = await fetch('/translate/vocabulary', {
+      const resp = await authFetch('/translate/vocabulary', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-          user_id: USER_ID,
           source_text: this.currentSource,
           translated_text: this.currentResult,
           direction: this.direction,
@@ -411,7 +414,7 @@ function toggleVocab() {
 
 async function loadVocab() {
   try {
-    const resp = await fetch(`/translate/vocabulary?user_id=${encodeURIComponent(USER_ID)}&limit=100`);
+    const resp = await authFetch(`/translate/vocabulary?limit=100`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     vocabItems = data.items;
@@ -446,7 +449,7 @@ function renderVocabList() {
 
 async function deleteVocab(id) {
   try {
-    const resp = await fetch(`/translate/vocabulary/${id}?user_id=${encodeURIComponent(USER_ID)}`, {method:'DELETE'});
+    const resp = await authFetch(`/translate/vocabulary/${id}`, {method:'DELETE'});
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     vocabItems = vocabItems.filter(v => v.id !== id);
     updateVocabCount();

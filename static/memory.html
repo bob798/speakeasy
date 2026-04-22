@@ -340,9 +340,12 @@ html, body {
   </div>
 </div>
 
+<script src="/static/js/auth.js"></script>
 <script>
 // ── Config ──────────────────────────────────────────────────────────────────
-const USER_ID = localStorage.getItem('speakeasy_user_id') || 'default_user';
+if (!window.SpeakeasyAuth.getToken()) { location.replace('/login'); }
+SpeakeasyAuth.requireAuth();
+const USER_ID = (SpeakeasyAuth.getUser() || {}).id || '';
 
 const ASSESSMENT_QUESTIONS = [
   "我能理解日常问候和简单指令（如 "Please sit down", "Open the book"）",
@@ -367,7 +370,7 @@ function switchTab(name) {
 // ── Profile ──────────────────────────────────────────────────────────────────
 async function loadProfile() {
   try {
-    const r = await fetch(`/memory/profile?user_id=${USER_ID}`);
+    const r = await authFetch(`/memory/profile`);
     const d = await r.json();
     if (d.cefr_level) {
       document.getElementById('cefr-value').textContent = d.cefr_level;
@@ -396,7 +399,7 @@ async function saveProfile() {
   // Remove null fields
   Object.keys(body).forEach(k => { if (!body[k]) delete body[k]; });
   try {
-    await fetch(`/memory/profile?user_id=${USER_ID}`, {
+    await authFetch(`/memory/profile`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -450,10 +453,10 @@ async function submitAssessment() {
     return;
   }
   try {
-    const r = await fetch('/assessment/self', {
+    const r = await authFetch('/assessment/self', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: USER_ID, answers: assessmentAnswers }),
+      body: JSON.stringify({ answers: assessmentAnswers }),
     });
     const d = await r.json();
     document.getElementById('cefr-value').textContent = d.cefr_level;
@@ -471,7 +474,7 @@ async function loadFacts(reset = false) {
     document.getElementById('facts-list').innerHTML = '';
   }
   try {
-    const r = await fetch(`/memory/facts?user_id=${USER_ID}&limit=${FACTS_PAGE}&offset=${factsOffset}`);
+    const r = await authFetch(`/memory/facts?limit=${FACTS_PAGE}&offset=${factsOffset}`);
     const d = await r.json();
     const list = document.getElementById('facts-list');
 
@@ -506,7 +509,7 @@ async function loadMoreFacts() { await loadFacts(false); }
 async function deleteFact(id) {
   if (!confirm('删除这条记忆？')) return;
   try {
-    const r = await fetch(`/memory/facts/${id}?user_id=${USER_ID}`, { method: 'DELETE' });
+    const r = await authFetch(`/memory/facts/${id}`, { method: 'DELETE' });
     if (r.ok) {
       const el = document.querySelector(`[data-fact-id="${id}"]`);
       if (el) el.remove();
@@ -519,7 +522,7 @@ async function deleteFact(id) {
 // ── Cards ────────────────────────────────────────────────────────────────────
 async function loadCards() {
   try {
-    const r = await fetch(`/memory/cards?user_id=${USER_ID}`);
+    const r = await authFetch(`/memory/cards`);
     const d = await r.json();
     const list = document.getElementById('cards-list');
 
@@ -551,7 +554,7 @@ async function loadCards() {
 async function deleteCard(id) {
   if (!confirm('删除这个语法卡片？')) return;
   try {
-    const r = await fetch(`/memory/cards/${id}?user_id=${USER_ID}`, { method: 'DELETE' });
+    const r = await authFetch(`/memory/cards/${id}`, { method: 'DELETE' });
     if (r.ok) {
       const el = document.querySelector(`[data-card-id="${id}"]`);
       if (el) el.remove();

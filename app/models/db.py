@@ -11,6 +11,17 @@ class Base(DeclarativeBase):
     pass
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id            = Column(String, primary_key=True)             # 稳定字符串 ID（UUID 或 'bob' 等）
+    email         = Column(String, nullable=False, unique=True)  # 登录唯一凭证
+    password_hash = Column(String, nullable=False)               # bcrypt 哈希
+    display_name  = Column(String, nullable=True)
+    created_at    = Column(DateTime, default=datetime.utcnow)
+    last_login_at = Column(DateTime, nullable=True)
+
+
 class Session(Base):
     __tablename__ = "sessions"
     id         : Mapped[str]                = mapped_column(String, primary_key=True)

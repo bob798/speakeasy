@@ -12,3 +12,5 @@ python-multipart>=0.0.7
 fsrs==3.1.0
 youtube-transcript-api>=0.6.0
 yt-dlp>=2024.0.0
+bcrypt==4.2.0
+PyJWT==2.9.0
