@@ -1,18 +1,25 @@
 services:
-  app:
+  dev-web:
     image: ${APP_IMAGE:-speakeasy:local}
-    restart: unless-stopped
+    container_name: speakeasy
     env_file: .env.production
-    ports:
-      - "127.0.0.1:8600:8000"
+    restart: always
+    networks:
+      - liboboa
+    environment:
+      TZ: Asia/Shanghai
     volumes:
-      - speakeasy_data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      - /etc/localtime:/etc/localtime:ro
+      - logs:/javarun/logs
+      - data:/data
+    ports:
+      - "8600:8000"
 
 volumes:
-  speakeasy_data:
+  logs:
+  data:
+
+networks:
+  liboboa:
+    name: liboboa
+    external: true
