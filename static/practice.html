@@ -848,13 +848,8 @@ async function rate(rating) {
   if (selectedSegIdx === null) return;
 
   ratingResults[rating]++;
-  practicedIndices.add(selectedSegIdx);
 
-  // Mark line as practiced in left panel
-  const lines = document.querySelectorAll('.sub-line');
-  if (lines[selectedSegIdx]) lines[selectedSegIdx].classList.add('practiced');
-
-  // Find card for this line and submit review
+  // 所有评分都提交给 FSRS
   const queueItem = practiceQueue.find(q => q.segIdx === selectedSegIdx);
   if (queueItem && queueItem.cardId) {
     try {
@@ -866,17 +861,24 @@ async function rate(rating) {
   }
 
   stopAllAudio();
+
+  // Again：停留在当前句，自动重播 TTS；不标记 practiced，不跳下一句
+  if (rating === 'again') {
+    setTimeout(() => playTTS(), 200);
+    return;
+  }
+
+  // Hard / Good / Easy：标记已练 + 自动跳到下一条未练句
+  practicedIndices.add(selectedSegIdx);
+  const lines = document.querySelectorAll('.sub-line');
+  if (lines[selectedSegIdx]) lines[selectedSegIdx].classList.add('practiced');
   updateProgress();
 
-  // Auto-advance to next unrated line
   const nextIdx = findNextUnpracticed(selectedSegIdx);
   if (nextIdx !== null) {
     selectLine(nextIdx);
-  } else {
-    // All done or user can keep clicking
-    if (practicedIndices.size >= segments.length) {
-      showSummary();
-    }
+  } else if (practicedIndices.size >= segments.length) {
+    showSummary();
   }
 }
 

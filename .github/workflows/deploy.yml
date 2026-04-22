@@ -58,6 +58,6 @@ jobs:
             cd ${{ secrets.VPS_APP_DIR }}
             echo "$ALIYUN_PASSWORD" | docker login "$ALIYUN_REGISTRY" -u "$ALIYUN_USERNAME" --password-stdin
             echo "APP_IMAGE=$APP_IMAGE" > .env
-            docker compose pull app
+            docker compose pull dev-web
             docker compose up -d
             docker image prune -f
