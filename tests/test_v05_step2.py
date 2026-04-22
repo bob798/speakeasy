@@ -2,11 +2,13 @@
 V0.5 Step 2 — translate_service 翻译服务 + CRUD
 user_id: test_user_v05_step2
 """
+import json
+
 import pytest
 from unittest.mock import patch, AsyncMock
 from sqlalchemy.orm import Session as OrmSession
 
-from app.models.db import engine, Base, Vocabulary
+from app.models.db import engine, Base, Vocabulary, TranslationCache
 from app.services.translate_service import (
     translate_text,
     save_vocabulary,
@@ -17,12 +19,22 @@ from app.services.translate_service import (
 TEST_USER = "test_user_v05_step2"
 
 
+def _mock_translations(*lines: str) -> str:
+    """生成符合 batch 协议的 JSON 返回"""
+    return json.dumps({"translations": list(lines)}, ensure_ascii=False)
+
+
 @pytest.fixture(autouse=True)
 def cleanup():
     Base.metadata.create_all(engine)
+    # 清空可能影响缓存命中的旧缓存行
+    with OrmSession(engine) as s:
+        s.query(TranslationCache).delete()
+        s.commit()
     yield
     with OrmSession(engine) as s:
         s.query(Vocabulary).filter_by(user_id=TEST_USER).delete()
+        s.query(TranslationCache).delete()
         s.commit()
 
 
@@ -32,12 +44,14 @@ def cleanup():
 async def test_translate_zh2en_basic():
     with patch("app.services.translate_service.get_client") as mock_get:
         mock_client = AsyncMock()
-        mock_client.complete = AsyncMock(return_value="I have worked on recommendation systems")
+        mock_client.complete = AsyncMock(
+            return_value=_mock_translations("I have worked on recommendation systems")
+        )
         mock_get.return_value = mock_client
 
         result = await translate_text("我做过推荐系统", "zh2en")
         assert "recommendation" in result.lower()
-        # 验证 messages 包含 zh2en system prompt
+        # 验证 messages 包含 zh2en batch system prompt
         call_args = mock_client.complete.call_args[0][0]
         assert any("system" == m["role"] for m in call_args)
         assert any("Chinese" in m["content"] for m in call_args if m["role"] == "system")
@@ -47,11 +61,10 @@ async def test_translate_zh2en_basic():
 async def test_translate_en2zh_basic():
     with patch("app.services.translate_service.get_client") as mock_get:
         mock_client = AsyncMock()
-        mock_client.complete = AsyncMock(return_value="我喜欢阅读")
+        mock_client.complete = AsyncMock(return_value=_mock_translations("我喜欢阅读"))
         mock_get.return_value = mock_client
 
         result = await translate_text("I love reading", "en2zh")
-        # 结果应包含中文字符
         assert any("\u4e00" <= ch <= "\u9fff" for ch in result)
 
 
@@ -75,7 +88,9 @@ async def test_translate_mixed_input():
     """中英混合输入不报错，正常返回"""
     with patch("app.services.translate_service.get_client") as mock_get:
         mock_client = AsyncMock()
-        mock_client.complete = AsyncMock(return_value="I use Python to build recommendation systems")
+        mock_client.complete = AsyncMock(
+            return_value=_mock_translations("I use Python to build recommendation systems")
+        )
         mock_get.return_value = mock_client
 
         result = await translate_text("我用 Python 做 recommendation", "zh2en")

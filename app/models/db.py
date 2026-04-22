@@ -148,6 +148,21 @@ class Vocabulary(Base):
     status          = Column(String, nullable=False, default="active")  # active | deleted
 
 
+class TranslationCache(Base):
+    __tablename__ = "translation_cache"
+
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    text_hash       = Column(String(64), nullable=False)        # sha256(source_text)
+    direction       = Column(String, nullable=False)            # 'zh2en' | 'en2zh'
+    source_text     = Column(String, nullable=False)            # 原文，防 hash 碰撞时做精确比对
+    translated_text = Column(String, nullable=False)
+    hit_count       = Column(Integer, nullable=False, default=1)
+    created_at      = Column(DateTime, default=datetime.utcnow)
+    last_hit_at     = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("text_hash", "direction"),)
+
+
 # Sync engine for ORM operations (tests, memory_service, review_service)
 import os as _os
 _DB_PATH = _os.environ.get("SPEAKEASY_DB_PATH", "./speakeasy.db")
