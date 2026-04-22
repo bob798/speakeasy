@@ -58,6 +58,7 @@ jobs:
             cd ${{ secrets.VPS_APP_DIR }}
             echo "$ALIYUN_PASSWORD" | docker login "$ALIYUN_REGISTRY" -u "$ALIYUN_USERNAME" --password-stdin
             echo "APP_IMAGE=$APP_IMAGE" > .env
-            docker compose pull dev-web
-            docker compose up -d
+            # 生产环境只用主 compose 文件，不加载 override（override 是给本地开发用的 build: .）
+            docker compose -f docker-compose.yml pull dev-web
+            docker compose -f docker-compose.yml up -d
             docker image prune -f
