@@ -1,7 +1,6 @@
-# 本地开发/测试：用本地构建替代 GHCR 镜像
+# 本地开发/测试：用本地构建替代远端镜像
 # docker compose up --build 时自动生效
 services:
-  app:
+  dev-web:
     build: .
     image: speakeasy:dev
-    env_file: .env
