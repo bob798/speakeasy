@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Speakeasy - 翻译</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+button { cursor: pointer; font-family: inherit; border: none; background: none; }
+textarea, input { font-family: inherit; }
+
+:root {
+  --bg:        #ede8de;
+  --surface:   #e4ddd2;
+  --elevated:  #ffffff;
+  --overlay:   #f7f4ef;
+  --border:       rgba(0,0,0,0.08);
+  --border-hover: rgba(0,0,0,0.16);
+  --accent:      #3d6b4f;
+  --accent-light:#4e8963;
+  --accent-dim:  rgba(61,107,79,0.1);
+  --rec:     #c0392b;
+  --rec-dim: rgba(192,57,43,0.1);
+  --text-1: #2c2820;
+  --text-2: #7a7060;
+  --text-3: #b5aa9a;
+  --radius: 12px;
+  --shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+body { font-family:'Sora','PingFang SC','Noto Sans SC',system-ui,sans-serif; background:var(--bg); color:var(--text-1); min-height:100vh; }
+
+/* ── Header ── */
+.header { display:flex; align-items:center; justify-content:space-between; padding:10px 20px; background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; }
+.header-left { display:flex; align-items:center; gap:12px; }
+.header-left .brand { font-size:16px; font-weight:600; color:var(--text-1); text-decoration:none; }
+.header-right { display:flex; align-items:center; gap:8px; }
+.header-right a { font-size:18px; text-decoration:none; padding:2px 4px; color:var(--text-2); transition:color 0.15s; }
+.header-right a:hover { color:var(--text-1); }
+
+/* ── Container ── */
+.container { max-width:860px; margin:0 auto; padding:24px 16px; }
+
+/* ── Card ── */
+.card { background:var(--elevated); border-radius:var(--radius); box-shadow:var(--shadow); padding:20px; margin-bottom:16px; }
+
+/* ── Direction Toggle ── */
+.direction-row { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+.dir-btn { padding:6px 16px; border-radius:20px; font-size:13px; font-weight:500; border:1px solid var(--border); background:var(--overlay); color:var(--text-2); transition:all 0.15s; }
+.dir-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.dir-swap { padding:6px 10px; border-radius:8px; font-size:16px; background:var(--overlay); border:1px solid var(--border); color:var(--text-2); transition:all 0.15s; }
+.dir-swap:hover { border-color:var(--accent); color:var(--accent); }
+.dir-label { font-size:13px; color:var(--text-2); }
+
+/* ── Input Area ── */
+.input-area { position:relative; margin-bottom:12px; }
+.input-area textarea {
+  width:100%; min-height:120px; padding:12px 14px;
+  border:1px solid var(--border); border-radius:8px; font-size:14px; line-height:1.6;
+  resize:vertical; outline:none; transition:border-color 0.15s; background:var(--overlay);
+  color:var(--text-1);
+}
+.input-area textarea:focus { border-color:var(--accent); }
+.input-area textarea.over-limit { border-color:var(--rec); }
+.char-count { font-size:11px; color:var(--text-3); text-align:right; margin-top:4px; transition:color 0.15s; }
+.char-count.over { color:var(--rec); font-weight:500; }
+.char-limit-msg { font-size:12px; color:var(--rec); margin-top:4px; display:none; }
+.char-limit-msg.show { display:block; }
+
+/* ── Action Row ── */
+.action-row { display:flex; gap:8px; align-items:center; margin-bottom:16px; }
+.btn { padding:8px 18px; border-radius:8px; font-size:13px; font-weight:500; transition:all 0.15s; }
+.btn-primary { background:var(--accent); color:#fff; }
+.btn-primary:hover { background:var(--accent-light); }
+.btn-primary:disabled { opacity:0.5; cursor:not-allowed; }
+.btn-outline { border:1px solid var(--border); color:var(--text-2); background:var(--elevated); }
+.btn-outline:hover { border-color:var(--accent); color:var(--accent); }
+.btn-outline:disabled { opacity:0.4; cursor:not-allowed; }
+.btn-icon { padding:8px 12px; border-radius:8px; font-size:15px; border:1px solid var(--border); color:var(--text-2); background:var(--elevated); transition:all 0.15s; }
+.btn-icon:hover { border-color:var(--accent); color:var(--accent); }
+.btn-icon:disabled { opacity:0.4; cursor:not-allowed; }
+.spacer { flex:1; }
+
+/* ── Result Area ── */
+.result-label { font-size:12px; font-weight:600; color:var(--text-2); margin-bottom:8px; }
+.result-box {
+  min-height:100px; padding:12px 14px;
+  background:var(--overlay); border-radius:8px;
+  font-size:14px; line-height:1.7; color:var(--text-1);
+  white-space:pre-wrap; word-break:break-word;
+}
+.result-box.placeholder { color:var(--text-3); font-style:italic; }
+.result-box.error { color:var(--rec); background:var(--rec-dim); }
+.result-box.loading { color:var(--text-3); }
+
+/* ── Result Action Row ── */
+.result-actions { display:flex; gap:8px; margin-top:10px; align-items:center; }
+.result-actions .spacer { flex:1; }
+
+/* ── Vocabulary Panel ── */
+.vocab-toggle { display:flex; align-items:center; gap:6px; cursor:pointer; padding:8px 12px; border-radius:8px; background:var(--overlay); border:1px solid var(--border); font-size:13px; color:var(--text-2); transition:all 0.15s; width:fit-content; }
+.vocab-toggle:hover { border-color:var(--accent); color:var(--accent); }
+.vocab-count { background:var(--accent); color:#fff; font-size:11px; min-width:18px; height:18px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; padding:0 5px; }
+.vocab-panel { display:none; margin-top:12px; }
+.vocab-panel.show { display:block; }
+.vocab-empty { text-align:center; padding:24px; color:var(--text-3); font-size:13px; }
+.vocab-item {
+  display:flex; align-items:flex-start; gap:10px;
+  padding:10px 12px; margin:4px 0; border-radius:8px;
+  background:var(--overlay); transition:background 0.15s;
+}
+.vocab-item:hover { background:var(--accent-dim); }
+.vocab-content { flex:1; min-width:0; }
+.vocab-source { font-size:13px; font-weight:500; color:var(--text-1); }
+.vocab-translated { font-size:12px; color:var(--text-2); margin-top:2px; }
+.vocab-meta { font-size:11px; color:var(--text-3); margin-top:4px; }
+.vocab-del { padding:4px 8px; font-size:12px; color:var(--text-3); border-radius:6px; transition:all 0.15s; flex-shrink:0; }
+.vocab-del:hover { color:var(--rec); background:var(--rec-dim); }
+
+/* ── Toast ── */
+.toast {
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--text-1); color:#fff; padding:10px 20px; border-radius:8px;
+  font-size:13px; opacity:0; transition:all 0.25s; pointer-events:none; z-index:999;
+}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+.toast.success { background:var(--accent); }
+.toast.error { background:var(--rec); }
+
+/* ── Loading Spinner ── */
+.spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,0.4); border-top-color:#fff; border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; margin-right:4px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <a href="/" class="brand">🗣️ Speakeasy</a>
+    <span style="font-size:13px; color:var(--text-3);">/ 翻译</span>
+  </div>
+  <div class="header-right">
+    <a href="/" title="首页">🏠</a>
+    <a href="/practice" title="发音练习">🎙️</a>
+    <a href="/memory" title="记忆管理">🧠</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Main Translate Card -->
+  <div class="card">
+    <!-- Direction Toggle -->
+    <div class="direction-row">
+      <button class="dir-btn active" id="btn-zh2en" onclick="setDirection('zh2en')">中 → 英</button>
+      <button class="dir-swap" onclick="swapDirection()" title="切换方向">⇄</button>
+      <button class="dir-btn" id="btn-en2zh" onclick="setDirection('en2zh')">英 → 中</button>
+      <span class="dir-label" id="dir-label" style="margin-left:4px;">中文 → English</span>
+    </div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <textarea id="input-text" placeholder="输入要翻译的文本…" oninput="onInput()" onkeydown="onKeyDown(event)"></textarea>
+    </div>
+    <div class="char-count" id="char-count">0 / 1000</div>
+    <div class="char-limit-msg" id="char-limit-msg">⚠️ 输入超过 1000 字符，请缩短后再翻译</div>
+
+    <!-- Action Row -->
+    <div class="action-row" style="margin-top:10px;">
+      <button class="btn btn-primary" id="translate-btn" onclick="doTranslate()">翻译</button>
+      <button class="btn btn-outline" id="clear-btn" onclick="clearAll()">清除</button>
+    </div>
+
+    <!-- Result -->
+    <div class="result-label">翻译结果</div>
+    <div class="result-box placeholder" id="result-box">翻译结果将显示在这里</div>
+
+    <!-- Result Actions -->
+    <div class="result-actions" id="result-actions" style="display:none;">
+      <button class="btn-icon" id="tts-btn" onclick="speakResult()" title="朗读结果">🔊</button>
+      <button class="btn-icon" id="save-btn" onclick="saveToVocab()" title="收藏到生词本">⭐</button>
+      <span class="spacer"></span>
+    </div>
+  </div>
+
+  <!-- Vocabulary Panel -->
+  <div class="card">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+      <div class="vocab-toggle" onclick="toggleVocab()">
+        <span>📖 生词本</span>
+        <span class="vocab-count" id="vocab-count">0</span>
+        <span id="vocab-toggle-arrow" style="font-size:12px; color:var(--text-3);">▼</span>
+      </div>
+    </div>
+    <div class="vocab-panel" id="vocab-panel">
+      <div class="vocab-empty" id="vocab-empty">还没有收藏，翻译后点 ⭐ 收藏</div>
+      <div id="vocab-list"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="/static/js/config.js"></script>
+<script src="/static/js/tts-provider.js"></script>
+<script>
+// ── State ────────────────────────────────────────────────
+const USER_ID = 'default_user';
+let direction = 'zh2en';
+let currentTranslated = '';
+let currentSource = '';
+let vocabOpen = false;
+let vocabItems = [];
+
+// ── Direction ────────────────────────────────────────────
+function setDirection(dir) {
+  direction = dir;
+  document.getElementById('btn-zh2en').classList.toggle('active', dir === 'zh2en');
+  document.getElementById('btn-en2zh').classList.toggle('active', dir === 'en2zh');
+  document.getElementById('dir-label').textContent = dir === 'zh2en' ? '中文 → English' : 'English → 中文';
+  document.getElementById('input-text').placeholder = dir === 'zh2en' ? '输入中文…' : 'Enter English text…';
+}
+
+function swapDirection() {
+  // swap source/result texts
+  const inputEl = document.getElementById('input-text');
+  const newInput = currentTranslated;
+  setDirection(direction === 'zh2en' ? 'en2zh' : 'zh2en');
+  inputEl.value = newInput;
+  onInput();
+  // clear result
+  setResult('', false);
+  currentSource = '';
+  currentTranslated = '';
+}
+
+// ── Input Handling ───────────────────────────────────────
+function onInput() {
+  const text = document.getElementById('input-text').value;
+  const len = text.length;
+  const countEl = document.getElementById('char-count');
+  const limitMsg = document.getElementById('char-limit-msg');
+  const translateBtn = document.getElementById('translate-btn');
+  const inputEl = document.getElementById('input-text');
+
+  countEl.textContent = `${len} / 1000`;
+  const over = len > 1000;
+  countEl.classList.toggle('over', over);
+  limitMsg.classList.toggle('show', over);
+  inputEl.classList.toggle('over-limit', over);
+  translateBtn.disabled = over;
+}
+
+function onKeyDown(e) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    doTranslate();
+  }
+}
+
+function clearAll() {
+  document.getElementById('input-text').value = '';
+  setResult('', false);
+  currentSource = '';
+  currentTranslated = '';
+  onInput();
+}
+
+// ── Translate ────────────────────────────────────────────
+async function doTranslate() {
+  const text = document.getElementById('input-text').value.trim();
+  if (!text) return;
+  if (text.length > 1000) return;
+
+  const btn = document.getElementById('translate-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>翻译中…';
+  setResult('翻译中…', false, 'loading');
+
+  try {
+    const resp = await fetch('/translate/text', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text, direction}),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    currentSource = text;
+    currentTranslated = data.translated_text;
+    setResult(data.translated_text, true);
+  } catch (e) {
+    setResult(`翻译失败：${e.message}`, false, 'error');
+    currentTranslated = '';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '翻译';
+  }
+}
+
+function setResult(text, showActions, mode) {
+  const box = document.getElementById('result-box');
+  const actionsEl = document.getElementById('result-actions');
+  box.className = 'result-box';
+  if (!text || text === '翻译结果将显示在这里') {
+    box.textContent = '翻译结果将显示在这里';
+    box.classList.add('placeholder');
+    actionsEl.style.display = 'none';
+    return;
+  }
+  box.textContent = text;
+  if (mode === 'error') box.classList.add('error');
+  else if (mode === 'loading') box.classList.add('loading');
+  actionsEl.style.display = showActions ? 'flex' : 'none';
+}
+
+// ── TTS（复用 tts-provider.js 的 ServerTTSProvider）────────
+const ttsProvider = new ServerTTSProvider();
+
+async function speakResult() {
+  if (!currentTranslated) return;
+  const btn = document.getElementById('tts-btn');
+  btn.disabled = true;
+  await ttsProvider.speak(
+    currentTranslated,
+    () => {},                           // onStart
+    () => { btn.disabled = false; },    // onEnd
+    () => { btn.disabled = false; showToast('朗读失败', 'error'); }  // onError
+  );
+}
+
+// ── Vocabulary ───────────────────────────────────────────
+async function saveToVocab() {
+  if (!currentSource || !currentTranslated) return;
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/translate/vocabulary', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        user_id: USER_ID,
+        source_text: currentSource,
+        translated_text: currentTranslated,
+        direction,
+      }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const item = await resp.json();
+    vocabItems.unshift(item);
+    updateVocabCount();
+    renderVocabList();
+    showToast('已收藏到生词本 ⭐', 'success');
+  } catch (e) {
+    showToast(`收藏失败：${e.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function toggleVocab() {
+  vocabOpen = !vocabOpen;
+  document.getElementById('vocab-panel').classList.toggle('show', vocabOpen);
+  document.getElementById('vocab-toggle-arrow').textContent = vocabOpen ? '▲' : '▼';
+  if (vocabOpen && vocabItems.length === 0) loadVocab();
+}
+
+async function loadVocab() {
+  try {
+    const resp = await fetch(`/translate/vocabulary?user_id=${encodeURIComponent(USER_ID)}&limit=100`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    vocabItems = data.items;
+    updateVocabCount();
+    renderVocabList();
+  } catch (e) {
+    document.getElementById('vocab-empty').textContent = `加载失败：${e.message}`;
+    document.getElementById('vocab-empty').style.display = 'block';
+  }
+}
+
+function renderVocabList() {
+  const listEl = document.getElementById('vocab-list');
+  const emptyEl = document.getElementById('vocab-empty');
+  if (vocabItems.length === 0) {
+    listEl.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  listEl.innerHTML = vocabItems.map(v => `
+    <div class="vocab-item" id="vitem-${v.id}">
+      <div class="vocab-content">
+        <div class="vocab-source">${escHtml(v.source_text)}</div>
+        <div class="vocab-translated">${escHtml(v.translated_text)}</div>
+        <div class="vocab-meta">${v.direction === 'zh2en' ? '中→英' : '英→中'} · ${formatDate(v.created_at)}</div>
+      </div>
+      <button class="vocab-del" onclick="deleteVocab(${v.id})" title="删除">🗑️</button>
+    </div>
+  `).join('');
+}
+
+async function deleteVocab(id) {
+  try {
+    const resp = await fetch(`/translate/vocabulary/${id}?user_id=${encodeURIComponent(USER_ID)}`, {method:'DELETE'});
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    vocabItems = vocabItems.filter(v => v.id !== id);
+    updateVocabCount();
+    renderVocabList();
+    showToast('已删除', 'success');
+  } catch (e) {
+    showToast(`删除失败：${e.message}`, 'error');
+  }
+}
+
+function updateVocabCount() {
+  document.getElementById('vocab-count').textContent = vocabItems.length;
+}
+
+// ── Utils ─────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg, type='success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.classList.remove('show'); }, 2500);
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
+  } catch { return iso; }
+}
+
+// ── Init ─────────────────────────────────────────────────
+loadVocab();
+</script>
+</body>
+</html>

@@ -141,7 +141,7 @@ flowchart TD
 
     C -->|anthropic| D[AnthropicClient\n使用官方 SDK\nanthropic.Anthropic]
     C -->|deepseek| E[OpenAICompatibleClient\nbase_url: api.deepseek.com]
-    C -->|volcengine| F[OpenAICompatibleClient\nbase_url: ark.cn-beijing.volces.com]
+    C -->|  | F[OpenAICompatibleClient\nbase_url: ark.cn-beijing.volces.com]
     C -->|zhipu| G[OpenAICompatibleClient\nbase_url: open.bigmodel.cn]
     C -->|未知| H[抛出 ValueError\n启动报错]
 

@@ -139,7 +139,7 @@ cp .env.example .env
 
 ```bash
 # 4. Run
-uvicorn app.main:app --reload
+uvicorn main:app --reload
 # Open http://localhost:8000
 ```
 

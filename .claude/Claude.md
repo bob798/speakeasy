@@ -55,13 +55,16 @@ speakeasy/
 │   │   ├── memory_service.py  # FSRS 记忆调度（V0.2b+）
 │   │   ├── fsrs_utils.py      # FSRS 共享工具（V0.4+）
 │   │   ├── subtitle_service.py # B站字幕提取（V0.4+）
-│   │   └── practice_service.py # 发音练习卡片管理（V0.4+）
+│   │   ├── practice_service.py # 发音练习卡片管理（V0.4+）
+│   │   └── translate_service.py # 翻译服务 + 生词本 CRUD（V0.5+）
 │   ├── prompts/
-│   │   └── review.py          # 分析用 Prompt（V0.2b+）
+│   │   ├── review.py          # 分析用 Prompt（V0.2b+）
+│   │   └── translate.py       # 翻译 Prompt（V0.5+）
 │   └── routers/
 │       ├── chat.py            # /chat · /chat/summary
 │       ├── review.py          # /review（V0.2b+）
-│       └── practice.py        # /practice/*（V0.4+）
+│       ├── practice.py        # /practice/*（V0.4+）
+│       └── translate.py       # /translate/*（V0.5+）
 ├── docs/
 │   ├── spec/                  # 产品规格文档
 │   ├── adr/
@@ -98,6 +101,7 @@ speakeasy/
 | user_facts | V0.3 | LLM 提取的跨会话事实记忆 |
 | pronunciation_cards | V0.4 | FSRS 管理的发音练习卡片 |
 | subtitle_sources | V0.4 | B站字幕缓存 |
+| vocabulary | V0.5 | 翻译生词本收藏（软删除，无 FSRS） |
 
 ### API 接口清单
 
@@ -121,6 +125,11 @@ speakeasy/
 | `/practice/cards/{id}` | DELETE | V0.4 | 软删除发音卡 |
 | `/practice/due` | GET | V0.4 | 获取到期复习卡 |
 | `/practice` | GET | V0.4 | 返回 practice.html 练习页面 |
+| `/translate` | GET | V0.5 | 返回 translate.html 翻译页面 |
+| `/translate/text` | POST | V0.5 | 双向翻译（zh2en/en2zh），1000 字符上限 |
+| `/translate/vocabulary` | POST | V0.5 | 收藏译文到生词本 |
+| `/translate/vocabulary` | GET | V0.5 | 生词本列表（分页） |
+| `/translate/vocabulary/{id}` | DELETE | V0.5 | 软删除生词本条目 |
 
 ---
 
@@ -169,6 +178,9 @@ Claude Code 在以下时机自动维护文档，无需 Human 指示：
 | 修改跨模块调用链 | 更新 docs/architecture/flows/ 对应文档 |
 | Bug 修复完成 | 更新 BUG_LOG.md 状态为已修复 |
 | 做了重要技术决策 | 在 docs/adr/ 新增 ADR 草稿，汇报中标注"待 Human 确认" |
+| 部署方式/配置变更 | 同步更新 README.md 中的部署说明、环境要求等相关章节 |
+| API 接口新增/修改 | 同步更新 README.md 中的 API 文档（如有）及 CLAUDE.md 接口清单 |
+| 依赖变更 | 同步更新 README.md 中的安装/依赖说明 |
 
 Human 维护（Claude Code 不代劳）：
   · ROADMAP.md 的版本状态（每次验收后移入"已发布"）
@@ -190,9 +202,10 @@ V0.2a ✅  语音输入 STT · 语音输出 TTS · 流式输出 · 对话历史�
 V0.2b ✅  对话复盘 · FSRS 记忆调度 · 点击提问 UI
 V0.3  ✅  三层记忆系统 · Level评估 · user_facts · 记忆管理页面
 V0.4  ✅  发音练习 · B站字幕提取 · 录音对比 · FSRS 复习闭环
+V0.5  🚧  翻译 MVP（翻译 MVP 完成）：双向翻译 · 生词本 · /translate 独立页
 ```
 
-**下一版本预告：V0.5**
+**下一版本预告：V0.5 后续**
 ```
 场景模式（职场/旅行/面试） · 进度可视化 · 学习连续天数
 ```
@@ -227,4 +240,4 @@ pytest tests/test_stepN.py -v
 | V0.2b | ✅ 完成 | 复盘 · FSRS · 点击提问 |
 | V0.3 | ✅ 完成 | 三层记忆 · Level评估 · user_facts · 记忆管理页 |
 | V0.4 | ✅ 完成 | 发音练习 · B站字幕提取 · 录音对比 · FSRS 复习闭环 |
-| V0.5 | ⏳ 待规划 | 场景模式 · 进度可视化 · 连续天数 |
+| V0.5 | 🚧 开发中 | 翻译 MVP 完成：双向翻译 · 生词本 · /translate 独立页 |

@@ -110,6 +110,7 @@ Alex 自然回应（隐式引导，对话中无感发生）：
 | V0.2b ✅ | 对话复盘（错误分析 + 亮点）+ FSRS 错误调度 + 点击追问 UI |
 | V0.3 ✅ | 用户画像 + Level 评估 + 跨会话事实记忆 + 记忆管理页面 |
 | V0.4 ✅ | 发音练习 + B站字幕提取 + 录音对比 + FSRS 复习闭环 |
+| V0.5 🚧 | 翻译模块 MVP：双向中英翻译（/translate 独立页）+ 生词本收藏（vocabulary 表，软删除）+ Header 🌐 入口 |
 
 ---
 
@@ -140,7 +141,7 @@ cp .env.example .env
 
 ```bash
 # 4. 启动
-uvicorn app.main:app --reload
+uvicorn main:app --reload
 # 打开 http://localhost:8000
 ```
 

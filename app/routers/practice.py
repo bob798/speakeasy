@@ -10,8 +10,9 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from app.services.subtitle_service import (
-    extract_bvid, fetch_bilibili_subtitles, parse_manual_text, resolve_short_url,
-    extract_youtube_id, fetch_youtube_subtitles, fetch_audio_subtitles,
+    extract_bvid, extract_page_num, fetch_bilibili_subtitles, parse_manual_text,
+    resolve_short_url, extract_youtube_id, fetch_youtube_subtitles,
+    fetch_audio_subtitles,
 )
 from app.services.practice_service import (
     create_pronunciation_cards,
@@ -122,9 +123,10 @@ async def get_subtitles(req: SubtitleRequest):
         bvid = extract_bvid(resolved_url)
         if not bvid:
             raise HTTPException(400, "无法识别链接，支持 B站和 YouTube 链接")
-        source_id = bvid
+        page = extract_page_num(resolved_url)
+        source_id = f"{bvid}_p{page}" if page > 1 else bvid
         source_type = "bilibili"
-        result = await fetch_bilibili_subtitles(bvid)
+        result = await fetch_bilibili_subtitles(bvid, page=page)
         if result.get("error") and "无字幕" in result["error"]:
             logger.info("B站字幕不可用，尝试音频识别: %s", bvid)
             result = await fetch_audio_subtitles(resolved_url)

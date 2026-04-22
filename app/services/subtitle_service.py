@@ -39,6 +39,12 @@ def extract_bvid(url: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
+def extract_page_num(url: str) -> int:
+    """从 B站 URL 提取分P号（?p=2），默认返回 1"""
+    m = re.search(r'[?&]p=(\d+)', url)
+    return int(m.group(1)) if m else 1
+
+
 async def resolve_short_url(url: str) -> str:
     """跟随 b23.tv 等短链接重定向，返回真实 URL"""
     if not _SHORT_URL_PATTERN.search(url):
@@ -53,7 +59,7 @@ async def resolve_short_url(url: str) -> str:
         return url
 
 
-async def fetch_bilibili_subtitles(bvid: str) -> dict:
+async def fetch_bilibili_subtitles(bvid: str, page: int = 1) -> dict:
     if not _BV_PATTERN.fullmatch(bvid):
         return {"error": "BV号格式无效", "segments": []}
 
@@ -61,7 +67,7 @@ async def fetch_bilibili_subtitles(bvid: str) -> dict:
         async with httpx.AsyncClient(
             trust_env=False, timeout=_TIMEOUT, headers=_HEADERS
         ) as client:
-            # Step 2: 获取 cid
+            # Step 2: 获取 cid（支持分P）
             resp = await client.get(
                 f"{_BILIBILI_API}/x/web-interface/view",
                 params={"bvid": bvid},
@@ -70,8 +76,14 @@ async def fetch_bilibili_subtitles(bvid: str) -> dict:
             if data.get("code") != 0:
                 return {"error": "视频不存在或无法访问", "segments": []}
 
-            cid = data["data"]["cid"]
+            pages = data["data"].get("pages", [])
+            if page > len(pages):
+                return {"error": f"分P {page} 不存在，共 {len(pages)} P", "segments": []}
+            cid = pages[page - 1]["cid"] if pages else data["data"]["cid"]
             title = data["data"].get("title", "")
+            # 合辑带分P标题
+            if len(pages) > 1 and pages[page - 1].get("part"):
+                title = f"{title} p{page:02d} {pages[page - 1]['part']}"
 
             # Step 3: 获取字幕列表
             resp = await client.get(
@@ -217,7 +229,7 @@ async def fetch_audio_subtitles(url: str) -> dict:
             "outtmpl": tmp_template,
             "quiet": True,
             "no_warnings": True,
-            "cookiesfrombrowser": ("safari",),  # B站 412 反爬需要浏览器 Cookie
+            "cookiesfrombrowser": ("chrome",),  # B站 412 反爬需要浏览器 Cookie
         }
 
         # yt-dlp 阶段：保留代理环境变量

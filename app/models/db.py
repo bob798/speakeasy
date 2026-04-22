@@ -133,6 +133,21 @@ class SubtitleSource(Base):
     __table_args__ = (UniqueConstraint("user_id", "source_id"),)
 
 
+# ── V0.5 翻译生词本 ────────────────────────────────────────
+
+class Vocabulary(Base):
+    __tablename__ = "vocabulary"
+
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    user_id         = Column(String, nullable=False, index=True)
+    source_text     = Column(String, nullable=False)
+    translated_text = Column(String, nullable=False)
+    direction       = Column(String, nullable=False)   # 'zh2en' | 'en2zh'
+    context         = Column(String, nullable=True)
+    created_at      = Column(DateTime, default=datetime.utcnow)
+    status          = Column(String, nullable=False, default="active")  # active | deleted
+
+
 # Sync engine for ORM operations (tests, memory_service, review_service)
 import os as _os
 _DB_PATH = _os.environ.get("SPEAKEASY_DB_PATH", "./speakeasy.db")

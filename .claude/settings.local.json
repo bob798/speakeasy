@@ -80,7 +80,10 @@
       "Bash(gh api:*)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(source:*)"
+      "Bash(source:*)",
+      "Bash(echo '')",
+      "Bash(echo '# Speakeasy 快速启动')",
+      "Bash(echo 'alias sk=\"cd ~/workspace/speakeasy && ./start.sh\"')"
     ]
   }
 }

@@ -97,11 +97,17 @@ body { font-family:'Sora','PingFang SC','Noto Sans SC',system-ui,sans-serif; bac
 
 /* ── Left Panel: Subtitle Lines ── */
 .left-panel .subtitle-lines { max-height:calc(100vh - 280px); overflow-y:auto; }
-.sub-line { padding:10px 14px; margin:3px 0; border-radius:8px; font-size:14px; line-height:1.6; cursor:pointer; transition:all 0.15s; border:2px solid transparent; user-select:none; }
+.sub-line { padding:10px 14px; margin:3px 0; border-radius:8px; font-size:14px; line-height:1.6; cursor:pointer; transition:all 0.15s; border:2px solid transparent; }
 .sub-line:hover { background:var(--overlay); }
 .sub-line.active { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); font-weight:500; }
 .sub-line.practiced { position:relative; }
 .sub-line.practiced::after { content:''; position:absolute; right:10px; top:50%; transform:translateY(-50%); width:8px; height:8px; border-radius:50%; background:var(--accent); opacity:0.4; }
+.sub-line { position:relative; }
+.sub-line .copy-line-btn { position:absolute; right:6px; top:50%; transform:translateY(-50%); opacity:0; border:none; background:none; cursor:pointer; font-size:13px; padding:2px 6px; border-radius:4px; transition:opacity 0.15s; color:var(--text-3); }
+.sub-line:hover .copy-line-btn { opacity:1; }
+.sub-line .copy-line-btn:hover { background:var(--overlay); color:var(--accent); }
+.copy-all-btn { border:none; background:none; cursor:pointer; font-size:14px; padding:2px 6px; border-radius:4px; color:var(--text-3); margin-left:auto; transition:color 0.15s; }
+.copy-all-btn:hover { color:var(--accent); }
 .sub-line .word { cursor:text; border-radius:3px; transition:background 0.1s; }
 .sub-line .word::selection { background:var(--accent); color:#fff; }
 .sub-line .word:hover { background:rgba(61,107,79,0.08); }
@@ -193,6 +199,7 @@ body { font-family:'Sora','PingFang SC','Noto Sans SC',system-ui,sans-serif; bac
   </div>
   <div class="header-right">
     <a href="/" title="首页">💬</a>
+    <a href="/translate" title="翻译">🌐</a>
     <a href="/practice" title="发音练习" style="color:var(--text-1)">🎙️</a>
     <a href="/memory" title="记忆管理">🧠</a>
   </div>
@@ -239,7 +246,7 @@ body { font-family:'Sora','PingFang SC','Noto Sans SC',system-ui,sans-serif; bac
     <!-- Left: Subtitle Lines -->
     <div class="left-panel">
       <div class="card">
-        <h3>📝 字幕内容 <span style="font-size:11px;color:var(--text-3);font-weight:400">（点击选择练习句子）</span></h3>
+        <h3 style="display:flex;align-items:center;gap:8px;">📝 字幕内容 <span style="font-size:11px;color:var(--text-3);font-weight:400">（点击选择练习句子）</span><button class="copy-all-btn" onclick="copyAllSubtitles()" title="复制全文">📋</button></h3>
         <div class="subtitle-lines" id="subtitleLines"></div>
       </div>
     </div>
@@ -498,6 +505,21 @@ function enterTwoColumnMode() {
   selectProvider('edge', document.querySelector('.provider-btn[data-provider="edge"]'));
 }
 
+// ── Copy Helpers ──
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓';
+    setTimeout(() => btn.textContent = orig, 1200);
+  });
+}
+function copyAllSubtitles() {
+  if (!segments.length) return;
+  const text = segments.map(s => s.content).join('\n');
+  const btn = document.querySelector('.copy-all-btn');
+  copyText(text, btn);
+}
+
 // ── Subtitle Rendering ──
 function renderSubtitles() {
   const container = document.getElementById('subtitleLines');
@@ -515,6 +537,12 @@ function renderSubtitles() {
       span.textContent = w;
       div.appendChild(span);
     });
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'copy-line-btn';
+    copyBtn.textContent = '📋';
+    copyBtn.title = '复制';
+    copyBtn.onclick = (e) => { e.stopPropagation(); copyText(seg.content, copyBtn); };
+    div.appendChild(copyBtn);
     div.onclick = (e) => {
       // 如果用户正在框选文字（选单词），不触发整行选择
       const sel = window.getSelection();
