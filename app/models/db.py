@@ -163,6 +163,22 @@ class TranslationCache(Base):
     __table_args__ = (UniqueConstraint("text_hash", "direction"),)
 
 
+class ExplanationCache(Base):
+    __tablename__ = "explanation_cache"
+
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    text_hash       = Column(String(64), nullable=False)
+    kind            = Column(String, nullable=False)            # 'sentence' | 'word'
+    cefr_level      = Column(String, nullable=False, default="")# A1/A2/B1/B2/C1/C2/''
+    source_text     = Column(String, nullable=False)
+    explanation     = Column(String, nullable=False)            # JSON 字符串
+    hit_count       = Column(Integer, nullable=False, default=1)
+    created_at      = Column(DateTime, default=datetime.utcnow)
+    last_hit_at     = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("text_hash", "kind", "cefr_level"),)
+
+
 # Sync engine for ORM operations (tests, memory_service, review_service)
 import os as _os
 _DB_PATH = _os.environ.get("SPEAKEASY_DB_PATH", "./speakeasy.db")

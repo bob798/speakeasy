@@ -208,12 +208,17 @@ def _restore_proxy_env(backup: dict):
     os.environ.update(backup)
 
 
-async def fetch_audio_subtitles(url: str) -> dict:
-    """通过 yt-dlp 下载音频 + Groq Whisper 转字幕（适用于无字幕的视频）"""
+async def fetch_audio_subtitles(url: str, cookies_text: Optional[str] = None) -> dict:
+    """通过 yt-dlp 下载音频 + Groq Whisper 转字幕（适用于无字幕的视频）
+
+    :param cookies_text: 可选的 Netscape 格式 cookies 文本（B 站 412 反爬时使用）。
+        优先级：cookies_text > SPEAKEASY_COOKIES_FILE 环境变量 > 无 cookie。
+    """
     import tempfile
     import os
 
     tmp_path = None
+    cookie_tmp_path = None
     try:
         import yt_dlp
 
@@ -229,8 +234,23 @@ async def fetch_audio_subtitles(url: str) -> dict:
             "outtmpl": tmp_template,
             "quiet": True,
             "no_warnings": True,
-            "cookiesfrombrowser": ("chrome",),  # B站 412 反爬需要浏览器 Cookie
         }
+
+        # cookies 来源（VPS 无法用 cookiesfrombrowser=chrome）:
+        #   1. 请求传入的 cookies_text（写入临时文件）
+        #   2. 环境变量指向的持久 cookies 文件
+        if cookies_text and cookies_text.strip():
+            cookie_tmp = tempfile.NamedTemporaryFile(
+                mode="w", suffix=".txt", delete=False, encoding="utf-8",
+            )
+            cookie_tmp.write(cookies_text.strip())
+            cookie_tmp.close()
+            cookie_tmp_path = cookie_tmp.name
+            ydl_opts["cookiefile"] = cookie_tmp_path
+        else:
+            env_cookie = os.environ.get("SPEAKEASY_COOKIES_FILE")
+            if env_cookie and os.path.exists(env_cookie):
+                ydl_opts["cookiefile"] = env_cookie
 
         # yt-dlp 阶段：保留代理环境变量
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -322,6 +342,11 @@ async def fetch_audio_subtitles(url: str) -> dict:
                 pass
         if 'tmp_dir' in dir() and tmp_dir and os.path.exists(tmp_dir):
             _shutil.rmtree(tmp_dir, ignore_errors=True)
+        if cookie_tmp_path and os.path.exists(cookie_tmp_path):
+            try:
+                os.unlink(cookie_tmp_path)
+            except OSError:
+                pass
 
 
 def parse_manual_text(text: str) -> list[dict]:

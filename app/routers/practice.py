@@ -21,6 +21,7 @@ from app.services.practice_service import (
     delete_pronunciation_card,
     get_due_pronunciation_cards,
 )
+from app.services.explain_service import explain_text
 from app.services.tts_service import multi_tts
 from app.models.db import engine, SubtitleSource
 from sqlalchemy.orm import Session as OrmSession
@@ -37,6 +38,7 @@ class SubtitleRequest(BaseModel):
     url: Optional[str] = None
     text: Optional[str] = None
     user_id: Optional[str] = None
+    cookies: Optional[str] = None   # Netscape 格式 B 站 cookies；抓取失败时前端兜底用
 
 
 class CardItem(BaseModel):
@@ -54,6 +56,13 @@ class CreateCardsRequest(BaseModel):
 class ReviewRequest(BaseModel):
     user_id: str
     rating: str   # again | hard | good | easy
+
+
+class ExplainRequest(BaseModel):
+    user_id: str
+    text: str
+    kind: str                     # 'sentence' | 'word'
+    context: Optional[str] = ""   # word 模式下可提供所在句子
 
 
 # ── 字幕缓存工具 ─────────────────────────────────────────
@@ -117,7 +126,7 @@ async def get_subtitles(req: SubtitleRequest):
         result = await fetch_youtube_subtitles(yt_id)
         if result.get("error") and "禁用" in result["error"]:
             logger.info("YouTube 字幕不可用，尝试音频识别: %s", yt_id)
-            result = await fetch_audio_subtitles(resolved_url)
+            result = await fetch_audio_subtitles(resolved_url, cookies_text=req.cookies)
     else:
         # 尝试 Bilibili
         bvid = extract_bvid(resolved_url)
@@ -129,7 +138,7 @@ async def get_subtitles(req: SubtitleRequest):
         result = await fetch_bilibili_subtitles(bvid, page=page)
         if result.get("error") and "无字幕" in result["error"]:
             logger.info("B站字幕不可用，尝试音频识别: %s", bvid)
-            result = await fetch_audio_subtitles(resolved_url)
+            result = await fetch_audio_subtitles(resolved_url, cookies_text=req.cookies)
 
     # 统一缓存（成功时）
     if result and "error" not in result and req.user_id and result.get("segments"):
@@ -244,6 +253,25 @@ async def get_due_cards(
 ):
     cards = get_due_pronunciation_cards(user_id, limit=limit)
     return {"cards": cards, "count": len(cards)}
+
+
+# ── 句子/单词解读 ─────────────────────────────────────────
+
+@router.post("/practice/explain")
+async def practice_explain(req: ExplainRequest):
+    try:
+        result = await explain_text(
+            text=req.text,
+            kind=req.kind,
+            user_id=req.user_id,
+            context=req.context or "",
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        logger.error("解读失败: %s", e, exc_info=True)
+        raise HTTPException(503, "解读服务暂时不可用，请稍后重试")
+    return result
 
 
 # ── 多源 TTS ─────────────────────────────────────────────
