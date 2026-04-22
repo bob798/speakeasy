@@ -15,3 +15,10 @@ dist/
 .env.production
 static/tts_cache/
 static/audio_cache/
+
+# OMC runtime state (HUD cache, session state, logs, notepad, project memory)
+.omc/state/
+.omc/logs/
+.omc/notepad.md
+.omc/project-memory.json
+tmux-client-*.log
