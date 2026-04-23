@@ -23,6 +23,7 @@ _scheduler = FSRS()
 
 @router.get("/review/{session_id}")
 async def get_review(session_id: str, user_id: str = Depends(get_current_user_id)):
+    if review.user_id != current_user.id: raise HTTPException(status_code=403, detail="Unauthorized")
     review = await get_session_review(session_id)
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
