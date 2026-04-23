@@ -26,6 +26,9 @@ async def get_review(session_id: str, user_id: str = Depends(get_current_user_id
     review = await get_session_review(session_id)
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
+    # Ownership validation to prevent IDOR
+    if review.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Unauthorized access to review")
     return {
         "session_id": review.session_id,
         "errors": json.loads(review.errors),
