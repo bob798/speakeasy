@@ -5,9 +5,12 @@ import os
 import edge_tts
 
 VOICES = {
-    "jenny": "en-US-JennyNeural",
-    "guy":   "en-US-GuyNeural",
-    "sonia": "en-GB-SoniaNeural",
+    "jenny":    "en-US-JennyNeural",
+    "guy":      "en-US-GuyNeural",
+    "sonia":    "en-GB-SoniaNeural",
+    # 讲解用中文声音（edge-tts 对混合中英文本容错较好）
+    "xiaoxiao": "zh-CN-XiaoxiaoNeural",
+    "yunxi":    "zh-CN-YunxiNeural",
 }
 
 _DEFAULT_VOICE = "en-US-JennyNeural"

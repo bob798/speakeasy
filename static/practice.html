@@ -198,8 +198,9 @@ body { font-family:'Sora','PingFang SC','Noto Sans SC',system-ui,sans-serif; bac
 .explain-backdrop.show { display:block; }
 .explain-drawer { position:fixed; top:0; right:0; bottom:0; width:min(460px, 90vw); background:var(--elevated); box-shadow:-4px 0 24px rgba(0,0,0,0.12); z-index:999; transform:translateX(100%); transition:transform 0.25s cubic-bezier(0.2,0.8,0.2,1); display:flex; flex-direction:column; }
 .explain-drawer.show { transform:translateX(0); }
-.explain-header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border); }
-.explain-title { font-size:15px; font-weight:600; color:var(--text-1); max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.explain-header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; padding:14px 18px; border-bottom:1px solid var(--border); }
+.explain-title { flex:1; min-width:0; font-size:15px; font-weight:600; color:var(--text-1); line-height:1.45; word-break:break-word; white-space:normal; }
+.explain-header button { flex-shrink:0; }
 .explain-close { padding:4px 10px; border-radius:6px; color:var(--text-2); font-size:16px; transition:all 0.15s; }
 .explain-close:hover { background:var(--overlay); color:var(--text-1); }
 .explain-meta { padding:6px 18px; font-size:11px; color:var(--text-3); border-bottom:1px dashed var(--border); }
@@ -221,6 +222,28 @@ body { font-family:'Sora','PingFang SC','Noto Sans SC',system-ui,sans-serif; bac
 .explain-body .loading { color:var(--text-3); font-style:italic; text-align:center; padding:32px 0; }
 .explain-body .error { color:var(--rec); background:var(--rec-dim); padding:10px; border-radius:6px; }
 .explain-footer { padding:12px 18px; border-top:1px solid var(--border); display:flex; align-items:center; gap:8px; background:var(--overlay); }
+.explain-header .title-speak { padding:4px 8px; border-radius:6px; color:var(--text-2); font-size:14px; margin-right:4px; }
+.explain-header .title-speak:hover { background:var(--overlay); color:var(--accent); }
+.explain-header .title-speak:disabled { opacity:0.45; cursor:wait; }
+.explain-body .example { position:relative; padding:6px 30px 6px 10px; background:var(--overlay); border-radius:6px; margin-bottom:6px; }
+.explain-body .example .mini-speak { position:absolute; right:4px; top:4px; padding:2px 6px; border-radius:4px; font-size:12px; color:var(--text-3); opacity:0; transition:opacity 0.1s; }
+.explain-body .example:hover .mini-speak { opacity:1; }
+.explain-body .example .mini-speak:hover { color:var(--accent); background:var(--bg); }
+.explain-body .liaison-item { padding:8px 10px; background:var(--overlay); border-radius:6px; margin-bottom:6px; }
+.explain-body .liaison-row { display:flex; align-items:baseline; gap:8px; margin-bottom:2px; flex-wrap:wrap; }
+.explain-body .liaison-label { flex-shrink:0; font-size:11px; color:var(--text-3); min-width:36px; }
+.explain-body .liaison-chunk { font-weight:600; color:var(--text-1); font-family:'SF Mono','Consolas',monospace; font-size:13px; }
+.explain-body .liaison-ipa { color:var(--accent); font-size:13px; font-family:'SF Mono','Consolas',monospace; letter-spacing:0.5px; }
+.explain-body .liaison-speak { position:static; opacity:1; padding:3px 9px; border-radius:4px; font-size:12px; color:var(--text-2); background:var(--bg); cursor:pointer; margin-left:auto; }
+.explain-body .liaison-speak:hover { color:var(--accent); background:var(--accent-dim); }
+.explain-body .liaison-speak.slow { color:#b08040; margin-left:4px; }
+.explain-body .liaison-speak.slow:hover { color:#b08040; background:rgba(176,128,64,0.15); }
+.explain-body .liaison-tip { color:var(--text-2); font-size:12px; margin-top:2px; }
+.explain-body .speakable { cursor:pointer; padding:1px 4px; border-radius:4px; transition:background 0.1s; }
+.explain-body .speakable:hover { background:var(--accent-dim); color:var(--accent); }
+.explain-ask { display:none; border-top:1px solid var(--border); background:var(--bg); height:45%; min-height:240px; }
+.explain-ask.show { display:flex; flex-direction:column; }
+.explain-drawer.with-ask .explain-body { flex:1 1 0; min-height:0; }
 @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
 
 /* ── Mobile ── */
@@ -372,12 +395,16 @@ body { font-family:'Sora','PingFang SC','Noto Sans SC',system-ui,sans-serif; bac
   <aside class="explain-drawer" id="explainDrawer" aria-hidden="true">
     <div class="explain-header">
       <div class="explain-title" id="explainTitle">解读</div>
+      <button class="title-speak" id="explainTitleSpeak" onclick="drawerSpeakTitle()" title="朗读原文">🔊</button>
+      <button class="title-speak" id="explainNarrationBtn" onclick="playExplainNarration()" title="讲给我听">▶️</button>
       <button class="explain-close" onclick="closeExplain()" title="关闭">✕</button>
     </div>
     <div class="explain-meta" id="explainMeta"></div>
     <div class="explain-body" id="explainBody"></div>
+    <div class="explain-ask" id="explainAskContainer"></div>
     <div class="explain-footer">
       <button class="btn btn-outline btn-sm" id="explainSaveBtn" onclick="saveExplainToVocab()">⭐ 收藏到生词本</button>
+      <button class="btn btn-outline btn-sm" id="explainAskBtn" onclick="toggleExplainAsk()">💬 追问</button>
       <span class="spacer" style="flex:1"></span>
       <button class="btn btn-outline btn-sm" onclick="closeExplain()">关闭</button>
     </div>
@@ -394,6 +421,7 @@ body { font-family:'Sora','PingFang SC','Noto Sans SC',system-ui,sans-serif; bac
 </div>
 
 <script src="/static/js/auth.js"></script>
+<script src="/static/js/ask-panel.js"></script>
 <script>
 if (!window.SpeakeasyAuth.getToken()) { location.replace('/login'); }
 SpeakeasyAuth.requireAuth();
@@ -433,6 +461,19 @@ document.addEventListener('click', (e) => {
   if (!dropdown && panel.classList.contains('show')) {
     panel.classList.remove('show');
   }
+});
+
+// 解读 drawer 内的点读按钮统一走事件委托，避免 inline onclick 的引号转义坑
+document.addEventListener('click', (e) => {
+  const trigger = e.target.closest('[data-speak]');
+  if (!trigger) return;
+  const drawer = trigger.closest('#explainDrawer');
+  if (!drawer) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const text  = trigger.dataset.speak || '';
+  const speed = trigger.dataset.speed || '+0%';
+  if (text) drawerSpeak(text, speed);
 });
 
 // ── Due Cards ──
@@ -957,6 +998,84 @@ function playRecording() {
 
 // ── Explain（句子/单词解读）──
 let currentExplainPayload = null;
+let drawerSpeakAudio = null;   // drawer 内单例播放器
+
+async function drawerSpeak(text, speed) {
+  const t = String(text || '').trim();
+  if (!t) return;
+  // 停掉任何正在播放的 drawer 内音频
+  if (drawerSpeakAudio) { try { drawerSpeakAudio.pause(); } catch(_){} drawerSpeakAudio = null; }
+  try {
+    const resp = await authFetch('/practice/tts', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        text: t,
+        provider: currentProvider === 'original' ? 'edge' : currentProvider,
+        voice: currentProvider === 'openai' ? 'alloy' : 'jenny',
+        speed: speed || '+0%',
+      }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const blob = await resp.blob();
+    if (blob.size < 100) throw new Error('空音频');
+    const url = URL.createObjectURL(blob);
+    drawerSpeakAudio = new Audio(url);
+    drawerSpeakAudio.onended = () => { URL.revokeObjectURL(url); drawerSpeakAudio = null; };
+    drawerSpeakAudio.onerror = () => { drawerSpeakAudio = null; };
+    await drawerSpeakAudio.play();
+  } catch(e) {
+    showToastP('朗读失败：' + e.message, true);
+  }
+}
+
+function drawerSpeakTitle() {
+  if (currentExplainPayload && currentExplainPayload.target) {
+    drawerSpeak(currentExplainPayload.target.text, '+0%');
+  }
+}
+
+async function playExplainNarration() {
+  if (!currentExplainPayload) { showToastP('先选一段解读', true); return; }
+  const narration = (currentExplainPayload.explanation || {}).narration;
+  if (!narration || !String(narration).trim()) {
+    showToastP('这段解读没有讲解稿', true); return;
+  }
+  const btn = document.getElementById('explainNarrationBtn');
+  if (drawerSpeakAudio) { try { drawerSpeakAudio.pause(); } catch(_){} drawerSpeakAudio = null; }
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  // C1 / C2 用英文 voice，其余用中文 voice（xiaoxiao 对中英混读容错较好）
+  const cefr = String((currentExplainPayload.cefr || 'B1')).toUpperCase();
+  const narrationVoice = (cefr === 'C1' || cefr === 'C2') ? 'jenny' : 'xiaoxiao';
+  try {
+    const resp = await authFetch('/practice/tts', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        text: String(narration),
+        provider: 'edge',
+        voice: narrationVoice,
+        speed: '+0%',
+      }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const blob = await resp.blob();
+    if (blob.size < 100) throw new Error('空音频');
+    const url = URL.createObjectURL(blob);
+    drawerSpeakAudio = new Audio(url);
+    drawerSpeakAudio.onended = () => {
+      URL.revokeObjectURL(url); drawerSpeakAudio = null;
+      btn.disabled = false; btn.textContent = '▶️';
+    };
+    drawerSpeakAudio.onerror = () => {
+      drawerSpeakAudio = null;
+      btn.disabled = false; btn.textContent = '▶️';
+    };
+    await drawerSpeakAudio.play();
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '▶️';
+    showToastP('讲解播放失败：' + e.message, true);
+  }
+}
 
 function getExplainTarget() {
   // 右侧 word-picker 选中单词 → 解读单词；否则解读整句
@@ -980,6 +1099,28 @@ async function explainSelected() {
   openExplainDrawer(target.text, target.kind);
   renderExplainLoading();
 
+  // 单词模式：本地 IPA 秒出。不阻塞后续 LLM。
+  if (target.kind === 'word') {
+    authFetch('/practice/explain/phonetic', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ text: target.text }),
+    }).then(r => r.ok ? r.json() : null).then(d => {
+      if (d && d.phonetic) renderExplainQuickPhonetic(d.phonetic);
+    }).catch(() => {});
+  }
+
+  // 句子走 NDJSON 流式，出错或不支持时自动回退到 /practice/explain
+  if (target.kind === 'sentence') {
+    try {
+      const ok = await streamExplainSentence(target);
+      if (ok) return;
+    } catch(e) {
+      console.warn('stream 失败，回退到整块：', e);
+    } finally {
+      btn.classList.remove('loading');
+    }
+  }
+
   try {
     const resp = await authFetch('/practice/explain', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -987,7 +1128,7 @@ async function explainSelected() {
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || `HTTP ${resp.status}`);
-    currentExplainPayload = { target, explanation: data.explanation };
+    currentExplainPayload = { target, explanation: data.explanation, cefr: data.cefr_level || 'B1' };
     renderExplainResult(target, data.explanation, data.cefr_level, data.cached);
   } catch(e) {
     renderExplainError(e.message || String(e));
@@ -996,9 +1137,83 @@ async function explainSelected() {
   }
 }
 
+async function streamExplainSentence(target) {
+  const resp = await authFetch('/practice/explain/stream', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ text: target.text }),
+  });
+  if (!resp.ok || !resp.body) return false;
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buf = '';
+  let first = true;
+  const partial = {};
+  let cefr = 'B1';
+  let cached = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, idx).trim();
+      buf = buf.slice(idx + 1);
+      if (!line) continue;
+      let obj;
+      try { obj = JSON.parse(line); } catch(_) { continue; }
+      if (obj._error) throw new Error(obj._error);
+      if (obj._cached) {
+        cached = true;
+        cefr = obj.cefr_level || cefr;
+        Object.assign(partial, obj.explanation || {});
+        currentExplainPayload = { target, explanation: partial, cefr };
+        renderExplainResult(target, partial, cefr, true);
+        return true;
+      }
+      if (obj._done) {
+        cefr = obj.cefr_level || cefr;
+        currentExplainPayload = { target, explanation: partial, cefr };
+        renderExplainResult(target, partial, cefr, cached);
+        return true;
+      }
+      if (obj.field) {
+        if (first) {
+          // 首段到达：清 loading，开始渲染骨架
+          document.getElementById('explainMeta').innerHTML =
+            `<span class="badge">${cefr}</span><span style="color:var(--text-3)">流式中…</span>`;
+          document.getElementById('explainBody').innerHTML = '';
+          first = false;
+        }
+        partial[obj.field] = obj.value;
+        renderExplainResult(target, partial, cefr, false);
+      }
+    }
+  }
+  // 正常走到这里：如果有内容就确认一次渲染
+  if (!first) {
+    currentExplainPayload = { target, explanation: partial };
+    renderExplainResult(target, partial, cefr, cached);
+    return true;
+  }
+  return false;
+}
+
+function renderExplainQuickPhonetic(ipa) {
+  // 如果 body 还在 loading，替换成"音标 + 等待释义"
+  const body = document.getElementById('explainBody');
+  if (!body) return;
+  if (body.querySelector('.loading')) {
+    body.innerHTML =
+      `<div class="section"><div class="kv"><b>音标</b>${escHtmlExplain(ipa)} <span style="color:var(--text-3);font-size:11px;">· 本地秒出</span></div></div>` +
+      '<div class="loading"><span class="spinner"></span> 释义加载中…</div>';
+  }
+}
+
 function openExplainDrawer(text, kind) {
   document.getElementById('explainTitle').textContent =
-    (kind === 'word' ? '📘 ' : '📗 ') + text.slice(0, 40) + (text.length > 40 ? '…' : '');
+    (kind === 'word' ? '📘 ' : '📗 ') + text;
   document.getElementById('explainBackdrop').classList.add('show');
   document.getElementById('explainDrawer').classList.add('show');
   document.getElementById('explainDrawer').setAttribute('aria-hidden', 'false');
@@ -1008,6 +1223,53 @@ function closeExplain() {
   document.getElementById('explainBackdrop').classList.remove('show');
   document.getElementById('explainDrawer').classList.remove('show');
   document.getElementById('explainDrawer').setAttribute('aria-hidden', 'true');
+  if (drawerSpeakAudio) { try { drawerSpeakAudio.pause(); } catch(_){} drawerSpeakAudio = null; }
+  destroyExplainAsk();
+}
+
+// ── 解读追问面板（复用 AskPanel）─────────────────────────
+let explainAskPanel = null;
+
+function destroyExplainAsk() {
+  if (explainAskPanel) {
+    try { explainAskPanel.destroy(); } catch(_) {}
+    explainAskPanel = null;
+  }
+  const box = document.getElementById('explainAskContainer');
+  if (box) box.classList.remove('show');
+  document.getElementById('explainDrawer').classList.remove('with-ask');
+  const btn = document.getElementById('explainAskBtn');
+  if (btn) btn.textContent = '💬 追问';
+}
+
+function toggleExplainAsk() {
+  if (explainAskPanel) { destroyExplainAsk(); return; }
+  if (!currentExplainPayload) { showToastP('先选一段解读', true); return; }
+  if (!window.AskPanel) { showToastP('追问组件未加载', true); return; }
+  const { target, explanation } = currentExplainPayload;
+  const cefr = (document.querySelector('.explain-meta .badge') || {}).textContent || 'B1';
+  const refId = `${target.kind}:${target.text}`;
+  const box = document.getElementById('explainAskContainer');
+  box.classList.add('show');
+  document.getElementById('explainDrawer').classList.add('with-ask');
+  document.getElementById('explainAskBtn').textContent = '💬 收起追问';
+  explainAskPanel = window.AskPanel.create({
+    mount: box,
+    scope: 'practice_explain',
+    refType: 'explanation',
+    refId,
+    contextPayload: {
+      kind: target.kind,
+      text: target.text,
+      context: target.context || '',
+      cefr_level: cefr,
+      explanation,
+    },
+    placeholder: '对这个' + (target.kind === 'word' ? '单词' : '句子') + '有什么疑问？',
+    emptyHint: '问点什么，老师会针对这个' + (target.kind === 'word' ? '单词' : '句子') + '回答',
+    onError(msg) { showToastP('追问失败：' + msg, true); },
+  });
+  explainAskPanel.loadExisting().then(() => explainAskPanel && explainAskPanel.focus());
 }
 
 function renderExplainLoading() {
@@ -1038,6 +1300,32 @@ function renderExplainResult(target, ex, cefr, cached) {
         ex.phrases.map(p => `<div class="phrase-item"><span class="phrase">${escHtmlExplain(p.phrase || '')}</span><span class="note">${escHtmlExplain(p.note || '')}</span></div>`).join('') +
         '</div>');
     }
+    if (Array.isArray(ex.liaison) && ex.liaison.length) {
+      parts.push('<div class="section"><div class="section-title">🎧 连读点</div>' +
+        ex.liaison.map(l => {
+          const chunk = String(l.chunk || '');
+          const ipa   = String(l.ipa || '');
+          const tip   = String(l.tip || '');
+          return `<div class="liaison-item">`
+               + `<div class="liaison-row"><span class="liaison-label">原文</span>`
+               + `<span class="liaison-chunk">${escHtmlExplain(chunk)}</span>`
+               + `</div>`
+               + (ipa
+                   ? `<div class="liaison-row"><span class="liaison-label">音标</span>`
+                     + `<span class="liaison-ipa">${escHtmlExplain(ipa)}</span>`
+                     + ` <button class="liaison-speak" data-speak="${escHtmlExplain(chunk)}" data-speed="+0%" title="正常速度">🔊</button>`
+                     + ` <button class="liaison-speak slow" data-speak="${escHtmlExplain(chunk)}" data-speed="-25%" title="慢读">🐢</button>`
+                     + `</div>`
+                   : '')
+               + (tip
+                   ? `<div class="liaison-row"><span class="liaison-label">说明</span>`
+                     + `<span class="liaison-tip">${escHtmlExplain(tip)}</span>`
+                     + `</div>`
+                   : '')
+               + `</div>`;
+        }).join('') +
+        '</div>');
+    }
   } else {
     const kv = [];
     if (ex.phonetic) kv.push(`<div class="kv"><b>音标</b>${escHtmlExplain(ex.phonetic)}</div>`);
@@ -1050,12 +1338,17 @@ function renderExplainResult(target, ex, cefr, cached) {
     }
     if (Array.isArray(ex.examples) && ex.examples.length) {
       parts.push('<div class="section"><div class="section-title">例句</div>' +
-        ex.examples.map(e => `<div class="example"><div class="en">${escHtmlExplain(e.en || '')}</div><div class="zh">${escHtmlExplain(e.zh || '')}</div></div>`).join('') +
+        ex.examples.map(e => {
+          const en = e.en || '';
+          return `<div class="example"><div class="en">${escHtmlExplain(en)}</div><div class="zh">${escHtmlExplain(e.zh || '')}</div>`
+               + `<button class="mini-speak" data-speak="${escHtmlExplain(en)}" data-speed="+0%" title="朗读">🔊</button></div>`;
+        }).join('') +
         '</div>');
     }
+    const wordSpan = (w) => `<span class="speakable" data-speak="${escHtmlExplain(String(w))}" data-speed="+0%">${escHtmlExplain(w)}</span>`;
     const pairs = [];
-    if (Array.isArray(ex.synonyms) && ex.synonyms.length) pairs.push(`<div class="kv"><b>近义</b>${ex.synonyms.map(escHtmlExplain).join(' · ')}</div>`);
-    if (Array.isArray(ex.antonyms) && ex.antonyms.length) pairs.push(`<div class="kv"><b>反义</b>${ex.antonyms.map(escHtmlExplain).join(' · ')}</div>`);
+    if (Array.isArray(ex.synonyms) && ex.synonyms.length) pairs.push(`<div class="kv"><b>近义</b>${ex.synonyms.map(wordSpan).join(' · ')}</div>`);
+    if (Array.isArray(ex.antonyms) && ex.antonyms.length) pairs.push(`<div class="kv"><b>反义</b>${ex.antonyms.map(wordSpan).join(' · ')}</div>`);
     if (pairs.length) parts.push('<div class="section">' + pairs.join('') + '</div>');
   }
 

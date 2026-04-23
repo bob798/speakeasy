@@ -6,7 +6,7 @@ import os
 from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, Query, Depends
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from app.routers.auth import get_current_user_id, get_current_user_id_optional
@@ -23,7 +23,7 @@ from app.services.practice_service import (
     delete_pronunciation_card,
     get_due_pronunciation_cards,
 )
-from app.services.explain_service import explain_text
+from app.services.explain_service import explain_text, quick_phonetic, stream_sentence_explanation
 from app.services.tts_service import multi_tts
 from app.models.db import engine, SubtitleSource
 from sqlalchemy.orm import Session as OrmSession
@@ -286,6 +286,53 @@ async def practice_explain(
         logger.error("解读失败: %s", e, exc_info=True)
         raise HTTPException(503, "解读服务暂时不可用，请稍后重试")
     return result
+
+
+class QuickPhoneticRequest(BaseModel):
+    text: str
+
+
+@router.post("/practice/explain/phonetic")
+async def practice_explain_phonetic(req: QuickPhoneticRequest):
+    """单词 IPA 本地秒出；未知词 phonetic=null，前端退回等 LLM 结果。"""
+    if not req.text or not req.text.strip():
+        raise HTTPException(400, "text is required")
+    return {"phonetic": quick_phonetic(req.text)}
+
+
+class StreamExplainRequest(BaseModel):
+    text: str
+
+
+@router.post("/practice/explain/stream")
+async def practice_explain_stream(
+    req: StreamExplainRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """句子解读流式接口（NDJSON，每行一个 JSON 事件）。
+
+    事件形式：
+      {"field": "...", "value": ...}
+      {"_cached": true, "cefr_level": "B1", "explanation": {...}}     # 缓存命中
+      {"_done": true, "cefr_level": "B1"}                              # 流结束
+      {"_error": "..."}                                                # 错误
+    """
+    if not req.text or not req.text.strip():
+        raise HTTPException(400, "text is required")
+
+    async def event_stream():
+        try:
+            async for line in stream_sentence_explanation(req.text, user_id):
+                yield line + "\n"
+        except ValueError as e:
+            import json as _json
+            yield _json.dumps({"_error": str(e)}, ensure_ascii=False) + "\n"
+        except Exception as e:
+            import json as _json
+            logger.error("stream 解读失败: %s", e, exc_info=True)
+            yield _json.dumps({"_error": "解读服务暂时不可用"}, ensure_ascii=False) + "\n"
+
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
 
 # ── 多源 TTS ─────────────────────────────────────────────

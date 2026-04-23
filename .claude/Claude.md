@@ -102,6 +102,8 @@ speakeasy/
 | pronunciation_cards | V0.4 | FSRS 管理的发音练习卡片 |
 | subtitle_sources | V0.4 | B站字幕缓存 |
 | vocabulary | V0.5 | 翻译生词本收藏（软删除，无 FSRS） |
+| ask_threads | V0.7 | 跨页面通用追问 thread（scope + ref_type/ref_id） |
+| ask_messages | V0.7 | 追问 thread 的消息列表 |
 
 ### API 接口清单
 
@@ -130,6 +132,13 @@ speakeasy/
 | `/translate/vocabulary` | POST | V0.5 | 收藏译文到生词本 |
 | `/translate/vocabulary` | GET | V0.5 | 生词本列表（分页） |
 | `/translate/vocabulary/{id}` | DELETE | V0.5 | 软删除生词本条目 |
+| `/practice/explain/phonetic` | POST | V0.7 | 单词 IPA 本地秒出（eng-to-ipa） |
+| `/practice/explain/stream` | POST | V0.7 | 句子解读 NDJSON 流式（字段级渐进渲染） |
+| `/ask/threads` | POST | V0.7 | 通用追问：新建 thread + 首轮问答 |
+| `/ask/threads/{id}/messages` | POST | V0.7 | 追问某 thread（带历史） |
+| `/ask/threads` | GET | V0.7 | 列出 thread（按 scope/ref_type/ref_id 过滤） |
+| `/ask/threads/{id}` | GET | V0.7 | 查看 thread + 消息 |
+| `/ask/threads/{id}` | DELETE | V0.7 | 软删 thread |
 
 ---
 
@@ -193,7 +202,7 @@ Human 维护（Claude Code 不代劳）：
 
 > ⚠️ 此部分每次版本迭代后由 Human / Claude 更新
 
-### 当前版本：V0.4（已完成）
+### 当前版本：V0.7（已完成）
 
 **已完成版本功能：**
 ```
@@ -202,10 +211,12 @@ V0.2a ✅  语音输入 STT · 语音输出 TTS · 流式输出 · 对话历史�
 V0.2b ✅  对话复盘 · FSRS 记忆调度 · 点击提问 UI
 V0.3  ✅  三层记忆系统 · Level评估 · user_facts · 记忆管理页面
 V0.4  ✅  发音练习 · B站字幕提取 · 录音对比 · FSRS 复习闭环
-V0.5  🚧  翻译 MVP（翻译 MVP 完成）：双向翻译 · 生词本 · /translate 独立页
+V0.5  ✅  翻译 MVP：双向翻译 · 生词本 · /translate 独立页
+V0.6  ✅  用户账号系统 · JWT · 登录注册 · 数据迁移脚本
+V0.7  ✅  解读弹窗增强 · 通用 Ask 追问（跨页面可复用）
 ```
 
-**下一版本预告：V0.5 后续**
+**下一版本预告：V0.8**
 ```
 场景模式（职场/旅行/面试） · 进度可视化 · 学习连续天数
 ```
@@ -240,4 +251,6 @@ pytest tests/test_stepN.py -v
 | V0.2b | ✅ 完成 | 复盘 · FSRS · 点击提问 |
 | V0.3 | ✅ 完成 | 三层记忆 · Level评估 · user_facts · 记忆管理页 |
 | V0.4 | ✅ 完成 | 发音练习 · B站字幕提取 · 录音对比 · FSRS 复习闭环 |
-| V0.5 | 🚧 开发中 | 翻译 MVP 完成：双向翻译 · 生词本 · /translate 独立页 |
+| V0.5 | ✅ 完成 | 翻译 MVP：双向翻译 · 生词本 · /translate 独立页 |
+| V0.6 | ✅ 完成 | 用户账号系统 · JWT · 登录注册 · 数据迁移 |
+| V0.7 | ✅ 完成 | 解读弹窗增强（IPA 秒出 / 连读 / 点读 / 讲解朗读 / 流式）· 通用 Ask 追问抽象 |

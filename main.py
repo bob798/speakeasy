@@ -11,6 +11,7 @@ from app.routers.memory import router as memory_router
 from app.routers.practice import router as practice_router
 from app.routers.translate import router as translate_router
 from app.routers.auth import router as auth_router
+from app.routers.ask import router as ask_router
 
 
 @asynccontextmanager
@@ -39,6 +40,7 @@ app.include_router(memory_router)
 app.include_router(practice_router)
 app.include_router(translate_router)
 app.include_router(auth_router)
+app.include_router(ask_router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

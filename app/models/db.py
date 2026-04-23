@@ -190,6 +190,33 @@ class ExplanationCache(Base):
     __table_args__ = (UniqueConstraint("text_hash", "kind", "cefr_level"),)
 
 
+# ── V0.7 追问对话（跨页面复用）─────────────────────────────
+
+class AskThread(Base):
+    __tablename__ = "ask_threads"
+
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    user_id         = Column(String, nullable=False, index=True)
+    scope           = Column(String, nullable=False)      # 'practice_explain' | 'translate' | 'chat' | ...
+    ref_type        = Column(String, nullable=False)      # 'explanation' | 'vocabulary' | ...
+    ref_id          = Column(String, nullable=False)      # 业务侧稳定 ID（如解读文本 hash）
+    title           = Column(String, nullable=False, default="")
+    context_payload = Column(String, nullable=False, default="{}")  # JSON：首轮 system prompt 所需上下文
+    status          = Column(String, nullable=False, default="active")  # active | deleted
+    created_at      = Column(DateTime, default=datetime.utcnow)
+    updated_at      = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AskMessage(Base):
+    __tablename__ = "ask_messages"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    thread_id  = Column(Integer, ForeignKey("ask_threads.id", ondelete="CASCADE"), nullable=False, index=True)
+    role       = Column(String(16), nullable=False)      # 'user' | 'assistant'
+    content    = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 # Sync engine for ORM operations (tests, memory_service, review_service)
 import os as _os
 _DB_PATH = _os.environ.get("SPEAKEASY_DB_PATH", "./speakeasy.db")
