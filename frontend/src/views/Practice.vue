@@ -165,7 +165,11 @@ onDeactivated(() => {
         <SentenceList @select="onSelect" @explain="onExplain" />
       </aside>
       <main class="right">
-        <PracticePlayer @rated="onRated" @explain="onExplain" />
+        <PracticePlayer
+          @rated="onRated"
+          @explain="onExplain"
+          @toast="({ text, type, duration }) => showToast(text, type || 'info', duration || 2000)"
+        />
       </main>
     </div>
 

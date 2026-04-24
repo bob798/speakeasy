@@ -1,88 +1,139 @@
 <script setup>
 /**
- * ExplanationModal · V0.7 句子/单词解读抽屉
- * 共用组件 · Chat 点击 AI 气泡触发 · Practice 点击字幕句触发
+ * ExplanationModal · V0.9.3 重写
  *
- * 调 /practice/explain/stream (NDJSON 流式) 逐字段渐进渲染；内嵌 AskPanel 做追问。
+ * 修复:
+ *   - Bug 422: 后端 /practice/explain/stream 只收 {text}
+ *     word 解读走 /practice/explain (非流，返 {explanation: {...}})
+ *   - 字段名对齐后端 NDJSON: meaning / grammar / phrases / liaison /
+ *                          current_level_points / next_level_points / narration
+ *   - 单词同时拉 /practice/explain/phonetic 立刻展示 IPA
  *
- * props:
- *   open (v-model) boolean
- *   target { type, content, context } · type='sentence' | 'word'
- *
- * @typedef {{ type: 'sentence'|'word', content: string, context?: any }} ExplainTarget
+ * @typedef {{ type: 'sentence'|'word', content: string, sentence?: string, context?: any }} ExplainTarget
  */
 import { ref, watch, computed, onBeforeUnmount } from 'vue'
 import { useSSE } from '@/composables/useSSE'
 import { useTTS } from '@/composables/useTTS'
+import { useAuthFetch } from '@/composables/useAuthFetch'
+import { API } from '@/config'
 import AskPanel from './AskPanel.vue'
 
 const open = defineModel('open', { type: Boolean, default: false })
 const props = defineProps({
-  /** @type {import('vue').PropType<ExplainTarget | null>} */
   target: { type: Object, default: null },
 })
 
 const { stream: sseStream, streaming, abort: abortStream } = useSSE()
 const { enqueue: ttsEnqueue, clear: ttsClear, playing: ttsPlaying } = useTTS()
+const { authFetch, authFetchJson } = useAuthFetch()
 
-function playTarget() {
-  if (!props.target?.content) return
-  ttsEnqueue(props.target.content, { manual: true })
-}
-
-onBeforeUnmount(() => {
-  ttsClear()
-})
-
-const explanation = ref({
-  summary: '',
-  breakdown: '',
-  translation: '',
-  ipa: '',
+const data = ref({
+  phonetic: '',
+  meaning: '',
   grammar: '',
+  phrases: [],
+  liaison: [],
+  current_level_points: [],
+  next_level_points: [],
+  narration: '',
 })
+const loading = ref(false)
 const error = ref('')
-const activeTab = ref('explain') // explain | ask
+const activeTab = ref('explain')
 
-const hasContent = computed(() => Object.values(explanation.value).some((v) => v))
+const hasContent = computed(() => {
+  return (
+    data.value.phonetic ||
+    data.value.meaning ||
+    data.value.grammar ||
+    data.value.phrases.length ||
+    data.value.liaison.length ||
+    data.value.current_level_points.length ||
+    data.value.next_level_points.length
+  )
+})
 
 function reset() {
-  explanation.value = {
-    summary: '',
-    breakdown: '',
-    translation: '',
-    ipa: '',
+  data.value = {
+    phonetic: '',
+    meaning: '',
     grammar: '',
+    phrases: [],
+    liaison: [],
+    current_level_points: [],
+    next_level_points: [],
+    narration: '',
   }
   error.value = ''
   activeTab.value = 'explain'
 }
 
-async function fetchExplanation() {
-  reset()
-  if (!props.target) return
+async function fetchWord() {
+  // 1. IPA 快拿
+  try {
+    const p = await authFetchJson(`${API.PRACTICE}/explain/phonetic`, {
+      text: props.target.content,
+    })
+    data.value.phonetic = p.phonetic || ''
+  } catch {
+    /* IPA 失败不阻塞 */
+  }
 
+  // 2. 完整解读
+  loading.value = true
+  try {
+    const resp = await authFetchJson(`${API.PRACTICE}/explain`, {
+      text: props.target.content,
+      kind: 'word',
+      context: props.target.sentence || '',
+    })
+    const exp = resp.explanation || {}
+    Object.assign(data.value, {
+      meaning: exp.meaning || exp.summary || '',
+      grammar: exp.grammar || '',
+      phrases: exp.phrases || [],
+      liaison: exp.liaison || [],
+      current_level_points: exp.current_level_points || [],
+      next_level_points: exp.next_level_points || [],
+      narration: exp.narration || '',
+    })
+  } catch (err) {
+    error.value = err.message || '解读失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function fetchSentence() {
+  loading.value = true
   try {
     await sseStream(
-      '/practice/explain/stream',
-      {
-        type: props.target.type,
-        content: props.target.content,
-        context: props.target.context || {},
-      },
+      `${API.PRACTICE}/explain/stream`,
+      { text: props.target.content }, // ✨ 修 422：只发 text
       {
         mode: 'ndjson',
         onEvent: (evt) => {
-          // 每个 NDJSON line 是 { field: 'summary', value: '...' } 或片段累积
-          if (evt.field && evt.value != null) {
-            if (evt.append) {
-              explanation.value[evt.field] =
-                (explanation.value[evt.field] || '') + evt.value
-            } else {
-              explanation.value[evt.field] = evt.value
-            }
-          } else if (evt.error) {
-            error.value = evt.error
+          if (evt._cached && evt.explanation) {
+            // 缓存命中：整体回填
+            const exp = evt.explanation
+            Object.assign(data.value, {
+              meaning: exp.meaning || '',
+              grammar: exp.grammar || '',
+              phrases: exp.phrases || [],
+              liaison: exp.liaison || [],
+              current_level_points: exp.current_level_points || [],
+              next_level_points: exp.next_level_points || [],
+              narration: exp.narration || '',
+            })
+            return
+          }
+          if (evt._done) return
+          if (evt._error) {
+            error.value = evt._error
+            return
+          }
+          if (evt.field && evt.value != null && evt.field in data.value) {
+            data.value[evt.field] = evt.value
           }
         },
         onError: (err) => {
@@ -92,19 +143,42 @@ async function fetchExplanation() {
     )
   } catch (err) {
     error.value = err.message || '解读失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function fetchExplanation() {
+  reset()
+  if (!props.target) return
+  if (props.target.type === 'word') {
+    await fetchWord()
+  } else {
+    await fetchSentence()
   }
 }
 
 watch(
   () => [open.value, props.target?.content],
-  ([isOpen, _content]) => {
+  ([isOpen]) => {
     if (isOpen && props.target?.content) {
       fetchExplanation()
     } else if (!isOpen) {
       abortStream()
+      ttsClear()
     }
   }
 )
+
+function playTarget() {
+  if (!props.target?.content) return
+  ttsEnqueue(props.target.content, { manual: true })
+}
+
+function playNarration() {
+  if (!data.value.narration) return
+  ttsEnqueue(data.value.narration, { manual: true })
+}
 
 function close() {
   open.value = false
@@ -114,6 +188,11 @@ function refId() {
   if (!props.target) return ''
   return `${props.target.type}:${props.target.content.slice(0, 50)}`
 }
+
+onBeforeUnmount(() => {
+  ttsClear()
+  abortStream()
+})
 </script>
 
 <template>
@@ -124,13 +203,14 @@ function refId() {
           <div class="target">
             <span class="kind">{{ target?.type === 'word' ? '单词' : '句子' }}</span>
             <span class="content">{{ target?.content }}</span>
+            <span v-if="data.phonetic" class="ipa">{{ data.phonetic }}</span>
           </div>
           <button
             class="play-btn"
             :class="{ playing: ttsPlaying }"
             @click="playTarget"
             :disabled="!target?.content"
-            aria-label="朗读"
+            aria-label="朗读目标"
             title="朗读"
           >
             {{ ttsPlaying ? '⏸' : '🔊' }}
@@ -157,28 +237,48 @@ function refId() {
         </nav>
 
         <div v-show="activeTab === 'explain'" class="explain-box">
-          <div v-if="streaming && !hasContent" class="loading">解读中...</div>
+          <div v-if="loading && !hasContent" class="loading">
+            <span class="dots"><span></span><span></span><span></span></span>
+            解读中...
+          </div>
           <div v-if="error" class="error">❌ {{ error }}</div>
 
-          <section v-if="explanation.ipa" class="section">
-            <h4>IPA 音标</h4>
-            <div class="ipa">{{ explanation.ipa }}</div>
+          <section v-if="data.meaning" class="section">
+            <h4>含义</h4>
+            <div>{{ data.meaning }}</div>
           </section>
-          <section v-if="explanation.summary" class="section">
-            <h4>速读</h4>
-            <div>{{ explanation.summary }}</div>
-          </section>
-          <section v-if="explanation.translation" class="section">
-            <h4>翻译</h4>
-            <div>{{ explanation.translation }}</div>
-          </section>
-          <section v-if="explanation.breakdown" class="section">
-            <h4>拆解</h4>
-            <div class="pre">{{ explanation.breakdown }}</div>
-          </section>
-          <section v-if="explanation.grammar" class="section">
+          <section v-if="data.grammar" class="section">
             <h4>语法</h4>
-            <div class="pre">{{ explanation.grammar }}</div>
+            <div class="pre">{{ data.grammar }}</div>
+          </section>
+          <section v-if="data.phrases?.length" class="section">
+            <h4>搭配 / 词组</h4>
+            <ul>
+              <li v-for="(p, i) in data.phrases" :key="i">{{ p }}</li>
+            </ul>
+          </section>
+          <section v-if="data.liaison?.length" class="section">
+            <h4>连读 / 发音</h4>
+            <ul>
+              <li v-for="(l, i) in data.liaison" :key="i">{{ l }}</li>
+            </ul>
+          </section>
+          <section v-if="data.current_level_points?.length" class="section">
+            <h4>你这个级别要抓的点</h4>
+            <ul>
+              <li v-for="(p, i) in data.current_level_points" :key="i">{{ p }}</li>
+            </ul>
+          </section>
+          <section v-if="data.next_level_points?.length" class="section">
+            <h4>下个级别再扩的点</h4>
+            <ul>
+              <li v-for="(p, i) in data.next_level_points" :key="i">{{ p }}</li>
+            </ul>
+          </section>
+          <section v-if="data.narration" class="section narration-row">
+            <button class="narr-play" @click="playNarration" :disabled="ttsPlaying">
+              {{ ttsPlaying ? '⏸ 播解读中' : '🔊 播一遍解读' }}
+            </button>
           </section>
         </div>
 
@@ -191,10 +291,11 @@ function refId() {
             :context-payload="{
               target_type: target?.type,
               target_content: target?.content,
-              summary: explanation.summary,
+              sentence: target?.sentence,
+              meaning: data.meaning,
             }"
-            placeholder="问点什么关于这句/这个词..."
-            empty-hint="解读之外还有想深究的，问 Alex"
+            placeholder="还想问点什么..."
+            empty-hint="有疑惑就问 Alex"
           />
         </div>
       </aside>
@@ -227,11 +328,14 @@ function refId() {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 .target {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 .kind {
   display: inline-block;
@@ -240,12 +344,18 @@ function refId() {
   background: var(--accent-soft);
   padding: 2px 8px;
   border-radius: 999px;
-  margin-bottom: 4px;
+  align-self: flex-start;
 }
 .content {
-  display: block;
   font-weight: 500;
   word-break: break-word;
+  font-size: 15px;
+}
+.ipa {
+  color: var(--accent);
+  font-family: Georgia, 'SF Pro Text', serif;
+  font-size: 13px;
+  margin-top: 2px;
 }
 .play-btn {
   width: 36px;
@@ -255,9 +365,10 @@ function refId() {
   color: var(--accent);
   background: var(--accent-soft);
   flex-shrink: 0;
-  transition: background var(--duration) var(--ease);
+  transition: transform var(--duration) var(--ease);
 }
 .play-btn:active {
+  transform: scale(0.92);
   background: var(--accent);
   color: var(--text-inverse);
 }
@@ -299,6 +410,7 @@ function refId() {
 .tab.active {
   color: var(--accent);
   border-bottom-color: var(--accent);
+  font-weight: 500;
 }
 .tab:disabled {
   opacity: 0.5;
@@ -331,18 +443,63 @@ function refId() {
   line-height: 1.6;
   color: var(--text-1);
 }
-.ipa {
-  font-family: 'SF Pro Text', Georgia, serif;
-  font-size: 16px !important;
-  color: var(--accent) !important;
-}
 .pre {
   white-space: pre-wrap;
+}
+.section ul {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-1);
+}
+.section li {
+  margin-bottom: 4px;
+}
+.narration-row {
+  padding-top: var(--space-4);
+  border-top: 1px dashed var(--border);
+  margin-top: var(--space-5);
+}
+.narr-play {
+  width: 100%;
+  padding: var(--space-3);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  transition: background var(--duration) var(--ease);
+}
+.narr-play:active {
+  background: var(--accent);
+  color: var(--text-inverse);
+}
+.narr-play:disabled {
+  opacity: 0.5;
 }
 .loading {
   text-align: center;
   color: var(--text-3);
   padding: var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+.dots span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+  margin: 0 2px;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+.dots span:nth-child(1) { animation-delay: -0.32s; }
+.dots span:nth-child(2) { animation-delay: -0.16s; }
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+  40% { transform: scale(1); opacity: 1; }
 }
 .error {
   padding: var(--space-3);

@@ -1,37 +1,84 @@
 <script setup>
 /**
- * PracticePlayer · 右侧练习区
- * 展示当前句 + TTS 播放 + 录音对比 + FSRS 评分
- * 迁移自 practice.html showControlsForLine / playTTS / startRecording / stopRecording 等
+ * PracticePlayer · V0.9.3
+ *
+ * 修:
+ *   - 选中句子无 card 时自动补创建（不再卡在"卡片准备中"）
+ *   - 单词解读入口：输入框 + 点击句中单词（从当前句拆词）
+ *   - 所有按钮加 active 反馈 + toast 回显
+ *   - 评分按 Easy 后自动跳下一句（沿用老版）
  */
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { usePracticeStore } from '@/stores/practice'
 import { usePractice } from '@/composables/usePractice'
 import { useRecorder } from '@/composables/useRecorder'
 
-const emit = defineEmits(['rated', 'explain'])
+const emit = defineEmits(['rated', 'explain', 'toast'])
 
 const store = usePracticeStore()
-const { ttsBlob, rateCard } = usePractice()
+const { ttsBlob, rateCard, createCards } = usePractice()
 const recorder = useRecorder()
 
 const ttsAudio = ref(null)
 const ttsUrl = ref(null)
 const ttsLoading = ref(false)
-const ttsError = ref('')
 const ratingBusy = ref(false)
+const cardLoading = ref(false)
+const wordQuery = ref('')
 
 const segment = computed(() => store.currentSegment)
-const currentCardId = computed(() => {
-  if (!segment.value) return null
-  const card = store.cards.find((c) => c.segIdx === store.currentIdx)
-  return card?.id || null
+const currentCard = computed(() =>
+  store.cards.find((c) => c.segIdx === store.currentIdx) || null
+)
+const words = computed(() => {
+  if (!segment.value) return []
+  // 拆词（保留单词，过滤标点与空白）
+  const re = /[A-Za-z][A-Za-z'-]*/g
+  const result = []
+  let m
+  while ((m = re.exec(segment.value.content)) !== null) {
+    if (!result.includes(m[0])) result.push(m[0])
+  }
+  return result
 })
+
+// 自动补卡片
+watch(
+  [() => store.currentIdx, () => store.segments.length],
+  async () => {
+    if (!segment.value || currentCard.value) return
+    if (cardLoading.value) return
+    cardLoading.value = true
+    try {
+      const resp = await createCards({
+        items: [
+          {
+            text: segment.value.content,
+            context: {
+              segIdx: store.currentIdx,
+              from: segment.value.from,
+              to: segment.value.to,
+            },
+            segIdx: store.currentIdx,
+          },
+        ],
+      })
+      const cards = resp.cards || []
+      if (cards.length) {
+        store.upsertCard({ ...cards[0], segIdx: store.currentIdx })
+      }
+    } catch (err) {
+      emit('toast', { text: '卡片创建失败', type: 'error' })
+    } finally {
+      cardLoading.value = false
+    }
+  },
+  { immediate: true }
+)
 
 async function playTTS() {
   if (!segment.value) return
   ttsLoading.value = true
-  ttsError.value = ''
   try {
     const blob = await ttsBlob({
       text: segment.value.content,
@@ -42,8 +89,9 @@ async function playTTS() {
     ttsUrl.value = URL.createObjectURL(blob)
     ttsAudio.value = new Audio(ttsUrl.value)
     await ttsAudio.value.play()
+    emit('toast', { text: '▶ 播放中', type: 'info', duration: 1000 })
   } catch (err) {
-    ttsError.value = err.message
+    emit('toast', { text: err.message || 'TTS 失败', type: 'error' })
   } finally {
     ttsLoading.value = false
   }
@@ -53,37 +101,65 @@ function playRecording() {
   if (!recorder.url.value) return
   const a = new Audio(recorder.url.value)
   a.play()
+  emit('toast', { text: '▶ 回放', type: 'info', duration: 1000 })
 }
 
 async function toggleRecord() {
   if (recorder.recording.value) {
     recorder.stop()
+    emit('toast', { text: '⏹ 已停止', type: 'info', duration: 1200 })
   } else {
     recorder.reset()
     await recorder.start()
+    if (!recorder.error.value) {
+      emit('toast', { text: '🎤 录音中...', type: 'info', duration: 1500 })
+    }
   }
 }
 
 async function rate(level) {
-  if (!currentCardId.value || ratingBusy.value) return
+  if (!currentCard.value?.id || ratingBusy.value) return
   ratingBusy.value = true
   try {
-    await rateCard(currentCardId.value, level)
+    await rateCard(currentCard.value.id, level)
     store.markPracticed(store.currentIdx, level)
     emit('rated', { idx: store.currentIdx, level })
+    emit('toast', { text: `✅ 已评 ${_labelOf(level)}`, type: 'success', duration: 1200 })
     // 自动跳下一句
     if (store.currentIdx < store.segments.length - 1) {
-      store.setCurrentIdx(store.currentIdx + 1)
+      setTimeout(() => store.setCurrentIdx(store.currentIdx + 1), 400)
     }
   } catch (err) {
-    ttsError.value = err.message
+    emit('toast', { text: err.message || '评分失败', type: 'error' })
   } finally {
     ratingBusy.value = false
   }
 }
 
-function onExplain() {
-  if (segment.value) emit('explain', segment.value.content)
+function _labelOf(level) {
+  return { again: 'Again', hard: 'Hard', good: 'Good', easy: 'Easy' }[level] || level
+}
+
+function onSentenceExplain() {
+  if (segment.value) {
+    emit('explain', { type: 'sentence', content: segment.value.content })
+  }
+}
+
+function onWordExplain(word) {
+  if (!word) return
+  emit('explain', {
+    type: 'word',
+    content: word.trim(),
+    sentence: segment.value?.content || '',
+  })
+}
+
+function onQueryExplain() {
+  const w = wordQuery.value.trim()
+  if (!w) return
+  onWordExplain(w)
+  wordQuery.value = ''
 }
 
 function _releaseTTS() {
@@ -97,7 +173,7 @@ function _releaseTTS() {
   }
 }
 
-// 换句时清理 TTS 缓存
+// 换句时清 TTS/录音
 watch(
   () => store.currentIdx,
   () => {
@@ -118,11 +194,40 @@ onBeforeUnmount(() => {
     </div>
 
     <template v-else>
+      <!-- 句子 + 解读 -->
       <header class="text-box">
         <p class="sentence">{{ segment.content }}</p>
-        <button class="explain" @click="onExplain" aria-label="解读">💡 解读</button>
+        <button class="explain" @click="onSentenceExplain" aria-label="解读整句">
+          💡 解读整句
+        </button>
       </header>
 
+      <!-- 单词解读入口 -->
+      <section v-if="words.length" class="word-row">
+        <p class="hint">想查哪个词？点下面或直接输入：</p>
+        <div class="words">
+          <button
+            v-for="w in words"
+            :key="w"
+            class="word-chip"
+            @click="onWordExplain(w)"
+          >
+            {{ w }}
+          </button>
+        </div>
+        <div class="word-input">
+          <input
+            v-model="wordQuery"
+            placeholder="输入其它单词..."
+            @keydown.enter="onQueryExplain"
+          />
+          <button class="btn-mini" :disabled="!wordQuery.trim()" @click="onQueryExplain">
+            查
+          </button>
+        </div>
+      </section>
+
+      <!-- 播放 / 录音 -->
       <section class="controls">
         <div class="row">
           <label>语速：</label>
@@ -141,10 +246,11 @@ onBeforeUnmount(() => {
 
         <div class="row btn-row">
           <button class="btn primary" :disabled="ttsLoading" @click="playTTS">
-            {{ ttsLoading ? '加载中...' : '🔊 原音' }}
+            <span v-if="ttsLoading" class="spin">⏳</span>
+            <span v-else>🔊 原音</span>
           </button>
           <button
-            class="btn"
+            class="btn record"
             :class="{ recording: recorder.recording.value }"
             @click="toggleRecord"
           >
@@ -158,29 +264,32 @@ onBeforeUnmount(() => {
             ▶ 回放
           </button>
         </div>
-
-        <p v-if="ttsError" class="err">{{ ttsError }}</p>
         <p v-if="recorder.error.value" class="err">{{ recorder.error.value }}</p>
       </section>
 
-      <section v-if="currentCardId" class="rating">
-        <p class="hint">给自己打分（FSRS）：</p>
-        <div class="btn-row">
-          <button class="btn rate rate-again" :disabled="ratingBusy" @click="rate('again')">
-            Again
-          </button>
-          <button class="btn rate rate-hard" :disabled="ratingBusy" @click="rate('hard')">
-            Hard
-          </button>
-          <button class="btn rate rate-good" :disabled="ratingBusy" @click="rate('good')">
-            Good
-          </button>
-          <button class="btn rate rate-easy" :disabled="ratingBusy" @click="rate('easy')">
-            Easy
-          </button>
-        </div>
+      <!-- 评分 -->
+      <section class="rating">
+        <p v-if="cardLoading" class="hint">卡片准备中...</p>
+        <p v-else-if="!currentCard" class="hint">⚠ 卡片缺失 · 点任意句子重试</p>
+        <template v-else>
+          <p class="hint">练一次，给自己打分：</p>
+          <div class="btn-row rate-row">
+            <button class="btn rate rate-again" :disabled="ratingBusy" @click="rate('again')">
+              Again
+            </button>
+            <button class="btn rate rate-hard" :disabled="ratingBusy" @click="rate('hard')">
+              Hard
+            </button>
+            <button class="btn rate rate-good" :disabled="ratingBusy" @click="rate('good')">
+              Good
+            </button>
+            <button class="btn rate rate-easy" :disabled="ratingBusy" @click="rate('easy')">
+              Easy
+            </button>
+          </div>
+          <p v-if="ratingBusy" class="hint sub">保存中...</p>
+        </template>
       </section>
-      <p v-else class="hint">（卡片准备中...）</p>
     </template>
   </div>
 </template>
@@ -208,9 +317,11 @@ onBeforeUnmount(() => {
   display: flex;
   gap: var(--space-3);
   align-items: flex-start;
+  flex-wrap: wrap;
 }
 .sentence {
   flex: 1;
+  min-width: 0;
   font-size: 18px;
   line-height: 1.6;
   color: var(--text-1);
@@ -219,12 +330,86 @@ onBeforeUnmount(() => {
 }
 .explain {
   flex-shrink: 0;
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-3);
   background: var(--accent-soft);
   color: var(--accent);
   border-radius: var(--radius-sm);
   font-size: 12px;
+  font-weight: 500;
+  transition: all var(--duration) var(--ease);
 }
+.explain:active {
+  background: var(--accent);
+  color: var(--text-inverse);
+  transform: scale(0.96);
+}
+
+.word-row {
+  padding: var(--space-3);
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+}
+.hint {
+  font-size: 12px;
+  color: var(--text-3);
+  margin: 0 0 var(--space-2);
+}
+.hint.sub {
+  margin-top: var(--space-2);
+  text-align: center;
+}
+.words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--space-3);
+}
+.word-chip {
+  padding: 4px var(--space-2);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text-1);
+  transition: all var(--duration) var(--ease);
+}
+.word-chip:active {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border-color: var(--accent);
+  transform: scale(0.93);
+}
+.word-input {
+  display: flex;
+  gap: var(--space-2);
+}
+.word-input input {
+  flex: 1;
+  padding: 6px var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  background: var(--bg-elevated);
+  outline: none;
+}
+.word-input input:focus {
+  border-color: var(--accent);
+}
+.btn-mini {
+  padding: 0 var(--space-3);
+  background: var(--accent);
+  color: var(--text-inverse);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  transition: background var(--duration) var(--ease);
+}
+.btn-mini:active {
+  background: var(--accent-hover);
+}
+.btn-mini:disabled {
+  opacity: 0.4;
+}
+
 .controls {
   display: flex;
   flex-direction: column;
@@ -261,47 +446,63 @@ select {
   font-size: 13px;
   flex: 1;
   min-width: 80px;
+  transition: all var(--duration) var(--ease);
 }
 .btn:active {
+  transform: scale(0.94);
   background: var(--bg);
 }
 .btn:disabled {
   opacity: 0.5;
+  transform: none;
 }
 .btn.primary {
   background: var(--accent);
   color: var(--text-inverse);
   border-color: var(--accent);
 }
-.btn.recording {
+.btn.primary:active {
+  background: var(--accent-hover);
+}
+.btn.record.recording {
   background: #c6463a;
   color: var(--text-inverse);
   border-color: #c6463a;
-  animation: pulse 1s infinite;
+  animation: record-pulse 1s infinite;
 }
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+@keyframes record-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(198, 70, 58, 0.4); }
+  50% { box-shadow: 0 0 0 6px transparent; }
 }
-.rating .hint {
-  font-size: 12px;
-  color: var(--text-3);
-  margin: 0 0 var(--space-2);
+.spin {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.rating {
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--border);
+}
+.rate-row {
+  gap: var(--space-2);
 }
 .rate {
   font-weight: 500;
 }
-.rate-again { background: rgba(198, 70, 58, 0.1); color: #c6463a; }
-.rate-hard  { background: rgba(214, 158, 46, 0.1); color: #b07a1a; }
-.rate-good  { background: rgba(61, 107, 79, 0.1); color: var(--accent); }
-.rate-easy  { background: rgba(46, 150, 64, 0.15); color: #2f7a40; }
+.rate-again { background: rgba(198, 70, 58, 0.1); color: #c6463a; border-color: transparent; }
+.rate-hard  { background: rgba(214, 158, 46, 0.1); color: #b07a1a; border-color: transparent; }
+.rate-good  { background: rgba(61, 107, 79, 0.1); color: var(--accent); border-color: transparent; }
+.rate-easy  { background: rgba(46, 150, 64, 0.15); color: #2f7a40; border-color: transparent; }
+.rate:active {
+  filter: brightness(0.9);
+  transform: scale(0.95);
+}
 .err {
   color: #c6463a;
   font-size: 12px;
   margin: 0;
-}
-.hint {
-  font-size: 12px;
-  color: var(--text-3);
 }
 </style>

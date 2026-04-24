@@ -1,13 +1,10 @@
 <script setup>
 /**
- * SentenceList · 左侧字幕句列表
- * 每行可点击选中 · 已练习标记 · 播放中高亮
- * 迁移自 practice.html renderSubtitles + selectLine
- *
- * 单词级交互（V0.8 补回）:
- *   - 整句点击 → emit('select', idx)
- *   - 💡 按钮 → emit('explain', { type:'sentence', content })
- *   - 单词长按 / 双击 → emit('explain', { type:'word', content, sentence })
+ * SentenceList · V0.9.3 修
+ *   - 移除单词级点击（与选中行点击冲突）
+ *   - 单击整句 = select
+ *   - 💡 按钮 = sentence explain
+ *   - 单词解读入口搬到 PracticePlayer
  */
 import { computed } from 'vue'
 import { usePracticeStore } from '@/stores/practice'
@@ -16,29 +13,6 @@ const emit = defineEmits(['select', 'explain'])
 const store = usePracticeStore()
 
 const items = computed(() => store.segments)
-
-function tokenize(text) {
-  // 保留标点作为不可点的 token，单词可点
-  const parts = []
-  const re = /([A-Za-z][A-Za-z'-]*|[^A-Za-z\s]+|\s+)/g
-  let m
-  while ((m = re.exec(text)) !== null) {
-    const piece = m[1]
-    const isWord = /^[A-Za-z]/.test(piece)
-    const isSpace = /^\s+$/.test(piece)
-    parts.push({ piece, isWord, isSpace })
-  }
-  return parts
-}
-
-function onWordClick(e, word, sentence) {
-  e.stopPropagation()
-  emit('explain', { type: 'word', content: word, sentence })
-}
-
-function onSentenceExplain(content) {
-  emit('explain', { type: 'sentence', content })
-}
 </script>
 
 <template>
@@ -54,20 +28,10 @@ function onSentenceExplain(content) {
       @click="emit('select', i)"
     >
       <span class="idx">{{ i + 1 }}.</span>
-      <span class="txt">
-        <template v-for="(tok, j) in tokenize(seg.content)" :key="j">
-          <span
-            v-if="tok.isWord"
-            class="word"
-            :title="`点击解读：${tok.piece}`"
-            @click="onWordClick($event, tok.piece, seg.content)"
-          >{{ tok.piece }}</span>
-          <span v-else>{{ tok.piece }}</span>
-        </template>
-      </span>
+      <span class="txt">{{ seg.content }}</span>
       <button
         class="explain-btn"
-        @click.stop="onSentenceExplain(seg.content)"
+        @click.stop="emit('explain', { type: 'sentence', content: seg.content })"
         aria-label="解读整句"
         title="解读整句"
       >
@@ -95,10 +59,15 @@ function onSentenceExplain(content) {
   align-items: flex-start;
   gap: var(--space-2);
   transition: background var(--duration) var(--ease);
+  user-select: none;
 }
-.item:active,
+.item:active {
+  background: var(--bg);
+}
 .item.active {
   background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  padding-left: calc(var(--space-4) - 3px);
 }
 .item.practiced {
   opacity: 0.6;
@@ -121,41 +90,29 @@ function onSentenceExplain(content) {
 .txt {
   flex: 1;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--text-1);
   word-break: break-word;
 }
-.word {
-  cursor: pointer;
-  border-radius: 3px;
-  transition: background var(--duration) var(--ease);
-}
-.word:active {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-@media (hover: hover) {
-  .word:hover {
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-}
 .explain-btn {
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  font-size: 14px;
-  opacity: 0;
-  transition: opacity var(--duration) var(--ease);
+  font-size: 16px;
+  background: transparent;
+  transition: background var(--duration) var(--ease), transform var(--duration) var(--ease);
 }
-.item.active .explain-btn,
-.item:active .explain-btn {
-  opacity: 1;
+.explain-btn:active {
+  background: var(--accent);
+  transform: scale(0.9);
+}
+.item.active .explain-btn {
+  background: var(--bg-elevated);
 }
 @media (hover: hover) {
-  .item:hover .explain-btn {
-    opacity: 1;
+  .explain-btn:hover {
+    background: var(--accent-soft);
   }
 }
 .empty {
