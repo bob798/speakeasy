@@ -1,24 +1,231 @@
 <script setup>
-// Practice · 主战场 2
-// Phase 3 (D17-D22) · 迁移源: static/practice.html 1529 行
+/**
+ * Practice · 主战场 2 · V0.8 重写版
+ * 迁移自 static/practice.html 1529 行 → 分解为 Import / SentenceList / PracticePlayer
+ *
+ * Phase 3 核心路径：
+ *   导入字幕 → 选句 → 创建卡片 → 播 TTS → 录音对比 → FSRS 评分
+ *
+ * keep-alive include=Practice · onDeactivated 清 TTS & recorder
+ */
+import { ref, computed, onActivated, onDeactivated } from 'vue'
+import { usePracticeStore } from '@/stores/practice'
+import { usePractice } from '@/composables/usePractice'
+import SubtitleImport from '@/components/practice/SubtitleImport.vue'
+import SentenceList from '@/components/practice/SentenceList.vue'
+import PracticePlayer from '@/components/practice/PracticePlayer.vue'
+import ExplanationModal from '@/components/ExplanationModal.vue'
+
+defineOptions({ name: 'Practice' })
+
+const store = usePracticeStore()
+const { createCards } = usePractice()
+
+const explainOpen = ref(false)
+const explainTarget = ref(null)
+const toast = ref({ show: false, text: '', type: 'info' })
+
+const hasSource = computed(() => !!store.currentSource)
+
+function showToast(text, type = 'info', duration = 2500) {
+  toast.value = { show: true, text, type }
+  setTimeout(() => (toast.value.show = false), duration)
+}
+
+async function onImported(data) {
+  store.loadSource(data)
+  // 批量创建卡片
+  try {
+    const segs = (data.segments || []).map((seg, i) => ({
+      text: seg.content,
+      context: { segIdx: i, from: seg.from, to: seg.to },
+      segIdx: i,
+    }))
+    if (segs.length) {
+      const resp = await createCards({
+        source_id: data.id,
+        items: segs,
+      })
+      if (resp.cards) {
+        store.cards = resp.cards.map((c, i) => ({ ...c, segIdx: i }))
+      }
+    }
+    showToast(`已导入 ${segs.length} 段`, 'info')
+  } catch (err) {
+    showToast(err.message || '卡片初始化失败', 'error')
+  }
+}
+
+function onSelect(idx) {
+  store.setCurrentIdx(idx)
+}
+
+function onExplain(content) {
+  explainTarget.value = {
+    type: 'sentence',
+    content,
+    context: { source: 'practice', source_id: store.currentSource?.id },
+  }
+  explainOpen.value = true
+}
+
+function onRated({ level }) {
+  showToast(`已评 ${level}`, 'info', 1200)
+}
+
+function onNewImport() {
+  store.reset()
+}
+
+onActivated(() => {
+  // 路由切回来时不做特殊恢复；keep-alive 已经保留 state
+})
+onDeactivated(() => {
+  // 不清 state，store 继续保持
+})
 </script>
 
 <template>
-  <main class="placeholder">
-    <h2>Practice · 占位</h2>
-    <p>Phase 3 将迁移 static/practice.html 的发音练习</p>
-    <p class="note">依赖: useSubtitle · usePractice · AskDrawer (复用自 Chat)</p>
-  </main>
+  <div class="practice-page">
+    <header class="topbar">
+      <RouterLink class="back" to="/">← 返回</RouterLink>
+      <div class="title">发音练习</div>
+      <button v-if="hasSource" class="new-btn" @click="onNewImport">+ 新导入</button>
+    </header>
+
+    <div v-if="!hasSource" class="import-wrap">
+      <SubtitleImport @imported="onImported" />
+    </div>
+
+    <div v-else class="two-col">
+      <aside class="left">
+        <div class="progress">
+          <div class="progress-bar" :style="{ width: `${store.progressPct}%` }"></div>
+        </div>
+        <div class="stats">
+          {{ store.totalPracticed }}/{{ store.segments.length }} 已练
+          · Again: {{ store.ratingResults.again }}
+          · Good: {{ store.ratingResults.good }}
+        </div>
+        <SentenceList @select="onSelect" @explain="onExplain" />
+      </aside>
+      <main class="right">
+        <PracticePlayer @rated="onRated" @explain="onExplain" />
+      </main>
+    </div>
+
+    <ExplanationModal v-model:open="explainOpen" :target="explainTarget" />
+
+    <Transition name="toast">
+      <div v-if="toast.show" class="toast" :class="toast.type">{{ toast.text }}</div>
+    </Transition>
+  </div>
 </template>
 
 <style scoped>
-.placeholder {
-  padding: var(--space-6);
-  max-width: 640px;
-  margin: 0 auto;
+.practice-page {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--bg);
 }
-.note {
-  color: var(--text-3);
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  padding-top: calc(var(--safe-top) + var(--space-3));
+  background: var(--bg-overlay);
+  backdrop-filter: saturate(180%) blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+.title {
+  font-weight: 600;
+  color: var(--accent);
+}
+.back {
+  color: var(--text-2);
+  font-size: 14px;
+}
+.new-btn {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
   font-size: 13px;
+}
+.import-wrap {
+  max-width: 560px;
+  width: 100%;
+  margin: var(--space-5) auto;
+  padding: 0 var(--space-4);
+}
+.two-col {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(220px, 36%) 1fr;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  min-height: 0;
+}
+.left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.progress {
+  height: 4px;
+  background: var(--border);
+}
+.progress-bar {
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--duration) var(--ease);
+}
+.stats {
+  padding: var(--space-2) var(--space-3);
+  font-size: 11px;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--border);
+}
+.right {
+  min-height: 0;
+}
+.toast {
+  position: fixed;
+  bottom: calc(var(--safe-bottom) + var(--space-5));
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text-1);
+  color: var(--text-inverse);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  font-size: 13px;
+  z-index: var(--z-toast);
+}
+.toast.error {
+  background: #c6463a;
+}
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity var(--duration) var(--ease);
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 768px) {
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+  .left {
+    max-height: 40vh;
+  }
 }
 </style>
