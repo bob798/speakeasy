@@ -1,7 +1,9 @@
 <script setup>
 /**
- * SubtitleImport · B站 URL / 手动文本 / 历史字幕源
- * 迁移自 practice.html:535-618
+ * SubtitleImport · V0.9.5 重设计
+ *   - 历史列表默认可见（chip 横滑条 · 不再隐藏到 📚 按钮后）
+ *   - 错误状态正确处理（不静默切到二栏空白）
+ *   - 4 段示例库（带文案）一键导入
  */
 import { ref, onMounted } from 'vue'
 import { usePractice } from '@/composables/usePractice'
@@ -20,7 +22,7 @@ const status = ref('')
 const statusError = ref(false)
 
 const history = ref([])
-const historyOpen = ref(false)
+const historyLoading = ref(false)
 
 async function onImport(useCookies = false) {
   if (submitting.value) return
@@ -52,21 +54,16 @@ async function onImport(useCookies = false) {
 
     const data = await importSubtitles(payload)
 
-    // 后端 error 字段处理（无字幕、Whisper 失败、IP 被封等）
     if (data.error) {
       const msg = String(data.error)
-      // B 站登录态保护错误兜底（cookies 重试）
-      if (
-        /412|登录|cookie/i.test(msg) ||
-        msg.includes('登录态')
-      ) {
+      if (/412|登录|cookie/i.test(msg) || msg.includes('登录态')) {
         showCookiesRetry.value = true
         status.value = '需要登录态：请粘贴浏览器 cookies 后重试'
       } else {
         status.value = msg
       }
       statusError.value = true
-      return  // ← 关键：不 emit imported，不让父级切到二栏
+      return
     }
 
     if (!data.segments || !data.segments.length) {
@@ -86,23 +83,42 @@ async function onImport(useCookies = false) {
 }
 
 async function loadHistory() {
+  historyLoading.value = true
   try {
-    const data = await listSources(10)
-    history.value = data.sources || data.items || []
+    const data = await listSources(20)
+    history.value = data.items || data.sources || []
   } catch {
     /* 静默 */
+  } finally {
+    historyLoading.value = false
   }
 }
 
 async function pickHistory(sourceId) {
   try {
     const src = await getSource(sourceId)
-    historyOpen.value = false
+    src.id = sourceId  // 确保 id 存在，PracticePlayer cardBySegIdx 用
     emit('imported', src)
   } catch (err) {
     status.value = err.message
     statusError.value = true
   }
+}
+
+function loadSample() {
+  manualText.value = `Hold tight please!
+This is Anna, on a bus going to an interview for a job as a sales executive at Tip Top Trading.
+How are you feeling Anna?
+Oh, a little nervous but I really want this job.
+Well don't worry Anna, as long as you say the right things, you'll be fine.
+The right things? Like what?
+You need to sell yourself, be confident, not arrogant and give examples.
+A good example that comes to mind.
+I'm particularly proud of.
+Timekeeping is important to me.`
+  mode.value = 'manual'
+  status.value = '已填示例 · 点击下方"提取"开始练习'
+  statusError.value = false
 }
 
 onMounted(loadHistory)
@@ -112,23 +128,30 @@ defineExpose({ refreshHistory: loadHistory })
 
 <template>
   <div class="import-panel">
+    <!-- 历史列表 · 默认可见 -->
+    <section v-if="history.length" class="history-row">
+      <h4>历史字幕 · 点击重新练习</h4>
+      <div class="history-chips">
+        <button
+          v-for="s in history"
+          :key="s.id"
+          class="hist-chip"
+          @click="pickHistory(s.id)"
+        >
+          <span class="kind">{{ s.source_type === 'manual' ? '📋' : (s.source_type === 'youtube' ? '🎬' : '📺') }}</span>
+          <span class="title">{{ s.title || '(未命名)' }}</span>
+        </button>
+      </div>
+    </section>
+
+    <h4 v-if="history.length" class="new-import-h">新导入</h4>
+
     <div class="tabs">
-      <button
-        class="tab"
-        :class="{ active: mode === 'url' }"
-        @click="mode = 'url'"
-      >
+      <button class="tab" :class="{ active: mode === 'url' }" @click="mode = 'url'">
         视频链接
       </button>
-      <button
-        class="tab"
-        :class="{ active: mode === 'manual' }"
-        @click="mode = 'manual'"
-      >
+      <button class="tab" :class="{ active: mode === 'manual' }" @click="mode = 'manual'">
         粘贴文本
-      </button>
-      <button class="hist-btn" @click="historyOpen = !historyOpen" aria-label="历史">
-        📚 {{ history.length }}
       </button>
     </div>
 
@@ -137,6 +160,7 @@ defineExpose({ refreshHistory: loadHistory })
         v-model="url"
         placeholder="B站 / YouTube 视频链接"
         autocomplete="off"
+        @keydown.enter="onImport(false)"
       />
     </div>
 
@@ -144,16 +168,15 @@ defineExpose({ refreshHistory: loadHistory })
       <textarea
         v-model="manualText"
         placeholder="一行一句粘贴英文字幕"
-        rows="4"
+        rows="6"
       ></textarea>
+      <button class="link-btn" @click="loadSample">
+        💡 试试示例（BBC English at Work · 10 句）
+      </button>
     </div>
 
-    <button
-      class="primary"
-      :disabled="submitting"
-      @click="onImport(false)"
-    >
-      {{ submitting ? '提取中...' : '提取' }}
+    <button class="primary" :disabled="submitting" @click="onImport(false)">
+      {{ submitting ? '提取中...' : '提取字幕' }}
     </button>
 
     <div v-if="showCookiesRetry" class="cookies-box">
@@ -162,23 +185,6 @@ defineExpose({ refreshHistory: loadHistory })
     </div>
 
     <p v-if="status" class="status" :class="{ error: statusError }">{{ status }}</p>
-
-    <Transition name="fade">
-      <div v-if="historyOpen" class="history">
-        <h4>历史字幕源</h4>
-        <ul v-if="history.length">
-          <li
-            v-for="s in history"
-            :key="s.id"
-            @click="pickHistory(s.id)"
-          >
-            <span class="title">{{ s.title || '(未命名)' }}</span>
-            <span class="meta">{{ s.segment_count || 0 }} 段</span>
-          </li>
-        </ul>
-        <p v-else class="empty">暂无历史</p>
-      </div>
-    </Transition>
   </div>
 </template>
 
@@ -189,26 +195,79 @@ defineExpose({ refreshHistory: loadHistory })
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
+.history-row {
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px dashed var(--border);
+}
+.history-row h4,
+.new-import-h {
+  margin: 0 0 var(--space-2);
+  font-size: 11px;
+  color: var(--text-3);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.new-import-h {
+  margin-top: var(--space-3);
+}
+.history-chips {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+.history-chips::-webkit-scrollbar {
+  height: 4px;
+}
+.hist-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: var(--text-1);
+  white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 220px;
+  touch-action: manipulation;
+  transition: all var(--duration) var(--ease);
+}
+.hist-chip:active {
+  background: var(--accent-soft);
+  transform: scale(0.96);
+}
+.hist-chip .kind {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.hist-chip .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .tabs {
   display: flex;
   gap: var(--space-2);
   margin-bottom: var(--space-3);
-  align-items: center;
 }
 .tab {
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   color: var(--text-2);
   font-size: 13px;
+  background: var(--bg);
+  transition: all var(--duration) var(--ease);
 }
 .tab.active {
   background: var(--accent-soft);
   color: var(--accent);
-}
-.hist-btn {
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--text-3);
+  font-weight: 500;
 }
 .field {
   margin-bottom: var(--space-3);
@@ -223,6 +282,7 @@ textarea {
   color: var(--text-1);
   font-size: 14px;
   outline: none;
+  font-family: inherit;
 }
 input:focus,
 textarea:focus {
@@ -231,6 +291,16 @@ textarea:focus {
 textarea {
   resize: vertical;
 }
+.link-btn {
+  display: block;
+  margin-top: var(--space-2);
+  padding: 4px 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .primary {
   width: 100%;
   padding: var(--space-3);
@@ -238,9 +308,13 @@ textarea {
   color: var(--text-inverse);
   border-radius: var(--radius-sm);
   font-weight: 500;
+  font-size: 14px;
+  transition: background var(--duration) var(--ease);
+  touch-action: manipulation;
 }
 .primary:active {
   background: var(--accent-hover);
+  transform: scale(0.98);
 }
 .primary:disabled {
   opacity: 0.6;
@@ -267,62 +341,5 @@ textarea {
 }
 .status.error {
   color: #c6463a;
-}
-.history {
-  margin-top: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: 1px dashed var(--border);
-}
-.history h4 {
-  margin: 0 0 var(--space-2);
-  font-size: 12px;
-  color: var(--text-3);
-  letter-spacing: 0.5px;
-}
-.history ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: 200px;
-  overflow-y: auto;
-}
-.history li {
-  padding: var(--space-2) var(--space-3);
-  display: flex;
-  justify-content: space-between;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 13px;
-}
-.history li:active {
-  background: var(--accent-soft);
-}
-.title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  margin-right: var(--space-2);
-}
-.meta {
-  color: var(--text-3);
-  font-size: 11px;
-  flex-shrink: 0;
-}
-.empty {
-  color: var(--text-3);
-  font-size: 12px;
-  padding: var(--space-3);
-  text-align: center;
-}
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity var(--duration) var(--ease),
-    max-height var(--duration) var(--ease);
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-  max-height: 0;
 }
 </style>
