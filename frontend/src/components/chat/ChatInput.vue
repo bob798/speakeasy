@@ -1,19 +1,22 @@
 <script setup>
 /**
- * ChatInput · 底部输入栏
- * Phase 2a 文字发送 · Phase 2b 接入 mic 按钮和倒计时环
- * 迁移自 static/index.html:1244-1280
+ * ChatInput · 底部输入栏（Phase 2b 含 mic + countdown）
+ * Phase 2a: textarea + send
+ * Phase 2b: 前置 MicButton · STT 识别完自动通过 send 事件发出
  */
-import { ref, watch } from 'vue'
+import { ref, watch, useTemplateRef } from 'vue'
+import MicButton from './MicButton.vue'
 
 const props = defineProps({
   placeholder: { type: String, default: '说点什么... (Shift+Enter 换行)' },
   disabled: { type: Boolean, default: false },
+  enableStt: { type: Boolean, default: true },
 })
-const emit = defineEmits(['send'])
+const emit = defineEmits(['send', 'stt-error'])
 
 const text = ref('')
-const textarea = ref(null)
+const interim = ref('')
+const textarea = useTemplateRef('textarea')
 
 function autoGrow() {
   const el = textarea.value
@@ -39,19 +42,40 @@ function submit() {
   autoGrow()
 }
 
+function onRecognized(recognized) {
+  const clean = recognized.trim()
+  if (!clean) return
+  // STT 识别完毕 → 不经过输入框直接发送（对齐老版 CEO 决策 #2）
+  emit('send', clean)
+}
+
+function onSTTError(msg) {
+  interim.value = ''
+  emit('stt-error', msg)
+}
+
 defineExpose({ focus: () => textarea.value?.focus() })
 </script>
 
 <template>
   <form class="input-bar" @submit.prevent="submit">
-    <textarea
-      ref="textarea"
-      v-model="text"
-      :placeholder="placeholder"
-      :disabled="disabled"
-      rows="1"
-      @keydown="onKeydown"
-    ></textarea>
+    <MicButton
+      v-if="enableStt"
+      @recognized="onRecognized"
+      @error="onSTTError"
+      @interim="interim = $event"
+    />
+    <div class="text-col">
+      <div v-if="interim" class="interim">{{ interim }}</div>
+      <textarea
+        ref="textarea"
+        v-model="text"
+        :placeholder="placeholder"
+        :disabled="disabled"
+        rows="1"
+        @keydown="onKeydown"
+      ></textarea>
+    </div>
     <button
       type="submit"
       class="send"
@@ -73,6 +97,18 @@ defineExpose({ focus: () => textarea.value?.focus() })
   backdrop-filter: saturate(180%) blur(16px);
   border-top: 1px solid var(--border);
   align-items: flex-end;
+}
+.text-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.interim {
+  padding: 2px var(--space-2);
+  font-size: 12px;
+  color: var(--text-3);
+  font-style: italic;
 }
 textarea {
   flex: 1;

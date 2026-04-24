@@ -1,12 +1,17 @@
 <script setup>
 /**
- * Chat · 主战场 1 · Phase 2a 基础结构
- * 交付：登录 → 发送 → SSE → 回复 → 历史
+ * Chat · 主战场 1 · Phase 2a 基础 + Phase 2b 增强
  *
- * Phase 2b 追加：hands-free / STT 接入 / TTS 自动朗读 / AskDrawer / ExplanationModal / VoiceSettings
- * Phase 2b keep-alive 决策：<keep-alive include="Chat,Practice"> · onDeactivated 清理 ttsQueue
+ * Phase 2b 新增：
+ *   - Alex 自动开场白（打字机效果）
+ *   - 话题卡片（空状态引导）
+ *   - 点击 AI 气泡 → ExplanationModal 抽屉
+ *   - STT 通过 ChatInput 内嵌 MicButton
+ *   - TTS 自动朗读（autoPlay 开关）
+ *
+ * Phase 2b keep-alive：<keep-alive include="Chat,Practice"> · onDeactivated 不 abort SSE（让 Alex 流完）
  */
-import { ref, onMounted, nextTick, useTemplateRef } from 'vue'
+import { ref, onMounted, onActivated, onDeactivated, nextTick, useTemplateRef } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useChat } from '@/composables/useChat'
 import { useTTS } from '@/composables/useTTS'
@@ -15,17 +20,38 @@ import { API } from '@/config'
 import ChatBubble from '@/components/chat/ChatBubble.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
 import HistorySidebar from '@/components/chat/HistorySidebar.vue'
+import ExplanationModal from '@/components/ExplanationModal.vue'
 
 defineOptions({ name: 'Chat' }) // keep-alive include 用
 
 const chatStore = useChatStore()
 const { sendMessage, streaming } = useChat()
-const { enqueue: ttsEnqueue } = useTTS()
+const { enqueue: ttsEnqueue, clear: ttsClear } = useTTS()
 const { authFetch } = useAuthFetch()
 
 const sidebarOpen = ref(false)
 const scrollBox = useTemplateRef('scrollBox')
 const toast = ref({ show: false, text: '', type: 'info' })
+
+// 解读抽屉
+const explainOpen = ref(false)
+const explainTarget = ref(null)
+
+// 话题卡片（硬编码，Phase 6+ 可做动态）
+const TOPICS = [
+  { emoji: '☕', label: '早餐聊聊', prompt: "Let's talk about what I had for breakfast today." },
+  { emoji: '💼', label: '工作', prompt: "I'd like to talk about my job and daily work." },
+  { emoji: '✈️', label: '旅行', prompt: "Let's talk about a place I'd love to travel to." },
+  { emoji: '📚', label: '学习', prompt: "I want to improve my English. Can you help?" },
+  { emoji: '🎬', label: '电影', prompt: "Let's chat about a movie I recently watched." },
+  { emoji: '🏃', label: '运动', prompt: "Let's talk about exercise and sports." },
+]
+const displayedTopics = ref([])
+
+function pickTopics() {
+  const shuffled = [...TOPICS].sort(() => Math.random() - 0.5)
+  displayedTopics.value = shuffled.slice(0, 3)
+}
 
 function showToast(text, type = 'info', duration = 2500) {
   toast.value = { show: true, text, type }
@@ -44,9 +70,11 @@ async function onSend(text) {
 async function onNewChat() {
   chatStore.newSession()
   sidebarOpen.value = false
+  pickTopics()
   showToast('新对话已开始', 'info', 1500)
   await nextTick()
   scrollToBottom()
+  alexOpening()
 }
 
 async function onSelectSession(sid) {
@@ -63,6 +91,53 @@ async function onSelectSession(sid) {
   }
 }
 
+function onBubbleExplain(content) {
+  explainTarget.value = {
+    type: 'sentence',
+    content,
+    context: { source: 'chat', session_id: chatStore.sessionId },
+  }
+  explainOpen.value = true
+}
+
+function onBubbleTTS(content) {
+  ttsEnqueue(content, { manual: true })
+}
+
+function onSTTError(msg) {
+  showToast(msg, 'error')
+}
+
+function onTopicClick(topic) {
+  onSend(topic.prompt)
+}
+
+// ── Alex 开场白（打字机效果）────────────────────────────────────
+const OPENING = "Hey! I'm Alex 👋 What's on your mind today? Type or tap the mic to speak."
+
+function alexOpening() {
+  if (chatStore.messages.length > 0) return
+
+  const msgId = chatStore.addMessage({
+    role: 'assistant',
+    content: '',
+    streaming: true,
+  })
+
+  let i = 0
+  const timer = setInterval(() => {
+    i++
+    chatStore.patchMessage(msgId, {
+      content: OPENING.slice(0, i),
+      streaming: i < OPENING.length,
+    })
+    if (i >= OPENING.length) {
+      clearInterval(timer)
+      // 开场白不进 history context（与老版行为一致）
+    }
+  }, 22)
+}
+
 function scrollToBottom() {
   const el = scrollBox.value
   if (!el) return
@@ -70,7 +145,20 @@ function scrollToBottom() {
 }
 
 onMounted(() => {
+  pickTopics()
+  if (chatStore.messages.length === 0) {
+    alexOpening()
+  }
   scrollToBottom()
+})
+
+// keep-alive: Chat → Memory 切回来时不重建 state；但要清 TTS 队列（Architect SF4）
+onActivated(() => {
+  scrollToBottom()
+})
+onDeactivated(() => {
+  ttsClear()
+  // SSE 不 abort，让 Alex 流完（Architect Tradeoff 2 synthesis）
 })
 </script>
 
@@ -91,24 +179,39 @@ onMounted(() => {
     </header>
 
     <div ref="scrollBox" class="messages">
-      <div v-if="chatStore.messages.length === 0" class="empty">
-        <p>👋 Hey, I'm Alex. Type a message to start.</p>
-        <p class="hint">Phase 2b 会在此加回话题卡片和自动开场白</p>
-      </div>
       <ChatBubble
         v-for="m in chatStore.messages"
         :key="m.id"
         :role="m.role"
         :content="m.content"
         :streaming="m.streaming"
-        @tts-request="ttsEnqueue($event, { manual: true })"
+        @tts-request="onBubbleTTS"
+        @explain-request="onBubbleExplain"
+        @click="m.role === 'assistant' && m.content && !m.streaming ? onBubbleExplain(m.content) : null"
       />
+
+      <!-- 话题卡片：无消息时显示 -->
+      <div
+        v-if="chatStore.messages.length <= 1 && !streaming"
+        class="topic-cards"
+      >
+        <button
+          v-for="t in displayedTopics"
+          :key="t.label"
+          class="topic-card"
+          @click="onTopicClick(t)"
+        >
+          <span class="emoji">{{ t.emoji }}</span>
+          <span>{{ t.label }}</span>
+        </button>
+      </div>
     </div>
 
     <ChatInput
       :disabled="streaming"
       :placeholder="streaming ? 'Alex 正在回复...' : '说点什么... (Shift+Enter 换行)'"
       @send="onSend"
+      @stt-error="onSTTError"
     />
 
     <Transition name="slide">
@@ -121,6 +224,8 @@ onMounted(() => {
         />
       </div>
     </Transition>
+
+    <ExplanationModal v-model:open="explainOpen" :target="explainTarget" />
 
     <Transition name="toast">
       <div v-if="toast.show" class="toast" :class="toast.type">{{ toast.text }}</div>
@@ -171,17 +276,32 @@ onMounted(() => {
   padding: var(--space-4) 0;
   -webkit-overflow-scrolling: touch;
 }
-.empty {
-  text-align: center;
-  padding: var(--space-6) var(--space-4);
-  color: var(--text-3);
+.topic-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: var(--space-2);
+  padding: var(--space-4);
+  margin-top: var(--space-3);
 }
-.empty p {
-  margin: 0 0 var(--space-2);
+.topic-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-1);
+  font-size: 13px;
+  transition: transform var(--duration) var(--ease);
 }
-.hint {
-  font-size: 12px;
-  opacity: 0.6;
+.topic-card:active {
+  transform: scale(0.96);
+  background: var(--accent-soft);
+}
+.emoji {
+  font-size: 22px;
 }
 .drawer-overlay {
   position: fixed;
