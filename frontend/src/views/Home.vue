@@ -6,9 +6,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useStats } from '@/composables/useStats'
 
 const router = useRouter()
 const auth = useAuthStore()
+const { stats, fetchToday } = useStats()
 
 const text = ref('')
 const textareaEl = ref(null)
@@ -67,6 +69,7 @@ function onTopic(prompt) {
 }
 
 onMounted(() => {
+  fetchToday()
   // 桌面端自动聚焦；移动端不弹键盘（需用户主动点）
   if (window.matchMedia('(min-width: 768px)').matches) {
     textareaEl.value?.focus()
@@ -83,6 +86,19 @@ onMounted(() => {
         <span class="mi">📜</span>
       </RouterLink>
     </header>
+
+    <!-- 数据条 · V0.9.1 -->
+    <div v-if="stats" class="stats-band">
+      <div class="chip" :class="{ hot: stats.streak_days >= 3 }">
+        🔥 <span>{{ stats.streak_days }} 天连续</span>
+      </div>
+      <div v-if="stats.today_message_count > 0" class="chip">
+        💬 <span>今日 {{ stats.today_message_count }} 条</span>
+      </div>
+      <RouterLink v-if="stats.due_cards > 0" to="/practice" class="chip cta">
+        📝 <span>{{ stats.due_cards }} 张待复习</span>
+      </RouterLink>
+    </div>
 
     <!-- Hero · Alex 问候 -->
     <section class="hero">
@@ -181,6 +197,47 @@ onMounted(() => {
 }
 .history-link:active {
   background: var(--bg-elevated);
+}
+
+.stats-band {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: var(--space-1) 0;
+  margin: 0;
+}
+.stats-band::-webkit-scrollbar {
+  display: none;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 6px var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+.chip.hot {
+  background: rgba(255, 156, 68, 0.1);
+  border-color: rgba(255, 156, 68, 0.25);
+  color: #c87020;
+}
+.chip.cta {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent);
+  font-weight: 500;
+}
+.chip.cta:active {
+  background: var(--accent);
+  color: var(--text-inverse);
 }
 
 .hero {

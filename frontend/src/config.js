@@ -20,6 +20,7 @@ export const API = {
   SETTINGS: '/settings',
   HEALTH: '/health',
   DEBUG: '/debug/status',
+  STATS: '/stats',
 }
 
 export const CHAT = {
