@@ -11,8 +11,8 @@
  *
  * Phase 2b keep-alive：<keep-alive include="Chat,Practice"> · onDeactivated 不 abort SSE（让 Alex 流完）
  */
-import { ref, onMounted, onActivated, onDeactivated, nextTick, useTemplateRef } from 'vue'
-import { RouterLink } from 'vue-router'
+import { ref, onMounted, onActivated, onDeactivated, nextTick, useTemplateRef, watch, computed } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useChatStore } from '@/stores/chat'
 import { useChat } from '@/composables/useChat'
 import { useTTS } from '@/composables/useTTS'
@@ -21,19 +21,51 @@ import { API } from '@/config'
 import ChatBubble from '@/components/chat/ChatBubble.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
 import HistorySidebar from '@/components/chat/HistorySidebar.vue'
+import VoiceSettings from '@/components/chat/VoiceSettings.vue'
 import ExplanationModal from '@/components/ExplanationModal.vue'
 
 defineOptions({ name: 'Chat' }) // keep-alive include 用
 
+const route = useRoute()
+const router = useRouter()
 const chatStore = useChatStore()
 const { sendMessage, streaming } = useChat()
-const { enqueue: ttsEnqueue, clear: ttsClear } = useTTS()
+const { enqueue: ttsEnqueue, clear: ttsClear, playing: ttsPlaying } = useTTS()
 const { authFetch } = useAuthFetch()
 
 const sidebarOpen = ref(false)
+const settingsOpen = ref(false)
 const scrollBox = useTemplateRef('scrollBox')
 const chatInputRef = useTemplateRef('chatInputRef')
 const toast = ref({ show: false, text: '', type: 'info' })
+
+// Hands-free 循环触发：SSE 结束 + TTS 播完 + hands-free 开启 → 自动开麦
+const lastRole = computed(() => {
+  const m = chatStore.messages[chatStore.messages.length - 1]
+  return m?.role
+})
+let _pendingHandsFree = false
+watch(
+  () => [streaming.value, ttsPlaying.value, chatStore.handsFree],
+  ([s, p, hf], [prevS]) => {
+    // streaming 刚变 false → 记一下需要在 TTS 完成后 trigger mic
+    if (prevS && !s && hf && lastRole.value === 'assistant') {
+      _pendingHandsFree = true
+    }
+    // 此刻 streaming=false 且 ttsPlaying=false 且 pending → 触发
+    if (_pendingHandsFree && !s && !p && hf) {
+      _pendingHandsFree = false
+      // 延迟 300ms 让用户喘口气
+      setTimeout(() => {
+        if (chatStore.handsFree && chatInputRef.value?.isMicIdle()) {
+          chatInputRef.value?.triggerMic()
+        }
+      }, 300)
+    }
+    // hands-free 关了 → 清 pending
+    if (!hf) _pendingHandsFree = false
+  }
+)
 
 // 解读抽屉
 const explainOpen = ref(false)
@@ -146,8 +178,19 @@ function scrollToBottom() {
   el.scrollTop = el.scrollHeight
 }
 
-onMounted(() => {
+onMounted(async () => {
   pickTopics()
+
+  // Home 预填：?prefill=xxx → 自动发送
+  const prefill = route.query.prefill
+  if (typeof prefill === 'string' && prefill.trim()) {
+    // 清掉 query 避免刷新再发
+    router.replace({ path: '/chat', query: {} })
+    await nextTick()
+    await onSend(prefill)
+    return
+  }
+
   if (chatStore.messages.length === 0) {
     alexOpening()
   }
@@ -173,15 +216,23 @@ onDeactivated(() => {
       <button class="icon-btn" @click="sidebarOpen = true" aria-label="历史">☰</button>
       <RouterLink class="title" to="/" aria-label="回到首页">Speakeasy</RouterLink>
       <div class="top-right">
+        <button
+          v-if="chatStore.handsFree"
+          class="icon-btn on pulse"
+          @click="chatStore.toggleHandsFree()"
+          aria-label="关闭 hands-free"
+          title="Hands-free 进行中 · 点击关闭"
+        >
+          🎙
+        </button>
         <button class="icon-btn" @click="onNewChat" aria-label="新对话" title="新对话">＋</button>
         <button
           class="icon-btn"
-          :class="{ on: chatStore.autoPlay }"
-          @click="chatStore.toggleAutoPlay()"
-          aria-label="自动朗读"
-          :title="chatStore.autoPlay ? '自动朗读已开' : '自动朗读已关'"
+          @click="settingsOpen = true"
+          aria-label="语音设置"
+          title="语音设置"
         >
-          {{ chatStore.autoPlay ? '🔊' : '🔇' }}
+          ⚙
         </button>
       </div>
     </header>
@@ -235,6 +286,7 @@ onDeactivated(() => {
     </Transition>
 
     <ExplanationModal v-model:open="explainOpen" :target="explainTarget" />
+    <VoiceSettings v-model:open="settingsOpen" />
 
     <Transition name="toast">
       <div v-if="toast.show" class="toast" :class="toast.type">{{ toast.text }}</div>
@@ -284,6 +336,14 @@ onDeactivated(() => {
 }
 .icon-btn.on {
   color: var(--accent);
+  background: var(--accent-soft);
+}
+.icon-btn.pulse {
+  animation: mic-pulse 1.4s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  50% { box-shadow: 0 0 0 6px transparent; }
 }
 .messages {
   flex: 1;

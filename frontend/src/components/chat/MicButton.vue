@@ -114,6 +114,17 @@ onBeforeUnmount(() => {
   stt.cancel()
   countdown.stop()
 })
+
+// Hands-free 模式下 Chat.vue 会调用 triggerStart() 自动开始录音
+defineExpose({
+  triggerStart() {
+    if (state.value === 'idle') _startRecording()
+  },
+  triggerStop() {
+    if (state.value === 'recording') _stopRecording()
+  },
+  isIdle: () => state.value === 'idle',
+})
 </script>
 
 <template>

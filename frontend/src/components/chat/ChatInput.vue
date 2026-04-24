@@ -17,6 +17,7 @@ const emit = defineEmits(['send', 'stt-error'])
 const text = ref('')
 const interim = ref('')
 const textarea = useTemplateRef('textarea')
+const micRef = useTemplateRef('micRef')
 
 function autoGrow() {
   const el = textarea.value
@@ -54,13 +55,18 @@ function onSTTError(msg) {
   emit('stt-error', msg)
 }
 
-defineExpose({ focus: () => textarea.value?.focus() })
+defineExpose({
+  focus: () => textarea.value?.focus(),
+  triggerMic: () => micRef.value?.triggerStart(),
+  isMicIdle: () => micRef.value?.isIdle?.() ?? true,
+})
 </script>
 
 <template>
   <form class="input-bar" @submit.prevent="submit">
     <MicButton
       v-if="enableStt"
+      ref="micRef"
       @recognized="onRecognized"
       @error="onSTTError"
       @interim="interim = $event"

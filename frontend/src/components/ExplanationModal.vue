@@ -11,8 +11,9 @@
  *
  * @typedef {{ type: 'sentence'|'word', content: string, context?: any }} ExplainTarget
  */
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onBeforeUnmount } from 'vue'
 import { useSSE } from '@/composables/useSSE'
+import { useTTS } from '@/composables/useTTS'
 import AskPanel from './AskPanel.vue'
 
 const open = defineModel('open', { type: Boolean, default: false })
@@ -22,6 +23,16 @@ const props = defineProps({
 })
 
 const { stream: sseStream, streaming, abort: abortStream } = useSSE()
+const { enqueue: ttsEnqueue, clear: ttsClear, playing: ttsPlaying } = useTTS()
+
+function playTarget() {
+  if (!props.target?.content) return
+  ttsEnqueue(props.target.content, { manual: true })
+}
+
+onBeforeUnmount(() => {
+  ttsClear()
+})
 
 const explanation = ref({
   summary: '',
@@ -114,6 +125,16 @@ function refId() {
             <span class="kind">{{ target?.type === 'word' ? '单词' : '句子' }}</span>
             <span class="content">{{ target?.content }}</span>
           </div>
+          <button
+            class="play-btn"
+            :class="{ playing: ttsPlaying }"
+            @click="playTarget"
+            :disabled="!target?.content"
+            aria-label="朗读"
+            title="朗读"
+          >
+            {{ ttsPlaying ? '⏸' : '🔊' }}
+          </button>
           <button class="close" @click="close" aria-label="关闭">×</button>
         </header>
 
@@ -226,12 +247,38 @@ function refId() {
   font-weight: 500;
   word-break: break-word;
 }
+.play-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 16px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  flex-shrink: 0;
+  transition: background var(--duration) var(--ease);
+}
+.play-btn:active {
+  background: var(--accent);
+  color: var(--text-inverse);
+}
+.play-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.play-btn.playing {
+  animation: play-pulse 1.4s ease-in-out infinite;
+}
+@keyframes play-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  50% { box-shadow: 0 0 0 6px transparent; }
+}
 .close {
   width: 32px;
   height: 32px;
   border-radius: 50%;
   font-size: 22px;
   color: var(--text-3);
+  flex-shrink: 0;
 }
 .close:active {
   background: var(--bg);

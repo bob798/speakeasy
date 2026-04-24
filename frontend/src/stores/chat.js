@@ -26,6 +26,9 @@ export const useChatStore = defineStore('chat', () => {
   /** @type {import('vue').Ref<ChatMessage[]>} */
   const messages = ref([])
   const autoPlay = ref(false)
+  const handsFree = ref(false)
+  const ttsProvider = ref('edge') // edge | doubao | webspeech
+  const ttsSpeed = ref('+0%') // -40% -20% +0% +20%
   const sttStatus = ref('idle') // idle | recording | processing | degraded | error
   const sttStatusHint = ref('')
 
@@ -85,10 +88,19 @@ export const useChatStore = defineStore('chat', () => {
     autoPlay.value = !autoPlay.value
   }
 
+  function toggleHandsFree() {
+    handsFree.value = !handsFree.value
+    // hands-free 打开时顺带开自动朗读（否则循环断链）
+    if (handsFree.value) autoPlay.value = true
+  }
+
   return {
     sessionId,
     messages,
     autoPlay,
+    handsFree,
+    ttsProvider,
+    ttsSpeed,
     sttStatus,
     sttStatusHint,
     userMessageCount,
@@ -100,5 +112,6 @@ export const useChatStore = defineStore('chat', () => {
     loadSession,
     setSTTStatus,
     toggleAutoPlay,
+    toggleHandsFree,
   }
 })
