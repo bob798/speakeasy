@@ -32,7 +32,7 @@ async function onTranslate() {
       text: source.value,
       direction: direction.value,
     })
-    translated.value = data.translation || data.translated || ''
+    translated.value = data.translated_text || data.translation || data.translated || ''
   } catch (err) {
     error.value = err.message || '翻译失败'
   } finally {

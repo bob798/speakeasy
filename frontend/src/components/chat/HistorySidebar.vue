@@ -82,16 +82,15 @@ defineExpose({ refresh: loadFirstPage })
     <ul class="list">
       <li
         v-for="s in sessions"
-        :key="s.session_id"
+        :key="s.id"
         class="item"
-        :class="{ active: s.session_id === activeId }"
-        :data-sid="s.session_id"
-        @click="onSelect(s.session_id)"
+        :class="{ active: s.id === activeId }"
+        :data-sid="s.id"
+        @click="onSelect(s.id)"
       >
-        <div class="preview">{{ s.first_user_message || '(空会话)' }}</div>
+        <div class="preview">{{ s.preview || '(空会话)' }}</div>
         <div class="meta">
-          <span>{{ s.turns || 0 }} 轮</span>
-          <span>{{ formatTime(s.updated_at) }}</span>
+          <span>{{ formatTime(s.ended_at || s.created_at) }}</span>
         </div>
       </li>
       <li v-if="loading" class="loading-row">加载中...</li>

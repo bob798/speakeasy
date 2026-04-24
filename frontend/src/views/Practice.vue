@@ -33,26 +33,70 @@ function showToast(text, type = 'info', duration = 2500) {
 }
 
 async function onImported(data) {
+  // 给 source 兜底一个 id（新导入时后端可能返回 id，从历史进入时后端返回时可能没带 id）
+  if (!data.id && data.source_id) data.id = data.source_id
   store.loadSource(data)
-  // 批量创建卡片
+
+  const segs = (data.segments || []).map((seg, i) => ({
+    text: seg.content,
+    context: { segIdx: i, from: seg.from, to: seg.to },
+    segIdx: i,
+  }))
+
   try {
-    const segs = (data.segments || []).map((seg, i) => ({
-      text: seg.content,
-      context: { segIdx: i, from: seg.from, to: seg.to },
-      segIdx: i,
-    }))
-    if (segs.length) {
-      const resp = await createCards({
-        source_id: data.id,
-        items: segs,
-      })
-      if (resp.cards) {
-        store.cards = resp.cards.map((c, i) => ({ ...c, segIdx: i }))
+    // 优先从后端拉该 source 下已有的 cards（历史模式）
+    const existingResp = await fetch('/practice/cards?limit=200', {
+      headers: getAuthHeaders(),
+    })
+    const existingCards = existingResp.ok
+      ? ((await existingResp.json()).cards || [])
+      : []
+
+    // segIdx 映射：从 card.context_json 读出 segIdx；没有就按 text 匹配
+    const cardBySegIdx = {}
+    for (const c of existingCards) {
+      let segIdx = null
+      try {
+        const ctx = c.context_json ? JSON.parse(c.context_json) : {}
+        if (typeof ctx.segIdx === 'number') segIdx = ctx.segIdx
+      } catch {
+        /* ignore */
+      }
+      if (segIdx == null) {
+        // fallback by text match
+        segIdx = segs.findIndex((s) => s.text === c.text)
+      }
+      if (segIdx >= 0 && segIdx < segs.length) {
+        cardBySegIdx[segIdx] = { ...c, segIdx }
       }
     }
+
+    // 判断是否需要补创建：缺哪些 segIdx
+    const missing = segs.filter((_, i) => !cardBySegIdx[i])
+    if (missing.length) {
+      const resp = await createCards({ items: missing })
+      const newCards = resp.cards || resp || []
+      newCards.forEach((c) => {
+        // 按 text 反查 segIdx
+        const i = segs.findIndex((s) => s.text === c.text)
+        if (i >= 0) cardBySegIdx[i] = { ...c, segIdx: i }
+      })
+    }
+
+    store.cards = Object.values(cardBySegIdx)
     showToast(`已导入 ${segs.length} 段`, 'info')
   } catch (err) {
     showToast(err.message || '卡片初始化失败', 'error')
+  }
+}
+
+function getAuthHeaders() {
+  try {
+    const t =
+      localStorage.getItem('v2:auth.token') || localStorage.getItem('token')
+    return t ? { Authorization: 'Bearer ' + t } : {}
+  } catch {
+    return {}
   }
 }
 
@@ -60,12 +104,23 @@ function onSelect(idx) {
   store.setCurrentIdx(idx)
 }
 
-function onExplain(content) {
-  explainTarget.value = {
-    type: 'sentence',
-    content,
-    context: { source: 'practice', source_id: store.currentSource?.id },
+function onExplain(payload) {
+  // 兼容两种 emit 形式：
+  //   string  → 整句解读
+  //   { type, content, sentence? } → 单词或整句解读
+  let target
+  if (typeof payload === 'string') {
+    target = { type: 'sentence', content: payload }
+  } else {
+    target = { type: payload.type, content: payload.content }
+    if (payload.sentence) target.sentence = payload.sentence
   }
+  target.context = {
+    source: 'practice',
+    source_id: store.currentSource?.id,
+    ...(target.sentence ? { sentence: target.sentence } : {}),
+  }
+  explainTarget.value = target
   explainOpen.value = true
 }
 

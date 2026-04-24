@@ -3,6 +3,11 @@
  * SentenceList · 左侧字幕句列表
  * 每行可点击选中 · 已练习标记 · 播放中高亮
  * 迁移自 practice.html renderSubtitles + selectLine
+ *
+ * 单词级交互（V0.8 补回）:
+ *   - 整句点击 → emit('select', idx)
+ *   - 💡 按钮 → emit('explain', { type:'sentence', content })
+ *   - 单词长按 / 双击 → emit('explain', { type:'word', content, sentence })
  */
 import { computed } from 'vue'
 import { usePracticeStore } from '@/stores/practice'
@@ -11,6 +16,29 @@ const emit = defineEmits(['select', 'explain'])
 const store = usePracticeStore()
 
 const items = computed(() => store.segments)
+
+function tokenize(text) {
+  // 保留标点作为不可点的 token，单词可点
+  const parts = []
+  const re = /([A-Za-z][A-Za-z'-]*|[^A-Za-z\s]+|\s+)/g
+  let m
+  while ((m = re.exec(text)) !== null) {
+    const piece = m[1]
+    const isWord = /^[A-Za-z]/.test(piece)
+    const isSpace = /^\s+$/.test(piece)
+    parts.push({ piece, isWord, isSpace })
+  }
+  return parts
+}
+
+function onWordClick(e, word, sentence) {
+  e.stopPropagation()
+  emit('explain', { type: 'word', content: word, sentence })
+}
+
+function onSentenceExplain(content) {
+  emit('explain', { type: 'sentence', content })
+}
 </script>
 
 <template>
@@ -26,12 +54,22 @@ const items = computed(() => store.segments)
       @click="emit('select', i)"
     >
       <span class="idx">{{ i + 1 }}.</span>
-      <span class="txt">{{ seg.content }}</span>
+      <span class="txt">
+        <template v-for="(tok, j) in tokenize(seg.content)" :key="j">
+          <span
+            v-if="tok.isWord"
+            class="word"
+            :title="`点击解读：${tok.piece}`"
+            @click="onWordClick($event, tok.piece, seg.content)"
+          >{{ tok.piece }}</span>
+          <span v-else>{{ tok.piece }}</span>
+        </template>
+      </span>
       <button
         class="explain-btn"
-        @click.stop="emit('explain', seg.content)"
-        aria-label="解读"
-        title="解读"
+        @click.stop="onSentenceExplain(seg.content)"
+        aria-label="解读整句"
+        title="解读整句"
       >
         💡
       </button>
@@ -86,6 +124,21 @@ const items = computed(() => store.segments)
   line-height: 1.5;
   color: var(--text-1);
   word-break: break-word;
+}
+.word {
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background var(--duration) var(--ease);
+}
+.word:active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+@media (hover: hover) {
+  .word:hover {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
 }
 .explain-btn {
   flex-shrink: 0;

@@ -14,6 +14,7 @@
  */
 
 import { ref, onBeforeUnmount } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 
 const TTS_ENDPOINT = '/tts'
 
@@ -56,9 +57,12 @@ export function useTTS() {
 
   async function _speakOne(text, onStart, onEnd) {
     try {
+      const authStore = useAuthStore()
+      const headers = { 'Content-Type': 'application/json' }
+      if (authStore.token) headers['Authorization'] = 'Bearer ' + authStore.token
       const res = await fetch(TTS_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ text }),
       })
       if (!res.ok) {

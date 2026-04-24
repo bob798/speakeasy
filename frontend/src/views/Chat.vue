@@ -12,6 +12,7 @@
  * Phase 2b keep-alive：<keep-alive include="Chat,Practice"> · onDeactivated 不 abort SSE（让 Alex 流完）
  */
 import { ref, onMounted, onActivated, onDeactivated, nextTick, useTemplateRef } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useChatStore } from '@/stores/chat'
 import { useChat } from '@/composables/useChat'
 import { useTTS } from '@/composables/useTTS'
@@ -31,6 +32,7 @@ const { authFetch } = useAuthFetch()
 
 const sidebarOpen = ref(false)
 const scrollBox = useTemplateRef('scrollBox')
+const chatInputRef = useTemplateRef('chatInputRef')
 const toast = ref({ show: false, text: '', type: 'info' })
 
 // 解读抽屉
@@ -150,11 +152,14 @@ onMounted(() => {
     alexOpening()
   }
   scrollToBottom()
+  // 自动聚焦输入框（桌面端友好 · 移动端不会弹键盘因为需要用户手势）
+  nextTick(() => chatInputRef.value?.focus())
 })
 
 // keep-alive: Chat → Memory 切回来时不重建 state；但要清 TTS 队列（Architect SF4）
 onActivated(() => {
   scrollToBottom()
+  nextTick(() => chatInputRef.value?.focus())
 })
 onDeactivated(() => {
   ttsClear()
@@ -166,16 +171,19 @@ onDeactivated(() => {
   <div class="chat-page">
     <header class="topbar">
       <button class="icon-btn" @click="sidebarOpen = true" aria-label="历史">☰</button>
-      <div class="title">Speakeasy</div>
-      <button
-        class="icon-btn"
-        :class="{ on: chatStore.autoPlay }"
-        @click="chatStore.toggleAutoPlay()"
-        aria-label="自动朗读"
-        :title="chatStore.autoPlay ? '自动朗读已开' : '自动朗读已关'"
-      >
-        {{ chatStore.autoPlay ? '🔊' : '🔇' }}
-      </button>
+      <RouterLink class="title" to="/" aria-label="回到首页">Speakeasy</RouterLink>
+      <div class="top-right">
+        <button class="icon-btn" @click="onNewChat" aria-label="新对话" title="新对话">＋</button>
+        <button
+          class="icon-btn"
+          :class="{ on: chatStore.autoPlay }"
+          @click="chatStore.toggleAutoPlay()"
+          aria-label="自动朗读"
+          :title="chatStore.autoPlay ? '自动朗读已开' : '自动朗读已关'"
+        >
+          {{ chatStore.autoPlay ? '🔊' : '🔇' }}
+        </button>
+      </div>
     </header>
 
     <div ref="scrollBox" class="messages">
@@ -208,6 +216,7 @@ onDeactivated(() => {
     </div>
 
     <ChatInput
+      ref="chatInputRef"
       :disabled="streaming"
       :placeholder="streaming ? 'Alex 正在回复...' : '说点什么... (Shift+Enter 换行)'"
       @send="onSend"
@@ -256,6 +265,12 @@ onDeactivated(() => {
 .title {
   font-weight: 600;
   color: var(--accent);
+  text-decoration: none;
+}
+.top-right {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
 }
 .icon-btn {
   width: 36px;

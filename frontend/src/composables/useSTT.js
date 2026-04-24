@@ -22,6 +22,7 @@
 
 import { ref, onBeforeUnmount } from 'vue'
 import { AudioVAD } from '@/lib/AudioVAD'
+import { useAuthStore } from '@/stores/auth'
 
 const DEFAULTS = {
   silenceThresholdDb: -35,
@@ -103,9 +104,13 @@ export function useSTT(opts = {}) {
       const ctrl = new AbortController()
       const fetchTimer = setTimeout(() => ctrl.abort(), config.fetchTimeoutMs)
       try {
+        const authStore = useAuthStore()
+        const headers = {}
+        if (authStore.token) headers['Authorization'] = 'Bearer ' + authStore.token
         const res = await fetch(config.endpoint, {
           method: 'POST',
           body: form,
+          headers,
           signal: ctrl.signal,
         })
         clearTimeout(fetchTimer)
