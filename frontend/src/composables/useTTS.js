@@ -54,8 +54,14 @@ export function useTTS() {
   let _audio = null
   let _queue = []
   let _busy = false
+  let _abortController = null
+  let _generation = 0   // 每次 clear() 自增 · 旧 fetch 回来时自检
 
   async function _speakOne(text, onStart, onEnd) {
+    // 并发保护：记录本次调用的代际，结束前检查代际未变才执行播放
+    const gen = _generation
+    const ctrl = new AbortController()
+    _abortController = ctrl
     try {
       const authStore = useAuthStore()
       const headers = { 'Content-Type': 'application/json' }
@@ -64,7 +70,9 @@ export function useTTS() {
         method: 'POST',
         headers,
         body: JSON.stringify({ text }),
+        signal: ctrl.signal,
       })
+      if (gen !== _generation) return onEnd()   // 被 clear 打断
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
         if (d.fallback === 'webspeech') {
@@ -73,7 +81,9 @@ export function useTTS() {
         }
         throw new Error(d.error || 'TTS_FAILED')
       }
-      const url = URL.createObjectURL(await res.blob())
+      const blob = await res.blob()
+      if (gen !== _generation) return onEnd()   // 打断兜底二次检查
+      const url = URL.createObjectURL(blob)
       _audio = new Audio(url)
       _audio.onplay = onStart
       _audio.onended = () => {
@@ -94,6 +104,7 @@ export function useTTS() {
         _webSpeechSpeak(text, onStart, onEnd)
       }
     } catch (err) {
+      if (err.name === 'AbortError') return onEnd()
       console.warn('[useTTS]', err)
       _webSpeechSpeak(text, onStart, onEnd)
     }
@@ -135,11 +146,16 @@ export function useTTS() {
       _audio.src = ''
       _audio = null
     }
+    if (_abortController) {
+      try { _abortController.abort() } catch { /* ignore */ }
+      _abortController = null
+    }
     if (window.speechSynthesis) window.speechSynthesis.cancel()
     playing.value = false
   }
 
   function clear() {
+    _generation++           // 作废所有进行中的 _speakOne
     _queue = []
     stop()
     _busy = false

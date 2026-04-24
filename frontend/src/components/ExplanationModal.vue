@@ -31,13 +31,23 @@ const askPanelRef = useTemplateRef('askPanelRef')
 const ttsLoading = ref(false)
 
 const data = ref({
-  phonetic: '',
+  // Sentence fields
   meaning: '',
   grammar: '',
   phrases: [],
   liaison: [],
   current_level_points: [],
   next_level_points: [],
+  // Word fields
+  phonetic: '',
+  pos: '',
+  definitions: [],
+  examples: [],
+  synonyms: [],
+  antonyms: [],
+  current_level_usage: '',
+  next_level_usage: '',
+  // Shared
   narration: '',
 })
 const loading = ref(false)
@@ -45,26 +55,24 @@ const error = ref('')
 const activeTab = ref('explain')
 
 const hasContent = computed(() => {
+  const d = data.value
   return (
-    data.value.phonetic ||
-    data.value.meaning ||
-    data.value.grammar ||
-    data.value.phrases.length ||
-    data.value.liaison.length ||
-    data.value.current_level_points.length ||
-    data.value.next_level_points.length
+    d.phonetic || d.meaning || d.grammar || d.pos ||
+    d.definitions.length || d.examples.length ||
+    d.phrases.length || d.liaison.length ||
+    d.synonyms.length || d.antonyms.length ||
+    d.current_level_points.length || d.next_level_points.length ||
+    d.current_level_usage || d.next_level_usage
   )
 })
 
 function reset() {
   data.value = {
-    phonetic: '',
-    meaning: '',
-    grammar: '',
-    phrases: [],
-    liaison: [],
-    current_level_points: [],
-    next_level_points: [],
+    meaning: '', grammar: '', phrases: [], liaison: [],
+    current_level_points: [], next_level_points: [],
+    phonetic: '', pos: '', definitions: [], examples: [],
+    synonyms: [], antonyms: [],
+    current_level_usage: '', next_level_usage: '',
     narration: '',
   }
   error.value = ''
@@ -72,7 +80,7 @@ function reset() {
 }
 
 async function fetchWord() {
-  // 1. IPA 快拿
+  // 1. IPA 快拿（本地秒出 · 不阻塞主请求）
   try {
     const p = await authFetchJson(`${API.PRACTICE}/explain/phonetic`, {
       text: props.target.content,
@@ -82,7 +90,7 @@ async function fetchWord() {
     /* IPA 失败不阻塞 */
   }
 
-  // 2. 完整解读
+  // 2. 完整解读 · Word prompt 9 字段
   loading.value = true
   try {
     const resp = await authFetchJson(`${API.PRACTICE}/explain`, {
@@ -92,12 +100,14 @@ async function fetchWord() {
     })
     const exp = resp.explanation || {}
     Object.assign(data.value, {
-      meaning: exp.meaning || exp.summary || '',
-      grammar: exp.grammar || '',
-      phrases: exp.phrases || [],
-      liaison: exp.liaison || [],
-      current_level_points: exp.current_level_points || [],
-      next_level_points: exp.next_level_points || [],
+      phonetic: exp.phonetic || data.value.phonetic,  // LLM 版盖掉 local 版
+      pos: exp.pos || '',
+      definitions: exp.definitions || [],
+      examples: exp.examples || [],
+      synonyms: exp.synonyms || [],
+      antonyms: exp.antonyms || [],
+      current_level_usage: exp.current_level_usage || '',
+      next_level_usage: exp.next_level_usage || '',
       narration: exp.narration || '',
     })
   } catch (err) {
@@ -273,38 +283,89 @@ onBeforeUnmount(() => {
           </div>
           <div v-if="error" class="error">❌ {{ error }}</div>
 
-          <section v-if="data.meaning" class="section">
-            <h4>含义</h4>
-            <div>{{ data.meaning }}</div>
-          </section>
-          <section v-if="data.grammar" class="section">
-            <h4>语法</h4>
-            <div class="pre">{{ data.grammar }}</div>
-          </section>
-          <section v-if="data.phrases?.length" class="section">
-            <h4>搭配 / 词组</h4>
-            <ul>
-              <li v-for="(p, i) in data.phrases" :key="i">{{ p }}</li>
-            </ul>
-          </section>
-          <section v-if="data.liaison?.length" class="section">
-            <h4>连读 / 发音</h4>
-            <ul>
-              <li v-for="(l, i) in data.liaison" :key="i">{{ l }}</li>
-            </ul>
-          </section>
-          <section v-if="data.current_level_points?.length" class="section">
-            <h4>你这个级别要抓的点</h4>
-            <ul>
-              <li v-for="(p, i) in data.current_level_points" :key="i">{{ p }}</li>
-            </ul>
-          </section>
-          <section v-if="data.next_level_points?.length" class="section">
-            <h4>下个级别再扩的点</h4>
-            <ul>
-              <li v-for="(p, i) in data.next_level_points" :key="i">{{ p }}</li>
-            </ul>
-          </section>
+          <!-- ═══ Word 字段 ═══ -->
+          <template v-if="target?.type === 'word'">
+            <section v-if="data.pos || data.definitions?.length" class="section">
+              <h4>📖 释义</h4>
+              <div v-if="data.pos" class="pos-tag">{{ data.pos }}</div>
+              <ul v-if="data.definitions?.length">
+                <li v-for="(d, i) in data.definitions" :key="i">{{ d }}</li>
+              </ul>
+            </section>
+            <section v-if="data.examples?.length" class="section">
+              <h4>📝 例句</h4>
+              <ul class="examples">
+                <li v-for="(ex, i) in data.examples" :key="i">
+                  <div class="en">{{ ex.en }}</div>
+                  <div class="zh">{{ ex.zh }}</div>
+                </li>
+              </ul>
+            </section>
+            <section v-if="data.synonyms?.length || data.antonyms?.length" class="section">
+              <h4>🔗 近反义词</h4>
+              <div v-if="data.synonyms?.length" class="tagline">
+                <span class="label">近:</span>
+                <span v-for="(w, i) in data.synonyms" :key="i" class="tag syn">{{ w }}</span>
+              </div>
+              <div v-if="data.antonyms?.length" class="tagline">
+                <span class="label">反:</span>
+                <span v-for="(w, i) in data.antonyms" :key="i" class="tag ant">{{ w }}</span>
+              </div>
+            </section>
+            <section v-if="data.current_level_usage" class="section">
+              <h4>🎯 你这级怎么用</h4>
+              <div>{{ data.current_level_usage }}</div>
+            </section>
+            <section v-if="data.next_level_usage" class="section">
+              <h4>⬆ 下级进阶用法</h4>
+              <div>{{ data.next_level_usage }}</div>
+            </section>
+          </template>
+
+          <!-- ═══ Sentence 字段 ═══ -->
+          <template v-else>
+            <section v-if="data.meaning" class="section">
+              <h4>💡 意思</h4>
+              <div>{{ data.meaning }}</div>
+            </section>
+            <section v-if="data.grammar" class="section">
+              <h4>🔨 语法结构</h4>
+              <div class="pre">{{ data.grammar }}</div>
+            </section>
+            <section v-if="data.phrases?.length" class="section">
+              <h4>🔗 搭配 / 词组</h4>
+              <ul class="phrases">
+                <li v-for="(p, i) in data.phrases" :key="i">
+                  <span class="phrase">{{ p.phrase || p }}</span>
+                  <span v-if="p.note" class="note">{{ p.note }}</span>
+                </li>
+              </ul>
+            </section>
+            <section v-if="data.liaison?.length" class="section">
+              <h4>🔊 连读 · 发音</h4>
+              <ul class="liaison">
+                <li v-for="(l, i) in data.liaison" :key="i">
+                  <span class="chunk">{{ l.chunk || l }}</span>
+                  <span v-if="l.ipa" class="ipa-inline">{{ l.ipa }}</span>
+                  <span v-if="l.tip" class="tip">{{ l.tip }}</span>
+                </li>
+              </ul>
+            </section>
+            <section v-if="data.current_level_points?.length" class="section">
+              <h4>🎯 你这级要抓的点</h4>
+              <ul>
+                <li v-for="(p, i) in data.current_level_points" :key="i">{{ p }}</li>
+              </ul>
+            </section>
+            <section v-if="data.next_level_points?.length" class="section">
+              <h4>⬆ 下级再扩的点</h4>
+              <ul>
+                <li v-for="(p, i) in data.next_level_points" :key="i">{{ p }}</li>
+              </ul>
+            </section>
+          </template>
+
+          <!-- ═══ 通用 · 播解读 ═══ -->
           <section v-if="data.narration" class="section narration-row">
             <button class="narr-play" @click="playNarration" :disabled="ttsPlaying">
               {{ ttsPlaying ? '⏸ 播解读中' : '🔊 播一遍解读' }}
@@ -500,6 +561,104 @@ onBeforeUnmount(() => {
 }
 .section li {
   margin-bottom: 4px;
+}
+.pos-tag {
+  display: inline-block;
+  padding: 2px 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 999px;
+  font-size: 12px;
+  margin-bottom: var(--space-2);
+}
+.examples {
+  list-style: none;
+  padding: 0;
+}
+.examples li {
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent);
+}
+.examples .en {
+  font-size: 14px;
+  color: var(--text-1);
+  margin-bottom: 2px;
+}
+.examples .zh {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.tagline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+.tagline .label {
+  font-size: 12px;
+  color: var(--text-3);
+  font-weight: 500;
+}
+.tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.tag.syn {
+  background: rgba(61, 107, 79, 0.1);
+  color: var(--accent);
+}
+.tag.ant {
+  background: rgba(198, 70, 58, 0.1);
+  color: #c6463a;
+}
+.phrases {
+  list-style: none;
+  padding: 0;
+}
+.phrases li {
+  margin-bottom: var(--space-2);
+}
+.phrase {
+  font-weight: 500;
+  color: var(--text-1);
+}
+.note {
+  color: var(--text-2);
+  font-size: 12px;
+  margin-left: var(--space-2);
+}
+.liaison {
+  list-style: none;
+  padding: 0;
+}
+.liaison li {
+  padding: var(--space-2) 0;
+  border-bottom: 1px dashed var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+.liaison li:last-child {
+  border-bottom: none;
+}
+.chunk {
+  font-weight: 500;
+}
+.ipa-inline {
+  color: var(--accent);
+  font-family: Georgia, 'SF Pro Text', serif;
+  font-size: 13px;
+}
+.tip {
+  color: var(--text-2);
+  font-size: 12px;
+  width: 100%;
 }
 .narration-row {
   padding-top: var(--space-4);

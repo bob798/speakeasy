@@ -374,19 +374,24 @@ onBeforeUnmount(() => {
   margin-bottom: var(--space-3);
 }
 .word-chip {
-  padding: 4px var(--space-2);
+  padding: 6px var(--space-3);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 999px;
   font-size: 13px;
   color: var(--text-1);
-  transition: all var(--duration) var(--ease);
+  transition: all 0.12s var(--ease);
+  /* 关键：消除 iOS 300ms tap 延迟 · 防止 double-tap-zoom */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  /* 保证点击区够大，移动端 40px 最小 */
+  min-height: 36px;
 }
 .word-chip:active {
   background: var(--accent);
   color: var(--text-inverse);
   border-color: var(--accent);
-  transform: scale(0.93);
+  transform: scale(0.92);
 }
 .word-input {
   display: flex;
