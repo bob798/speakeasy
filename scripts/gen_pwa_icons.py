@@ -27,17 +27,21 @@ WHITE = (255, 255, 255)
 
 
 def _find_bold_font(size: int):
-    """寻找系统可用的 bold 字体（macOS 优先）。"""
+    """寻找能正确渲染大写 S 的 bold 字体。"""
+    # (path, ttc_index) — None 索引走 truetype 单字体
     candidates = [
-        "/System/Library/Fonts/SFNS.ttf",
-        "/System/Library/Fonts/SFNSRounded.ttf",
-        "/System/Library/Fonts/HelveticaNeue.ttc",
-        "/Library/Fonts/Arial Bold.ttf",
-        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        ("/System/Library/Fonts/Supplemental/Arial Bold.ttf", None),
+        ("/System/Library/Fonts/Helvetica.ttc", 1),  # index 1 = bold
+        ("/System/Library/Fonts/HelveticaNeue.ttc", 1),
+        ("/System/Library/Fonts/Supplemental/Arial.ttf", None),
+        ("/Library/Fonts/Arial Bold.ttf", None),
+        ("/System/Library/Fonts/PingFang.ttc", 1),
     ]
-    for path in candidates:
+    for path, idx in candidates:
         if Path(path).exists():
             try:
+                if idx is not None:
+                    return ImageFont.truetype(path, size, index=idx)
                 return ImageFont.truetype(path, size)
             except Exception:
                 continue
