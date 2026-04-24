@@ -1,7 +1,9 @@
+import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import create_tables
@@ -12,6 +14,42 @@ from app.routers.practice import router as practice_router
 from app.routers.translate import router as translate_router
 from app.routers.auth import router as auth_router
 from app.routers.ask import router as ask_router
+
+
+# ── V0.8 前端重构挂载策略（Pass 3 plan §4 + Critic B1-B5）────────────
+# `/`        → frontend/dist/index.html（Vue SPA，history 模式）
+# `/legacy/` → 老版 static HTML（回滚路径，保留 2 周灰度期）
+# `/static/` → 保留（audio_cache、tts_cache 等数据目录仍走这里）
+# `/assets/` → Vite 构建产物（JS/CSS/PWA sw/manifest）
+#
+# 如果 frontend/dist 不存在（未构建），全部 fallback 回老版 static/
+FRONTEND_DIST = "frontend/dist"
+SPA_AVAILABLE = os.path.isdir(FRONTEND_DIST)
+
+# API 路径前缀：catch-all 不得覆盖这些 GET 路由（它们已被对应 router 处理）
+# 这里列的是 **GET 路径前缀**，用于 SPA fallback 判断
+API_PREFIXES = (
+    "api/",
+    "chat",
+    "stt",
+    "tts",
+    "history",
+    "sessions",
+    "review/",
+    "memory/",
+    "practice/",
+    "translate/",
+    "auth/",
+    "ask/",
+    "assessment/",
+    "settings/",
+    "health",
+    "debug/",
+    "legacy/",
+    ".well-known/",
+    "static/",
+    "assets/",
+)
 
 
 @asynccontextmanager
@@ -42,45 +80,91 @@ app.include_router(translate_router)
 app.include_router(auth_router)
 app.include_router(ask_router)
 
+# 数据目录挂载（audio_cache、tts_cache 等）——无论新旧前端都要读
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# SPA 资源挂载（Vue bundle）——仅在构建产物存在时启用
+if SPA_AVAILABLE and os.path.isdir(os.path.join(FRONTEND_DIST, "assets")):
+    app.mount(
+        "/assets",
+        StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")),
+        name="spa_assets",
+    )
 
+
+# ── 系统端点（保持不变）────────────────────────────────────────
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "spa_available": SPA_AVAILABLE}
 
 
 @app.get("/.well-known/appspecific/com.chrome.devtools.json")
 async def devtools_noop():
-    from fastapi.responses import Response
     return Response(status_code=204)
+
+
+# ── /legacy/* 老版 HTML（回滚路径，Pass 3 B3）─────────────────
+@app.get("/legacy/")
+@app.get("/legacy")
+async def legacy_root():
+    return FileResponse("static/index.html")
+
+
+@app.get("/legacy/review")
+async def legacy_review():
+    return FileResponse("static/review.html")
+
+
+@app.get("/legacy/memory")
+async def legacy_memory():
+    return FileResponse("static/memory.html")
+
+
+@app.get("/legacy/practice")
+async def legacy_practice():
+    return FileResponse("static/practice.html")
+
+
+@app.get("/legacy/translate")
+async def legacy_translate():
+    return FileResponse("static/translate.html")
+
+
+@app.get("/legacy/login")
+async def legacy_login():
+    return FileResponse("static/login.html")
+
+
+# ── SPA catch-all（必须放在所有路由之后）──────────────────────
+def _serve_spa_or_legacy(full_path: str = "") -> FileResponse:
+    """
+    Vue Router history 模式 fallback 策略：
+    1. 如果路径是 API 前缀 → 404（应该被对应 router 拦截，走到这说明没匹配）
+    2. 如果 frontend/dist 可用且路径是具体文件 → 返回该文件
+    3. 如果 frontend/dist 可用 → 返回 dist/index.html（由 Vue Router 接管）
+    4. 否则 fallback → 返回老版 static/index.html
+    """
+    # API 前缀防护：404 让前端看到明确错误，而不是加载 SPA shell 迷惑用户
+    if full_path.startswith(API_PREFIXES):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    if SPA_AVAILABLE:
+        # 具体文件（如 manifest.webmanifest / sw.js / favicon.svg）
+        candidate = os.path.join(FRONTEND_DIST, full_path)
+        if full_path and os.path.isfile(candidate):
+            return FileResponse(candidate)
+        return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+
+    # 未构建 SPA → 回老版 index.html（灰度期尚未切换状态）
+    return FileResponse("static/index.html")
 
 
 @app.get("/")
 async def root():
-    return FileResponse("static/index.html")
+    return _serve_spa_or_legacy("")
 
 
-@app.get("/review")
-async def review_page():
-    return FileResponse("static/review.html")
-
-
-@app.get("/memory")
-async def memory_page():
-    return FileResponse("static/memory.html")
-
-
-@app.get("/practice")
-async def practice_page():
-    return FileResponse("static/practice.html")
-
-
-@app.get("/translate")
-async def translate_page():
-    return FileResponse("static/translate.html")
-
-
-@app.get("/login")
-async def login_page():
-    return FileResponse("static/login.html")
+# catch-all：任何未匹配的 GET 路径（包括 /chat /practice /memory 等 Vue 路由）
+@app.get("/{full_path:path}")
+async def spa_fallback(full_path: str):
+    return _serve_spa_or_legacy(full_path)

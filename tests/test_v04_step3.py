@@ -12,13 +12,14 @@ def client():
 
 
 def test_practice_page_returns_200(client):
-    resp = client.get("/practice")
+    # V0.8: /practice 迁到 /legacy/practice（Pass 3 B3）
+    resp = client.get("/legacy/practice")
     assert resp.status_code == 200
     assert "text/html" in resp.headers.get("content-type", "")
 
 
 def test_index_has_practice_link(client):
-    resp = client.get("/")
+    resp = client.get("/legacy/")
     assert resp.status_code == 200
     assert 'href="/practice"' in resp.text
 
