@@ -66,6 +66,40 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * 启动时静默校验 · V0.9.2
+   * 有 token 就试调 /auth/me：
+   *   200 → 更新 user 信息
+   *   401 → 静默清 localStorage（不跳转，由 router guard 统一处理）
+   *   网络错误 → 保留 token（可能离线，用户可继续浏览已缓存页面）
+   */
+  async function initFromStorage() {
+    if (!token.value) return
+    try {
+      const resp = await fetch('/auth/me', {
+        headers: { Authorization: 'Bearer ' + token.value },
+      })
+      if (resp.status === 401) {
+        logout({ silent: true })
+        return
+      }
+      if (resp.ok) {
+        const data = await resp.json()
+        if (data.user) {
+          user.value = data.user
+          try {
+            localStorage.setItem(V2_USER_KEY, JSON.stringify(data.user))
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+      // 其它状态码（5xx / 网络）静默忽略 · 不清 token
+    } catch {
+      // 离线或 DNS 错 · 保留 token
+    }
+  }
+
+  /**
    * 登出 + 清 storage + 路由跳登录
    * @param {Object} [opts]
    * @param {boolean} [opts.silent] 不跳 /login（用于 401 静默清理）
@@ -99,5 +133,6 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     setAuth,
     logout,
+    initFromStorage,
   }
 })

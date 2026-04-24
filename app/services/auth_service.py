@@ -19,26 +19,61 @@ logger = get_logger("auth_service")
 # ── 配置 ────────────────────────────────────────────────────
 
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_DAYS = 14
+JWT_EXPIRE_DAYS = 60          # V0.9.2：14 → 60 天，避免频繁登录
+_DEV_SECRET_FILE = ".jwt_secret.local"   # gitignored；dev 跨进程持久化
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 
 
 def _get_jwt_secret() -> str:
-    """从环境变量读 JWT_SECRET；缺失则生成一次性（仅 dev，重启 token 失效）"""
+    """
+    读 JWT_SECRET 的优先级：
+      1. 环境变量 JWT_SECRET（生产推荐）
+      2. .jwt_secret.local 文件（dev 跨 uvicorn 重启持久化 · gitignored）
+      3. 进程内生成随机密钥（最后兜底）
+    """
     secret = os.environ.get("JWT_SECRET")
-    if not secret:
-        # 避免进程内多次生成不同 secret 导致所有 token 失效
-        global _DEV_SECRET
-        try:
-            return _DEV_SECRET  # type: ignore[name-defined]
-        except NameError:
-            _DEV_SECRET = secrets.token_urlsafe(32)
-            logger.warning(
-                "JWT_SECRET 未设置，使用进程级临时密钥（仅 dev 用）；"
-                "生产环境请在 .env.production 中配置固定的 JWT_SECRET"
-            )
-            return _DEV_SECRET
-    return secret
+    if secret:
+        return secret
+
+    # 进程内缓存
+    global _DEV_SECRET
+    try:
+        return _DEV_SECRET  # type: ignore[name-defined]
+    except NameError:
+        pass
+
+    # 尝试从文件读
+    try:
+        if os.path.isfile(_DEV_SECRET_FILE):
+            with open(_DEV_SECRET_FILE, "r", encoding="utf-8") as f:
+                disk = f.read().strip()
+            if disk:
+                _DEV_SECRET = disk
+                logger.info(
+                    "JWT_SECRET 从 %s 读取（dev 模式持久化）", _DEV_SECRET_FILE
+                )
+                return _DEV_SECRET
+    except Exception as e:
+        logger.warning("读取 %s 失败: %s", _DEV_SECRET_FILE, e)
+
+    # 生成并持久化
+    _DEV_SECRET = secrets.token_urlsafe(32)
+    try:
+        with open(_DEV_SECRET_FILE, "w", encoding="utf-8") as f:
+            f.write(_DEV_SECRET)
+        os.chmod(_DEV_SECRET_FILE, 0o600)
+        logger.warning(
+            "JWT_SECRET 未设置，已生成并写入 %s（dev 模式跨重启保活）；"
+            "生产环境请在 .env.production 中配置固定的 JWT_SECRET",
+            _DEV_SECRET_FILE,
+        )
+    except Exception as e:
+        logger.error(
+            "无法持久化 JWT_SECRET 到 %s: %s；本次进程关闭后 token 失效",
+            _DEV_SECRET_FILE,
+            e,
+        )
+    return _DEV_SECRET
 
 
 # ── 密码 ────────────────────────────────────────────────────
