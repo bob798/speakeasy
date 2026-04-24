@@ -8,7 +8,7 @@
  *   <AskPanel scope="practice_explain" ref-type="explanation" ref-id="abc"
  *             :context-payload="{ sentence }" @error="onErr" />
  */
-import { ref, onMounted, nextTick, useTemplateRef } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, useTemplateRef } from 'vue'
 import { useAskThread } from '@/composables/useAskThread'
 
 const props = defineProps({
@@ -33,6 +33,22 @@ const { messages, busy, error, loadExisting, ask } = useAskThread({
 const input = ref('')
 const msgsBox = useTemplateRef('msgsBox')
 const textareaEl = useTemplateRef('textareaEl')
+const rootEl = useTemplateRef('rootEl')
+
+function onFocus() {
+  // 键盘弹出 · 输入框滚入可视区
+  setTimeout(() => {
+    textareaEl.value?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, 350)
+}
+
+function onViewportResize() {
+  const vv = window.visualViewport
+  const el = rootEl.value
+  if (!vv || !el) return
+  const bottomGap = window.innerHeight - vv.height - vv.offsetTop
+  el.style.setProperty('--kb-offset', bottomGap > 50 ? `-${bottomGap}px` : '0px')
+}
 
 async function onSend() {
   const v = input.value.trim()
@@ -64,6 +80,10 @@ function scrollBottom() {
 }
 
 onMounted(async () => {
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', onViewportResize)
+    window.visualViewport.addEventListener('scroll', onViewportResize)
+  }
   if (props.autoLoad) {
     await loadExisting()
     await nextTick()
@@ -71,11 +91,22 @@ onMounted(async () => {
   }
 })
 
-defineExpose({ ask, reset: () => (input.value = '') })
+onBeforeUnmount(() => {
+  if (window.visualViewport) {
+    window.visualViewport.removeEventListener('resize', onViewportResize)
+    window.visualViewport.removeEventListener('scroll', onViewportResize)
+  }
+})
+
+defineExpose({
+  ask,
+  reset: () => (input.value = ''),
+  focus: () => textareaEl.value?.focus(),
+})
 </script>
 
 <template>
-  <div class="ap-root">
+  <div ref="rootEl" class="ap-root">
     <div ref="msgsBox" class="ap-messages">
       <div v-if="!messages.length" class="ap-empty">{{ emptyHint }}</div>
       <div
@@ -99,6 +130,7 @@ defineExpose({ ask, reset: () => (input.value = '') })
         :disabled="busy"
         @keydown="onKeydown"
         @input="autoGrow"
+        @focus="onFocus"
       ></textarea>
       <button type="submit" class="ap-send" :disabled="!input.trim() || busy">发送</button>
     </form>
@@ -107,11 +139,16 @@ defineExpose({ ask, reset: () => (input.value = '') })
 
 <style scoped>
 .ap-root {
+  --kb-offset: 0px;
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   background: var(--bg-elevated);
+}
+.ap-root .ap-inputbar {
+  transform: translateY(var(--kb-offset));
+  transition: transform 0.2s ease;
 }
 .ap-messages {
   flex: 1;

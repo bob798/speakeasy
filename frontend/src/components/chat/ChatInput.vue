@@ -5,7 +5,7 @@
  *   - 移动键盘 · focus 时 scrollIntoView({block:'end'}) 避免被键盘盖住
  *   - VisualViewport 监听键盘弹出 · 顶到可视底部
  */
-import { ref, watch, useTemplateRef, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, useTemplateRef } from 'vue'
 import MicButton from './MicButton.vue'
 
 const props = defineProps({
@@ -66,28 +66,8 @@ function onFocus() {
   }, 350) // 等键盘动画
 }
 
-// iOS VisualViewport 键盘事件 · 实时调整底部偏移
-function onViewportResize() {
-  const vv = window.visualViewport
-  if (!vv || !barRef.value) return
-  const bottomGap = window.innerHeight - vv.height - vv.offsetTop
-  // 键盘弹出时 bottomGap > 0，把输入栏往上推
-  barRef.value.style.transform = bottomGap > 50 ? `translateY(-${bottomGap}px)` : ''
-}
-
-onMounted(() => {
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', onViewportResize)
-    window.visualViewport.addEventListener('scroll', onViewportResize)
-  }
-})
-
-onBeforeUnmount(() => {
-  if (window.visualViewport) {
-    window.visualViewport.removeEventListener('resize', onViewportResize)
-    window.visualViewport.removeEventListener('scroll', onViewportResize)
-  }
-})
+// visualViewport 监听已提升到 main.js 全局（同步 --app-vh）
+// 这里只负责 focus 时滚动可视
 
 defineExpose({
   focus: () => textarea.value?.focus(),
@@ -139,10 +119,7 @@ defineExpose({
   backdrop-filter: saturate(180%) blur(16px);
   border-top: 1px solid var(--border);
   align-items: flex-end;
-  position: sticky;
-  bottom: 0;
-  transition: transform 0.2s var(--ease);
-  will-change: transform;
+  flex-shrink: 0;
   z-index: 5;
 }
 .text-col {

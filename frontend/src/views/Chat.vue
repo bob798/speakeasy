@@ -298,8 +298,10 @@ onDeactivated(() => {
 .chat-page {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  /* visualViewport JS 同步 · 键盘弹出时 --app-vh 变小，页面自动收缩 */
+  height: var(--app-vh, 100dvh);
   background: var(--bg);
+  overflow: hidden;
 }
 .topbar {
   display: flex;

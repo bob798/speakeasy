@@ -12,11 +12,13 @@ import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { usePracticeStore } from '@/stores/practice'
 import { usePractice } from '@/composables/usePractice'
 import { useRecorder } from '@/composables/useRecorder'
+import { useAuthFetch } from '@/composables/useAuthFetch'
 
 const emit = defineEmits(['rated', 'explain', 'toast'])
 
 const store = usePracticeStore()
 const { ttsBlob, rateCard, createCards } = usePractice()
+const { authFetch } = useAuthFetch()
 const recorder = useRecorder()
 
 const ttsAudio = ref(null)
@@ -50,25 +52,32 @@ watch(
     if (cardLoading.value) return
     cardLoading.value = true
     try {
-      const resp = await createCards({
-        items: [
-          {
-            text: segment.value.content,
-            context: {
-              segIdx: store.currentIdx,
-              from: segment.value.from,
-              to: segment.value.to,
-            },
-            segIdx: store.currentIdx,
-          },
-        ],
+      const segText = segment.value.content
+      const ctxStr = JSON.stringify({
+        segIdx: store.currentIdx,
+        from: segment.value.from,
+        to: segment.value.to,
       })
-      const cards = resp.cards || []
-      if (cards.length) {
-        store.upsertCard({ ...cards[0], segIdx: store.currentIdx })
+      // POST 返 {created, skipped}（无 cards 数组）· 随后 GET 拉回
+      await createCards({
+        items: [{ text: segText, context: ctxStr }],
+      })
+      // 再 GET 取新卡（text 匹配）
+      const resp = await authFetch('/practice/cards?limit=200')
+      if (resp.ok) {
+        const list = (await resp.json()).cards || []
+        // 找到 text 匹配的 card，建立 segIdx 映射
+        const match = list.find((c) => {
+          if (c.text === segText) return true
+          // normalize 兜底：后端可能做过 text normalize
+          return String(c.text).toLowerCase().trim() === segText.toLowerCase().trim()
+        })
+        if (match) {
+          store.upsertCard({ ...match, segIdx: store.currentIdx })
+        }
       }
     } catch (err) {
-      emit('toast', { text: '卡片创建失败', type: 'error' })
+      emit('toast', { text: '卡片创建失败: ' + (err.message || err), type: 'error' })
     } finally {
       cardLoading.value = false
     }
@@ -492,13 +501,17 @@ select {
 .rate {
   font-weight: 500;
 }
-.rate-again { background: rgba(198, 70, 58, 0.1); color: #c6463a; border-color: transparent; }
-.rate-hard  { background: rgba(214, 158, 46, 0.1); color: #b07a1a; border-color: transparent; }
-.rate-good  { background: rgba(61, 107, 79, 0.1); color: var(--accent); border-color: transparent; }
-.rate-easy  { background: rgba(46, 150, 64, 0.15); color: #2f7a40; border-color: transparent; }
+/* 评分按钮 · 饱和色彰显可用 · 不再像 disabled */
+.rate-again { background: #c6463a; color: #fff; border-color: #c6463a; }
+.rate-hard  { background: #d69e2e; color: #fff; border-color: #d69e2e; }
+.rate-good  { background: var(--accent); color: #fff; border-color: var(--accent); }
+.rate-easy  { background: #2f7a40; color: #fff; border-color: #2f7a40; }
 .rate:active {
-  filter: brightness(0.9);
+  filter: brightness(0.88);
   transform: scale(0.95);
+}
+.rate:disabled {
+  filter: grayscale(0.4) brightness(0.85);
 }
 .err {
   color: #c6463a;

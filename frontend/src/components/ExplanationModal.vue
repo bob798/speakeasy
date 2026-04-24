@@ -11,7 +11,7 @@
  *
  * @typedef {{ type: 'sentence'|'word', content: string, sentence?: string, context?: any }} ExplainTarget
  */
-import { ref, watch, computed, onBeforeUnmount } from 'vue'
+import { ref, watch, computed, nextTick, onBeforeUnmount, useTemplateRef } from 'vue'
 import { useSSE } from '@/composables/useSSE'
 import { useTTS } from '@/composables/useTTS'
 import { useAuthFetch } from '@/composables/useAuthFetch'
@@ -26,6 +26,9 @@ const props = defineProps({
 const { stream: sseStream, streaming, abort: abortStream } = useSSE()
 const { enqueue: ttsEnqueue, clear: ttsClear, playing: ttsPlaying } = useTTS()
 const { authFetch, authFetchJson } = useAuthFetch()
+
+const askPanelRef = useTemplateRef('askPanelRef')
+const ttsLoading = ref(false)
 
 const data = ref({
   phonetic: '',
@@ -170,15 +173,41 @@ watch(
   }
 )
 
-function playTarget() {
+async function playTarget() {
   if (!props.target?.content) return
+  ttsLoading.value = true
+  // 监听 playing → 变 true 后关掉 loading；或 1.5s 超时兜底
+  const t = setTimeout(() => (ttsLoading.value = false), 2000)
+  const stop = watch(ttsPlaying, (v) => {
+    if (v) {
+      ttsLoading.value = false
+      clearTimeout(t)
+      stop()
+    }
+  })
   ttsEnqueue(props.target.content, { manual: true })
 }
 
-function playNarration() {
+async function playNarration() {
   if (!data.value.narration) return
+  ttsLoading.value = true
+  const t = setTimeout(() => (ttsLoading.value = false), 2000)
+  const stop = watch(ttsPlaying, (v) => {
+    if (v) {
+      ttsLoading.value = false
+      clearTimeout(t)
+      stop()
+    }
+  })
   ttsEnqueue(data.value.narration, { manual: true })
 }
+
+watch(activeTab, async (tab) => {
+  if (tab === 'ask') {
+    await nextTick()
+    setTimeout(() => askPanelRef.value?.focus(), 100)
+  }
+})
 
 function close() {
   open.value = false
@@ -207,13 +236,14 @@ onBeforeUnmount(() => {
           </div>
           <button
             class="play-btn"
-            :class="{ playing: ttsPlaying }"
+            :class="{ playing: ttsPlaying, loading: ttsLoading }"
             @click="playTarget"
-            :disabled="!target?.content"
+            :disabled="!target?.content || ttsLoading"
             aria-label="朗读目标"
             title="朗读"
           >
-            {{ ttsPlaying ? '⏸' : '🔊' }}
+            <span v-if="ttsLoading" class="spin">⏳</span>
+            <span v-else>{{ ttsPlaying ? '⏸' : '🔊' }}</span>
           </button>
           <button class="close" @click="close" aria-label="关闭">×</button>
         </header>
@@ -285,14 +315,19 @@ onBeforeUnmount(() => {
         <div v-show="activeTab === 'ask'" class="ask-box">
           <AskPanel
             v-if="target?.content"
+            ref="askPanelRef"
             scope="practice_explain"
             ref-type="explanation"
             :ref-id="refId()"
             :context-payload="{
-              target_type: target?.type,
-              target_content: target?.content,
-              sentence: target?.sentence,
-              meaning: data.meaning,
+              kind: target?.type,
+              text: target?.content,
+              context: target?.sentence || '',
+              explanation: {
+                meaning: data.meaning,
+                grammar: data.grammar,
+                phrases: data.phrases,
+              },
             }"
             placeholder="还想问点什么..."
             empty-hint="有疑惑就问 Alex"
@@ -378,6 +413,16 @@ onBeforeUnmount(() => {
 }
 .play-btn.playing {
   animation: play-pulse 1.4s ease-in-out infinite;
+}
+.play-btn.loading {
+  opacity: 0.75;
+}
+.spin {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 @keyframes play-pulse {
   0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }

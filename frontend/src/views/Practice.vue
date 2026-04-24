@@ -37,10 +37,11 @@ async function onImported(data) {
   if (!data.id && data.source_id) data.id = data.source_id
   store.loadSource(data)
 
+  // Bug fix: CardItem.context 必须是 str，之前发 dict 导致 422
   const segs = (data.segments || []).map((seg, i) => ({
     text: seg.content,
-    context: { segIdx: i, from: seg.from, to: seg.to },
-    segIdx: i,
+    context: JSON.stringify({ segIdx: i, from: seg.from, to: seg.to }),
+    segIdx: i,  // 前端本地跟踪用，后端 pydantic 会忽略 extras
   }))
 
   try {
@@ -52,12 +53,12 @@ async function onImported(data) {
       ? ((await existingResp.json()).cards || [])
       : []
 
-    // segIdx 映射：从 card.context_json 读出 segIdx；没有就按 text 匹配
+    // segIdx 映射：从 card.context 读出 segIdx；没有就按 text 匹配
     const cardBySegIdx = {}
     for (const c of existingCards) {
       let segIdx = null
       try {
-        const ctx = c.context_json ? JSON.parse(c.context_json) : {}
+        const ctx = c.context ? JSON.parse(c.context) : {}
         if (typeof ctx.segIdx === 'number') segIdx = ctx.segIdx
       } catch {
         /* ignore */
@@ -74,13 +75,30 @@ async function onImported(data) {
     // 判断是否需要补创建：缺哪些 segIdx
     const missing = segs.filter((_, i) => !cardBySegIdx[i])
     if (missing.length) {
-      const resp = await createCards({ items: missing })
-      const newCards = resp.cards || resp || []
-      newCards.forEach((c) => {
-        // 按 text 反查 segIdx
-        const i = segs.findIndex((s) => s.text === c.text)
-        if (i >= 0) cardBySegIdx[i] = { ...c, segIdx: i }
+      await createCards({ items: missing })
+      // POST 只返 {created, skipped}，需要重新 GET 拉完整 cards 列表
+      const refetchResp = await fetch('/practice/cards?limit=200', {
+        headers: getAuthHeaders(),
       })
+      const refetched = refetchResp.ok
+        ? ((await refetchResp.json()).cards || [])
+        : []
+      for (const c of refetched) {
+        if (cardBySegIdx[segs.findIndex((s) => s.text === c.text)]) continue
+        let segIdx = null
+        try {
+          const ctx = c.context ? JSON.parse(c.context) : {}
+          if (typeof ctx.segIdx === 'number') segIdx = ctx.segIdx
+        } catch {
+          /* ignore */
+        }
+        if (segIdx == null) {
+          segIdx = segs.findIndex((s) => s.text === c.text)
+        }
+        if (segIdx >= 0 && segIdx < segs.length) {
+          cardBySegIdx[segIdx] = { ...c, segIdx }
+        }
+      }
     }
 
     store.cards = Object.values(cardBySegIdx)
