@@ -25,7 +25,7 @@ const historyOpen = ref(false)
 async function onImport(useCookies = false) {
   if (submitting.value) return
   submitting.value = true
-  status.value = '提取中...'
+  status.value = '提取中... (B站可能要 10-30 秒)'
   statusError.value = false
   showCookiesRetry.value = false
 
@@ -51,14 +51,31 @@ async function onImport(useCookies = false) {
     }
 
     const data = await importSubtitles(payload)
-    if (data.fallback === 'cookies') {
-      showCookiesRetry.value = true
-      status.value = '需要登录态：请粘贴浏览器 cookies 后重试'
+
+    // 后端 error 字段处理（无字幕、Whisper 失败、IP 被封等）
+    if (data.error) {
+      const msg = String(data.error)
+      // B 站登录态保护错误兜底（cookies 重试）
+      if (
+        /412|登录|cookie/i.test(msg) ||
+        msg.includes('登录态')
+      ) {
+        showCookiesRetry.value = true
+        status.value = '需要登录态：请粘贴浏览器 cookies 后重试'
+      } else {
+        status.value = msg
+      }
+      statusError.value = true
+      return  // ← 关键：不 emit imported，不让父级切到二栏
+    }
+
+    if (!data.segments || !data.segments.length) {
+      status.value = '没有抓到任何字幕段，可手动粘贴文本'
       statusError.value = true
       return
     }
 
-    status.value = `已导入 ${data.segments?.length || 0} 段字幕`
+    status.value = `✅ 已导入 ${data.segments.length} 段字幕`
     emit('imported', data)
   } catch (err) {
     status.value = err.message || '提取失败'

@@ -25,7 +25,10 @@ const explainOpen = ref(false)
 const explainTarget = ref(null)
 const toast = ref({ show: false, text: '', type: 'info' })
 
-const hasSource = computed(() => !!store.currentSource)
+// 必须有 source 且至少有一段；空段时仍展示导入页面，避免卡死
+const hasSource = computed(
+  () => !!store.currentSource && (store.segments?.length || 0) > 0
+)
 
 function showToast(text, type = 'info', duration = 2500) {
   toast.value = { show: true, text, type }
@@ -163,7 +166,15 @@ onDeactivated(() => {
     <header class="topbar">
       <RouterLink class="back" to="/">← 返回</RouterLink>
       <div class="title">发音练习</div>
-      <button v-if="hasSource" class="new-btn" @click="onNewImport">+ 新导入</button>
+      <button
+        v-if="hasSource"
+        class="new-btn"
+        @click="onNewImport"
+        title="重新导入字幕"
+      >
+        🔄 重新导入
+      </button>
+      <span v-else class="placeholder" />
     </header>
 
     <div v-if="!hasSource" class="import-wrap">
@@ -225,11 +236,21 @@ onDeactivated(() => {
   font-size: 14px;
 }
 .new-btn {
-  padding: var(--space-1) var(--space-3);
+  padding: 6px var(--space-3);
   border-radius: var(--radius-sm);
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--accent);
+  color: var(--text-inverse);
   font-size: 13px;
+  font-weight: 500;
+  transition: background var(--duration) var(--ease);
+  touch-action: manipulation;
+}
+.new-btn:active {
+  background: var(--accent-hover);
+  transform: scale(0.96);
+}
+.placeholder {
+  width: 80px;  /* 占位让 title 居中 */
 }
 .import-wrap {
   max-width: 560px;
