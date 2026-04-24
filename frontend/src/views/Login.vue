@@ -1,13 +1,17 @@
 <script setup>
 // Login · 次战场
-// Phase 0.5 (D5) · 冒烟里程碑 gate
-// Phase 2.5 (D12.5) · polish（401 全链路 + 记忆重定向 e2e）
+// Phase 0.5 冒烟里程碑 gate + Phase 2.5 polish（401 全链路 + 记忆重定向 e2e）
 //
-// 当前占位：Phase 1 交付 useAuthFetch + authStore 后，此处接入实现
+// Phase 1 已接入：useAuthFetch · useAuthStore
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { useAuthFetch } from '@/composables/useAuthFetch'
 
 const router = useRouter()
+const authStore = useAuthStore()
+const { authFetchJson } = useAuthFetch()
+
 const email = ref('')
 const password = ref('')
 const submitting = ref(false)
@@ -21,29 +25,17 @@ async function onLogin() {
   submitting.value = true
   error.value = ''
   try {
-    // 占位：直接调后端 /auth/login（Phase 1 会换成 useAuthFetch）
-    const resp = await fetch('/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.value, password: password.value }),
+    const data = await authFetchJson('/auth/login', {
+      email: email.value,
+      password: password.value,
     })
-    if (!resp.ok) {
-      const data = await resp.json().catch(() => ({}))
-      error.value = data.detail || `登录失败 (${resp.status})`
-      return
-    }
-    const data = await resp.json()
-    // v2: 命名空间（Pass 3 B4）
-    localStorage.setItem('v2:auth.token', data.token)
-    localStorage.setItem('v2:auth.user', JSON.stringify(data.user || {}))
-    // 兼容老版同步（灰度期 /legacy/ 需要）
-    localStorage.setItem('token', data.token)
+    authStore.setAuth(data.token, data.user)
 
     const redirect = localStorage.getItem('v2:__redirect_after_login') || '/'
     localStorage.removeItem('v2:__redirect_after_login')
     router.push(redirect)
   } catch (err) {
-    error.value = `网络错误: ${err.message}`
+    error.value = err.message || '登录失败'
   } finally {
     submitting.value = false
   }
@@ -67,7 +59,7 @@ async function onLogin() {
       </button>
       <p v-if="error" class="error">{{ error }}</p>
     </form>
-    <p class="note">Phase 0.5 冒烟里程碑 · Phase 2.5 polish 后补注册</p>
+    <p class="note">Phase 0.5 冒烟 · Phase 2.5 polish 后补注册</p>
   </main>
 </template>
 
@@ -99,7 +91,7 @@ input {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
-  font-size: 16px; /* 防 iOS 自动缩放 */
+  font-size: 16px;
 }
 input:focus {
   outline: 2px solid var(--accent);
