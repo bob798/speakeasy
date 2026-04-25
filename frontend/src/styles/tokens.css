@@ -1,0 +1,60 @@
+/**
+ * 设计 token · 从 static/index.html :root 迁出
+ * Phase 1.7 交付物
+ */
+:root {
+  /* accent 系 */
+  --accent: #3d6b4f;
+  --accent-hover: #335e44;
+  --accent-soft: #eaf3ee;
+
+  /* 背景层 */
+  --bg: #f7f7f5;
+  --bg-elevated: #ffffff;
+  --bg-overlay: rgba(255, 255, 255, 0.92);
+
+  /* 文本层 */
+  --text-1: #1a1d1f;
+  --text-2: #4a5159;
+  --text-3: #8a9199;
+  --text-inverse: #ffffff;
+
+  /* 边框 */
+  --border: #e3e6e8;
+  --border-strong: #c5c9cd;
+
+  /* 半径 · 间距 */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* 字体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro SC', 'PingFang SC',
+    'Helvetica Neue', sans-serif;
+
+  /* 动效 */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration: 180ms;
+
+  /* z-index 层 */
+  --z-drawer: 80;
+  --z-modal: 90;
+  --z-toast: 100;
+
+  /* safe-area（iOS 刘海/底部） */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* 暗色模式占位（V0.8 不启用，保留钩子） */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* 暂留 light token，V0.9 再拆暗色 */
+  }
+}

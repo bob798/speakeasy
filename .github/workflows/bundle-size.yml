@@ -1,0 +1,53 @@
+name: Bundle Size Budget
+
+# P0-T3: 前端 bundle 300KB gzip 硬预算闸门
+# 触发：任何涉及 frontend/ 的 PR 或 push
+# 失败即阻止合入，避免前端体积失控
+
+on:
+  push:
+    branches: [main, 'feat/**']
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/bundle-size.yml'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/bundle-size.yml'
+
+jobs:
+  size:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.10.0'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Size-limit check (hard 300KB gzip budget)
+        run: npx size-limit
+
+      - name: Report bundle analysis
+        if: always()
+        run: |
+          echo "## 📦 Bundle Size Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "预算: JS 200KB gzip + CSS 100KB gzip = 300KB 总上限" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -lh dist/assets/*.js dist/assets/*.css 2>/dev/null | awk '{print $9, $5}' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

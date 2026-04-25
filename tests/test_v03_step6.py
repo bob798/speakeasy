@@ -28,18 +28,19 @@ def client():
 
 # ── index.html 包含引导弹窗结构 ──────────────────────────────────────────────
 
+# V0.8 迁到 /legacy/ (Pass 3 B3) · SPA 灰度期保留老版路径做回滚
 def test_index_has_assessment_banner(client):
-    r = client.get("/")
+    r = client.get("/legacy/")
     assert "assessment-banner" in r.text
 
 
 def test_index_assessment_banner_has_dismiss(client):
-    r = client.get("/")
+    r = client.get("/legacy/")
     assert "dismissAssessmentBanner" in r.text
 
 
 def test_index_assessment_links_to_memory(client):
-    r = client.get("/")
+    r = client.get("/legacy/")
     # The banner has a link to /memory
     assert "/memory" in r.text
 
@@ -47,12 +48,12 @@ def test_index_assessment_links_to_memory(client):
 # ── memory.html 包含重新评估按钮 ─────────────────────────────────────────────
 
 def test_memory_has_reassess_button(client):
-    r = client.get("/memory")
+    r = client.get("/legacy/memory")
     assert "reassess-btn" in r.text or "重新评估" in r.text
 
 
 def test_memory_has_open_assessment(client):
-    r = client.get("/memory")
+    r = client.get("/legacy/memory")
     assert "openAssessment" in r.text
 
 

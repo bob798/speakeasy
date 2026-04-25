@@ -117,13 +117,14 @@ def test_delete_card_wrong_user(client):
 # ── /memory page route ────────────────────────────────────────────────────────
 
 def test_memory_page_served(client):
-    r = client.get("/memory")
+    # V0.8 迁到 /legacy/memory（SPA 灰度期保留老版，Pass 3 B3）
+    r = client.get("/legacy/memory")
     assert r.status_code == 200
     assert "text/html" in r.headers.get("content-type", "")
 
 
 def test_memory_page_has_tabs(client):
-    r = client.get("/memory")
+    r = client.get("/legacy/memory")
     assert "语言档案" in r.text
     assert "Alex 记得的事" in r.text
     assert "语法强化" in r.text

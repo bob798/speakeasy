@@ -1,0 +1,9 @@
+/Volumes/data/workspace/speakeasy/tests//test_v07_followup.py
+/Volumes/data/workspace/speakeasy/tests//test_v07_followup2.py
+/Volumes/data/workspace/speakeasy/tests//test_v07_step10.py
+/Volumes/data/workspace/speakeasy/tests//test_v07_step4.py
+/Volumes/data/workspace/speakeasy/tests//test_v07_step5.py
+/Volumes/data/workspace/speakeasy/tests//test_v07_step6.py
+/Volumes/data/workspace/speakeasy/tests//test_v07_step7.py
+/Volumes/data/workspace/speakeasy/tests//test_v07_step8.py
+/Volumes/data/workspace/speakeasy/tests//test_v07_step9.py

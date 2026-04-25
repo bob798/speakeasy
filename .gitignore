@@ -1,4 +1,5 @@
 .env
+.jwt_secret.local
 __pycache__/
 *.pyc
 *.pyo
