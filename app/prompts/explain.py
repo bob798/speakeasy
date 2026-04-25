@@ -5,11 +5,28 @@ Return a single JSON object (no markdown fences, no commentary) with EXACTLY the
 - "meaning": 中文意译，1-2 句说清楚这句话在说什么
 - "grammar": 中文解释这句话的语法结构（主句/从句/时态/语态/重要连接词）。用要点罗列
 - "phrases": 数组。这句话里值得学的词组/固定搭配，每项包含 "phrase" 和 "note"（中文解释）
-- "liaison": 数组。句中典型的连读/弱读/失爆/同化点。每项 {{"chunk": "...", "ipa": "/.../", "tip": "..."}}
-    · chunk 是连读片段的英文原文（2-4 个单词），必须取自这句话
-    · ipa 是连读之后的实际发音，带斜线
-    · tip 用简洁中文说明连读规则（不超过 25 字）
-    · 如果这句话没有明显连读点，返回空数组
+- "liaison": 数组。**穷尽**句子里所有连读/弱读/失爆/同化/T-flap 点，宁多不少。每项 {{"chunk": "...", "ipa": "/.../", "tip": "..."}}
+    必查类型（每类只要句子里有就要列出来，**不要只挑最显眼的几个**）：
+    1) **辅音+元音 linking**：上一词尾辅音 + 下一词首元音直接相连
+       例：came in → /keɪmˈɪn/、wake up → /weɪkˈʌp/、what about → /wəˈtəbaʊt/
+    2) **辅音+辅音同化/失爆**：相邻同部位或近部位辅音
+       例：what sales → /wɒtˈseɪlz/（/t/ 失爆贴 /s/）、good time → /gʊtˈtaɪm/、let me → /lɛmi/
+    3) **/t/ flap 或 /t/ → /ʔ/**（美式更常见，英式中有 glottal）
+       例：get it → /gɛɾɪt/、a lot of → /əlɒtəv/
+    4) **辅音串简化**：next time、asked、texts 等
+       例：next time → /nɛksˈtaɪm/（/t/ 失爆）
+    5) **弱读虚词**（任何句子里 to/of/and/can/for/her/him/them/that 出现就要列）
+       例：of the → /əvðə/、and I → /ən aɪ/、can you → /kən jə/
+    6) **同化**：don't you → doncha、what you → whacha、got you → gotcha
+    7) **缩略**：he is → he's、going to → gonna、want to → wanna
+    8) **元音+元音用 /j w r/ 衔接**：see it → /siːjɪt/、go on → /goʊwɒn/、for example → /fərɪɡˈzæmpl/
+
+    硬性要求：
+    · chunk 必须是这句话里**连续相邻的 2-4 个单词原文**（大小写按原句）
+    · ipa 是连读后**实际**发音，必须带斜线 //
+    · tip 用简洁中文说明属于哪一类规则（不超过 30 字）
+    · **句子超过 8 个单词就至少列 2 条**；超 15 个单词至少 3 条
+    · 只有句子极短（≤4 单词）且确实没有连读时才返回空数组
 - "current_level_points": 数组。与学习者当前 CEFR 级别({cefr_level})相关的语言点，每项是一个中文短句
 - "next_level_points": 数组。属于下一个 CEFR 级别的语言点（学习者再进一步就该掌握的），每项是一个中文短句。如果没有明显的下一级点，返回空数组
 - "narration": 一段 2-4 句的讲解稿（老师口吻，自然口语）。用于 TTS 朗读，不要列表、不要标题、不要 markdown/括号/引号说明

@@ -26,7 +26,7 @@ MAX_TEXT_LEN = 2000
 _DEFAULT_LEVEL = "B1"
 
 # Prompt 输出 schema 版本；变更 schema（如新增字段）或语言规则时加 1，使旧 cache 自动失效
-_SCHEMA_VERSION = 4
+_SCHEMA_VERSION = 5     # bump: 强化 liaison 穷尽枚举（"what sales" 类被遗漏）
 
 
 # ── Helpers ──────────────────────────────────────────────────
