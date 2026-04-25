@@ -2,9 +2,15 @@ venv/
 __pycache__/
 *.pyc
 .env
+.jwt_secret.local
 .claude/
 .omc/
 .git/
+
+# 前端：node_modules 不进，dist 由 multi-stage build 产生
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
 *.db
 *.db-shm
 *.db-wal
