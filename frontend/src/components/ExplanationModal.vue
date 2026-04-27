@@ -14,7 +14,7 @@
 import { ref, watch, computed, nextTick, onBeforeUnmount, useTemplateRef } from 'vue'
 import { useSSE } from '@/composables/useSSE'
 import { useTTS } from '@/composables/useTTS'
-import { useAuthFetch } from '@/composables/useAuthFetch'
+import { useAuthFetch, getErrorMessage } from '@/composables/useAuthFetch'
 import { API } from '@/config'
 import AskPanel from './AskPanel.vue'
 
@@ -111,7 +111,7 @@ async function fetchWord() {
       narration: exp.narration || '',
     })
   } catch (err) {
-    error.value = err.message || '解读失败'
+    error.value = getErrorMessage(err, '解读失败')
   } finally {
     loading.value = false
   }
@@ -150,12 +150,12 @@ async function fetchSentence() {
           }
         },
         onError: (err) => {
-          error.value = err.message || '解读失败'
+          error.value = getErrorMessage(err, '解读失败')
         },
       }
     )
   } catch (err) {
-    error.value = err.message || '解读失败'
+    error.value = getErrorMessage(err, '解读失败')
   } finally {
     loading.value = false
   }

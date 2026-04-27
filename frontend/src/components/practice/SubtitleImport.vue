@@ -7,6 +7,7 @@
  */
 import { ref, onMounted } from 'vue'
 import { usePractice } from '@/composables/usePractice'
+import { getErrorMessage } from '@/composables/useAuthFetch'
 
 const emit = defineEmits(['imported'])
 
@@ -75,8 +76,11 @@ async function onImport(useCookies = false) {
     status.value = `✅ 已导入 ${data.segments.length} 段字幕`
     emit('imported', data)
   } catch (err) {
-    status.value = err.message || '提取失败'
-    statusError.value = true
+    const msg = getErrorMessage(err, '提取失败')
+    if (msg) {
+      status.value = msg
+      statusError.value = true
+    }
   } finally {
     submitting.value = false
   }
@@ -100,8 +104,11 @@ async function pickHistory(sourceId) {
     src.id = sourceId  // 确保 id 存在，PracticePlayer cardBySegIdx 用
     emit('imported', src)
   } catch (err) {
-    status.value = err.message
-    statusError.value = true
+    const msg = getErrorMessage(err)
+    if (msg) {
+      status.value = msg
+      statusError.value = true
+    }
   }
 }
 

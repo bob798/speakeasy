@@ -4,7 +4,7 @@
  * 迁移自 static/memory.html · profile + facts + cards 三 Tab
  */
 import { ref, onMounted } from 'vue'
-import { useAuthFetch } from '@/composables/useAuthFetch'
+import { useAuthFetch, getErrorMessage } from '@/composables/useAuthFetch'
 import { API } from '@/config'
 
 const { authFetch, authFetchJson } = useAuthFetch()
@@ -24,7 +24,7 @@ async function loadProfile() {
     if (!resp.ok) throw new Error('加载失败')
     profile.value = await resp.json()
   } catch (err) {
-    toast.value = err.message
+    toast.value = getErrorMessage(err)
   }
 }
 
@@ -34,7 +34,7 @@ async function saveProfile() {
     toast.value = '已保存'
     setTimeout(() => (toast.value = ''), 2000)
   } catch (err) {
-    toast.value = err.message
+    toast.value = getErrorMessage(err)
   }
 }
 
@@ -51,7 +51,7 @@ async function loadFacts(offset = 0) {
     factsOffset.value = facts.value.length
     factsTotal.value = data.total || 0
   } catch (err) {
-    toast.value = err.message
+    toast.value = getErrorMessage(err)
   }
 }
 
@@ -61,7 +61,7 @@ async function deleteFact(id) {
     if (!resp.ok) throw new Error('删除失败')
     facts.value = facts.value.filter((f) => f.id !== id)
   } catch (err) {
-    toast.value = err.message
+    toast.value = getErrorMessage(err)
   }
 }
 
@@ -73,7 +73,7 @@ async function loadCards() {
     const data = await resp.json()
     cards.value = data.cards || data.items || []
   } catch (err) {
-    toast.value = err.message
+    toast.value = getErrorMessage(err)
   } finally {
     cardsLoading.value = false
   }
@@ -85,7 +85,7 @@ async function deleteCard(id) {
     if (!resp.ok) throw new Error('删除失败')
     cards.value = cards.value.filter((c) => c.id !== id)
   } catch (err) {
-    toast.value = err.message
+    toast.value = getErrorMessage(err)
   }
 }
 

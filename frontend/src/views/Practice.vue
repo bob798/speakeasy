@@ -11,6 +11,7 @@
 import { ref, computed, onActivated, onDeactivated } from 'vue'
 import { usePracticeStore } from '@/stores/practice'
 import { usePractice } from '@/composables/usePractice'
+import { getErrorMessage } from '@/composables/useAuthFetch'
 import SubtitleImport from '@/components/practice/SubtitleImport.vue'
 import SentenceList from '@/components/practice/SentenceList.vue'
 import PracticePlayer from '@/components/practice/PracticePlayer.vue'
@@ -107,7 +108,8 @@ async function onImported(data) {
     store.cards = Object.values(cardBySegIdx)
     showToast(`已导入 ${segs.length} 段`, 'info')
   } catch (err) {
-    showToast(err.message || '卡片初始化失败', 'error')
+    const msg = getErrorMessage(err, '卡片初始化失败')
+    if (msg) showToast(msg, 'error')
   }
 }
 

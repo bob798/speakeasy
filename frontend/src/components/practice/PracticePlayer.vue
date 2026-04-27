@@ -12,7 +12,7 @@ import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { usePracticeStore } from '@/stores/practice'
 import { usePractice } from '@/composables/usePractice'
 import { useRecorder } from '@/composables/useRecorder'
-import { useAuthFetch } from '@/composables/useAuthFetch'
+import { useAuthFetch, getErrorMessage } from '@/composables/useAuthFetch'
 
 const emit = defineEmits(['rated', 'explain', 'toast'])
 
@@ -77,7 +77,8 @@ watch(
         }
       }
     } catch (err) {
-      emit('toast', { text: '卡片创建失败: ' + (err.message || err), type: 'error' })
+      const msg = getErrorMessage(err)
+      if (msg) emit('toast', { text: '卡片创建失败: ' + msg, type: 'error' })
     } finally {
       cardLoading.value = false
     }
@@ -100,7 +101,8 @@ async function playTTS() {
     await ttsAudio.value.play()
     emit('toast', { text: '▶ 播放中', type: 'info', duration: 1000 })
   } catch (err) {
-    emit('toast', { text: err.message || 'TTS 失败', type: 'error' })
+    const msg = getErrorMessage(err, 'TTS 失败')
+    if (msg) emit('toast', { text: msg, type: 'error' })
   } finally {
     ttsLoading.value = false
   }
@@ -139,7 +141,8 @@ async function rate(level) {
       setTimeout(() => store.setCurrentIdx(store.currentIdx + 1), 400)
     }
   } catch (err) {
-    emit('toast', { text: err.message || '评分失败', type: 'error' })
+    const msg = getErrorMessage(err, '评分失败')
+    if (msg) emit('toast', { text: msg, type: 'error' })
   } finally {
     ratingBusy.value = false
   }

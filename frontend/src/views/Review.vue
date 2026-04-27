@@ -5,7 +5,7 @@
  */
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { useAuthFetch } from '@/composables/useAuthFetch'
+import { useAuthFetch, getErrorMessage } from '@/composables/useAuthFetch'
 import { API } from '@/config'
 
 const route = useRoute()
@@ -30,7 +30,7 @@ async function load() {
     if (!resp.ok) throw new Error('加载失败')
     review.value = await resp.json()
   } catch (err) {
-    error.value = err.message
+    error.value = getErrorMessage(err)
   } finally {
     loading.value = false
   }
@@ -43,7 +43,7 @@ async function generateSummary() {
     await authFetchJson(API.CHAT_SUMMARY, { session_id: sessionId.value })
     await load()
   } catch (err) {
-    error.value = err.message
+    error.value = getErrorMessage(err)
   } finally {
     summarizing.value = false
   }
@@ -54,7 +54,7 @@ async function onRate(rating) {
     await authFetchJson(`${API.REVIEW}/${sessionId.value}/rate`, { rating })
     rated.value = true
   } catch (err) {
-    error.value = err.message
+    error.value = getErrorMessage(err)
   }
 }
 

@@ -10,7 +10,7 @@
  *   Tab 2 翻牌复习：随机抽未掌握的条目，show 源，tap 翻牌，打分
  */
 import { ref, computed, onMounted } from 'vue'
-import { useAuthFetch } from '@/composables/useAuthFetch'
+import { useAuthFetch, getErrorMessage } from '@/composables/useAuthFetch'
 import { useTTS } from '@/composables/useTTS'
 import { API } from '@/config'
 
@@ -41,7 +41,7 @@ async function onTranslate() {
     })
     translated.value = data.translated_text || ''
   } catch (err) {
-    error.value = err.message || '翻译失败'
+    error.value = getErrorMessage(err, '翻译失败')
   } finally {
     translating.value = false
   }
@@ -58,8 +58,9 @@ async function onSave() {
     await loadVocab()
     _toast('⭐ 已加入生词本', 'success')
   } catch (err) {
-    error.value = err.message
-    _toast(err.message, 'error')
+    const msg = getErrorMessage(err)
+    error.value = msg
+    if (msg) _toast(msg, 'error')
   }
 }
 
@@ -133,7 +134,8 @@ async function onDeleteVocab(id) {
     _saveMastered()
     _toast('已删除', 'info')
   } catch (err) {
-    _toast(err.message, 'error')
+    const msg = getErrorMessage(err)
+    if (msg) _toast(msg, 'error')
   }
 }
 

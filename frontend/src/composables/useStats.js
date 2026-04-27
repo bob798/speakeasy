@@ -4,7 +4,7 @@
  */
 
 import { ref } from 'vue'
-import { useAuthFetch } from './useAuthFetch'
+import { useAuthFetch, getErrorMessage } from './useAuthFetch'
 import { API } from '@/config'
 
 export function useStats() {
@@ -21,7 +21,7 @@ export function useStats() {
       if (!resp.ok) throw new Error('加载失败')
       stats.value = await resp.json()
     } catch (err) {
-      error.value = err.message
+      error.value = getErrorMessage(err)
     } finally {
       loading.value = false
     }

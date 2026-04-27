@@ -15,6 +15,30 @@
 import { useAuthStore } from '@/stores/auth'
 
 /**
+ * 401 静默错误。logout + 跳转 /login 已由 store 触发，调用方不需要再 toast。
+ * silent=true 让 getErrorMessage() 返回空串，避免误导用户以为是"服务端报错"。
+ */
+export class AuthExpiredError extends Error {
+  constructor() {
+    super('未登录或登录已过期')
+    this.name = 'AuthExpiredError'
+    this.silent = true
+  }
+}
+
+/**
+ * 统一从 catch 到的 err 取展示文本。401 等静默错误返回空串。
+ * @param {unknown} err
+ * @param {string} [fallback]
+ * @returns {string}
+ */
+export function getErrorMessage(err, fallback = '') {
+  if (err && typeof err === 'object' && /** @type {any} */ (err).silent) return ''
+  const msg = err && typeof err === 'object' ? /** @type {any} */ (err).message : ''
+  return msg || fallback
+}
+
+/**
  * @typedef {Object} AuthFetchOptions
  * @property {string} [method]
  * @property {Record<string, string>} [headers]
@@ -42,7 +66,7 @@ export function useAuthFetch() {
       const currentPath =
         typeof window !== 'undefined' ? window.location.pathname + window.location.search : null
       authStore.logout({ redirectTo: currentPath })
-      throw new Error('未登录或登录已过期')
+      throw new AuthExpiredError()
     }
     return resp
   }

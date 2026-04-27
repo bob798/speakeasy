@@ -19,7 +19,7 @@
  */
 
 import { ref } from 'vue'
-import { useAuthFetch } from './useAuthFetch'
+import { useAuthFetch, getErrorMessage } from './useAuthFetch'
 import { API } from '@/config'
 
 /**
@@ -117,7 +117,7 @@ export function useAskThread(opts) {
     } catch (err) {
       // 回滚 pending
       messages.value.splice(pendingIdx, 1)
-      error.value = err.message || '追问失败'
+      error.value = getErrorMessage(err, '追问失败')
     } finally {
       busy.value = false
     }

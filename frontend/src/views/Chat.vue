@@ -16,7 +16,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useChatStore } from '@/stores/chat'
 import { useChat } from '@/composables/useChat'
 import { useTTS } from '@/composables/useTTS'
-import { useAuthFetch } from '@/composables/useAuthFetch'
+import { useAuthFetch, getErrorMessage } from '@/composables/useAuthFetch'
 import { API } from '@/config'
 import ChatBubble from '@/components/chat/ChatBubble.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
@@ -121,7 +121,8 @@ async function onSelectSession(sid) {
     await nextTick()
     scrollToBottom()
   } catch (err) {
-    showToast(err.message, 'error')
+    const msg = getErrorMessage(err)
+    if (msg) showToast(msg, 'error')
   }
 }
 
