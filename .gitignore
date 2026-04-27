@@ -23,3 +23,6 @@ static/audio_cache/
 .omc/notepad.md
 .omc/project-memory.json
 tmux-client-*.log
+
+# BBC EAW 原始 HTML（29MB，可由 scripts/bbc_eaw_fetch.py 重抓）
+data/bbc_eaw/raw/

@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import create_tables
+from app.services.bbc_eaw_seeder import seed_at_startup
 from app.routers import chat, stt, tts, history, debug, review
 from app.routers.settings import router as settings_router
 from app.routers.memory import router as memory_router
@@ -57,6 +58,7 @@ API_PREFIXES = (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_tables()
+    seed_at_startup()  # idempotent · 失败仅 warn 不挂启动
     yield
 
 

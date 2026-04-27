@@ -27,3 +27,6 @@ docker-compose*.yml
 .github/
 test_report.txt
 speakeasy_memory_research_summary.md
+
+# BBC EAW 数据集：原始 HTML 留本地（29 MB），parsed JSON 进镜像（576 KB）由 startup seed 入库
+data/bbc_eaw/raw/

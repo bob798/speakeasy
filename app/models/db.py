@@ -217,6 +217,31 @@ class AskMessage(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+# ── 公共素材：BBC Learning English / English at Work ────────
+# 67 集，每集一行；不绑 user_id（全用户共享）
+# 灌库脚本：scripts/bbc_eaw_seed.py（数据来源 data/bbc_eaw/parsed/）
+
+class BbcEawEpisode(Base):
+    __tablename__ = "bbc_eaw_episodes"
+
+    id                 = Column(Integer, primary_key=True, autoincrement=True)
+    slug               = Column(String, nullable=False, unique=True)   # 01-the-interview
+    url                = Column(String, nullable=False)
+    title              = Column(String, nullable=True)                 # The Interview
+    episode_id         = Column(String, nullable=True, index=True)     # 160706
+    air_date           = Column(String, nullable=True)                 # 06 Jul 2016
+    topic              = Column(String, nullable=True, index=True)     # Language for interviews
+    description        = Column(String, nullable=False, default="")
+    phrases_json       = Column(String, nullable=False, default="[]")  # JSON: ["..."]
+    listening_question = Column(String, nullable=True)
+    listening_answer   = Column(String, nullable=True)
+    transcript_json    = Column(String, nullable=False, default="[]")  # JSON: [{speaker,text}]
+    transcript_turns   = Column(Integer, nullable=False, default=0)
+    source_html_path   = Column(String, nullable=True)                 # data/bbc_eaw/raw/<slug>.html
+    created_at         = Column(DateTime, default=datetime.utcnow)
+    updated_at         = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 # Sync engine for ORM operations (tests, memory_service, review_service)
 import os as _os
 _DB_PATH = _os.environ.get("SPEAKEASY_DB_PATH", "./speakeasy.db")

@@ -1,0 +1,672 @@
+[
+  {
+    "slug": "01-the-interview",
+    "title": "The Interview",
+    "episode_id": "160706",
+    "air_date": "06 Jul 2016",
+    "topic": "Language for interviews",
+    "phrases_count": 3,
+    "transcript_turns": 36,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/01-the-interview"
+  },
+  {
+    "slug": "02-the-interruption",
+    "title": "The Interruption",
+    "episode_id": "160713",
+    "air_date": "13 Jul 2016",
+    "topic": "Structuring answers",
+    "phrases_count": 3,
+    "transcript_turns": 28,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/02-the-interruption"
+  },
+  {
+    "slug": "03-the-crisis",
+    "title": "The Crisis",
+    "episode_id": "160720",
+    "air_date": "20 Jul 2016",
+    "topic": "Language for making suggestions",
+    "phrases_count": 6,
+    "transcript_turns": 45,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/03-the-crisis"
+  },
+  {
+    "slug": "04-doing-lunch",
+    "title": "Doing lunch",
+    "episode_id": "160727",
+    "air_date": "27 Jul 2016",
+    "topic": "Introducing yourself",
+    "phrases_count": 5,
+    "transcript_turns": 48,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/04-doing-lunch"
+  },
+  {
+    "slug": "05-polite-requests",
+    "title": "The Queen of Sheba",
+    "episode_id": "160803",
+    "air_date": "03 Aug 2016",
+    "topic": "Language for polite requests",
+    "phrases_count": 5,
+    "transcript_turns": 41,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/05-polite-requests"
+  },
+  {
+    "slug": "06-how-to-offer-help",
+    "title": "Double-booked",
+    "episode_id": "160810",
+    "air_date": "10 Aug 2016",
+    "topic": "Language for offering help",
+    "phrases_count": 5,
+    "transcript_turns": 44,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/06-how-to-offer-help"
+  },
+  {
+    "slug": "07-apologising",
+    "title": "Mr Lime's grapefruits",
+    "episode_id": "160817",
+    "air_date": "17 Aug 2016",
+    "topic": "Apologising",
+    "phrases_count": 6,
+    "transcript_turns": 43,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/07-apologising"
+  },
+  {
+    "slug": "08-gving-praise",
+    "title": "Room 301",
+    "episode_id": "160824",
+    "air_date": "24 Aug 2016",
+    "topic": "Language for giving praise",
+    "phrases_count": 3,
+    "transcript_turns": 35,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/08-gving-praise"
+  },
+  {
+    "slug": "09-checking-information",
+    "title": "The warehouse",
+    "episode_id": "160831",
+    "air_date": "31 Aug 2016",
+    "topic": "Language for checking information",
+    "phrases_count": 5,
+    "transcript_turns": 34,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/09-checking-information"
+  },
+  {
+    "slug": "10-disagreeing",
+    "title": "The brainstorm",
+    "episode_id": "160907",
+    "air_date": "07 Sep 2016",
+    "topic": "Language for disagreeing",
+    "phrases_count": 2,
+    "transcript_turns": 38,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/10-disagreeing"
+  },
+  {
+    "slug": "11-language-working-long-hours",
+    "title": "Overtime",
+    "episode_id": "160914",
+    "air_date": "14 Sep 2016",
+    "topic": "Language for working long hours",
+    "phrases_count": 4,
+    "transcript_turns": 34,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/11-language-working-long-hours"
+  },
+  {
+    "slug": "12-opening-presentations",
+    "title": "The big day",
+    "episode_id": "160921",
+    "air_date": "21 Sep 2016",
+    "topic": "Language for opening a presentation",
+    "phrases_count": 5,
+    "transcript_turns": 24,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/12-opening-presentations"
+  },
+  {
+    "slug": "13-making-a-pitch",
+    "title": "The Imperial Lemon",
+    "episode_id": "160928",
+    "air_date": "28 Sep 2016",
+    "topic": "Language for pitching",
+    "phrases_count": 3,
+    "transcript_turns": 17,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/13-making-a-pitch"
+  },
+  {
+    "slug": "14-giving-feedback",
+    "title": "Telephone tell-tale",
+    "episode_id": "161005",
+    "air_date": "05 Oct 2016",
+    "topic": "Giving feedback",
+    "phrases_count": 3,
+    "transcript_turns": 35,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/14-giving-feedback"
+  },
+  {
+    "slug": "15-more-about-telephone-manner",
+    "title": "Seb Lime",
+    "episode_id": "161012",
+    "air_date": "12 Oct 2016",
+    "topic": "Language for talking on he phone",
+    "phrases_count": 7,
+    "transcript_turns": 46,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/15-more-about-telephone-manner"
+  },
+  {
+    "slug": "16-politely-refusing",
+    "title": "Slimy Limey!",
+    "episode_id": "161019",
+    "air_date": "19 Oct 2016",
+    "topic": "Language for politely refusing",
+    "phrases_count": 4,
+    "transcript_turns": 51,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/16-politely-refusing"
+  },
+  {
+    "slug": "17-how-to-place-an-order",
+    "title": "Lemon-sized luxury boxes",
+    "episode_id": "161026",
+    "air_date": "26 Oct 2016",
+    "topic": "Language for placing an order",
+    "phrases_count": 5,
+    "transcript_turns": 33,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/17-how-to-place-an-order"
+  },
+  {
+    "slug": "18-writing-an-email",
+    "title": "The email",
+    "episode_id": "161102",
+    "air_date": "02 Nov 2016",
+    "topic": "Language for writing an email",
+    "phrases_count": 5,
+    "transcript_turns": 46,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/18-writing-an-email"
+  },
+  {
+    "slug": "19-explaining-a-misunderstanding",
+    "title": "The open window",
+    "episode_id": "161109",
+    "air_date": "09 Nov 2016",
+    "topic": "Language for explaining a misunderstanding",
+    "phrases_count": 3,
+    "transcript_turns": 40,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/19-explaining-a-misunderstanding"
+  },
+  {
+    "slug": "20-setting-an-agenda",
+    "title": "The Team Meeting",
+    "episode_id": "161116",
+    "air_date": "16 Nov 2016",
+    "topic": "Language for setting an agenda at a meeting",
+    "phrases_count": 8,
+    "transcript_turns": 20,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/20-setting-an-agenda"
+  },
+  {
+    "slug": "21-asking-for-help",
+    "title": "Don't panic!",
+    "episode_id": "161123",
+    "air_date": "23 Nov 2016",
+    "topic": "Language for asking for help",
+    "phrases_count": 3,
+    "transcript_turns": 44,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/21-asking-for-help"
+  },
+  {
+    "slug": "22-making-polite-requests",
+    "title": "The smoker",
+    "episode_id": "161130",
+    "air_date": "30 Nov 2016",
+    "topic": "Language for making polite requests",
+    "phrases_count": 4,
+    "transcript_turns": 43,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/22-making-polite-requests"
+  },
+  {
+    "slug": "23-health-and-safety",
+    "title": "Risky business",
+    "episode_id": "161207",
+    "air_date": "07 Dec 2016",
+    "topic": "Language for",
+    "phrases_count": 4,
+    "transcript_turns": 38,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/23-health-and-safety"
+  },
+  {
+    "slug": "24-words-to-use-in-an-emergency",
+    "title": "No smoke without fire",
+    "episode_id": "161214",
+    "air_date": "14 Dec 2016",
+    "topic": "Language to use in an emergency",
+    "phrases_count": 4,
+    "transcript_turns": 38,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/24-words-to-use-in-an-emergency"
+  },
+  {
+    "slug": "25-booking-a-hotel",
+    "title": "The big cheese",
+    "episode_id": "161221",
+    "air_date": "21 Dec 2016",
+    "topic": "Language for booking a hotel room",
+    "phrases_count": 4,
+    "transcript_turns": 47,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/25-booking-a-hotel"
+  },
+  {
+    "slug": "26-complaining",
+    "title": "You cannot be serious!",
+    "episode_id": "161228",
+    "air_date": "28 Dec 2016",
+    "topic": "Language for complaining",
+    "phrases_count": 5,
+    "transcript_turns": 47,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/26-complaining"
+  },
+  {
+    "slug": "27-delivering-bad-news",
+    "title": "Getting down to business",
+    "episode_id": "170104",
+    "air_date": "04 Jan 2017",
+    "topic": "Language for delivering bad news",
+    "phrases_count": 3,
+    "transcript_turns": 48,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/27-delivering-bad-news"
+  },
+  {
+    "slug": "28-keeping-language-professional",
+    "title": "Home truths",
+    "episode_id": "170111",
+    "air_date": "11 Jan 2017",
+    "topic": "Language for",
+    "phrases_count": 3,
+    "transcript_turns": 47,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/28-keeping-language-professional"
+  },
+  {
+    "slug": "29-cold-calling",
+    "title": "Putting the feelers out",
+    "episode_id": "170118",
+    "air_date": "18 Jan 2017",
+    "topic": "Language for making a cold call",
+    "phrases_count": 4,
+    "transcript_turns": 47,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/29-cold-calling"
+  },
+  {
+    "slug": "30-negotiating",
+    "title": "Two heads are better than one",
+    "episode_id": "170125",
+    "air_date": "25 Jan 2017",
+    "topic": "Language for negotiation",
+    "phrases_count": 4,
+    "transcript_turns": 40,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/30-negotiating"
+  },
+  {
+    "slug": "31-project-management",
+    "title": "Sign on the dotted line",
+    "episode_id": "170201",
+    "air_date": "01 Feb 2017",
+    "topic": "Language for project management",
+    "phrases_count": 4,
+    "transcript_turns": 48,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/31-project-management"
+  },
+  {
+    "slug": "32-negotiating-a-deal-2",
+    "title": "The deal is off!",
+    "episode_id": "170208",
+    "air_date": "08 Feb 2017",
+    "topic": "Further language for negotiating a deal",
+    "phrases_count": 3,
+    "transcript_turns": 45,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/32-negotiating-a-deal-2"
+  },
+  {
+    "slug": "33-booking-a-flight",
+    "title": "The deal is off!",
+    "episode_id": "170215",
+    "air_date": "15 Feb 2017",
+    "topic": "Language for booking a flight",
+    "phrases_count": 5,
+    "transcript_turns": 44,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/33-booking-a-flight"
+  },
+  {
+    "slug": "34-clinching-the-deal",
+    "title": "The business trip",
+    "episode_id": "170222",
+    "air_date": "22 Feb 2017",
+    "topic": "Language for clinching the deal",
+    "phrases_count": 4,
+    "transcript_turns": 46,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/34-clinching-the-deal"
+  },
+  {
+    "slug": "35-briefing-the-manager",
+    "title": "Lost in France",
+    "episode_id": "170301",
+    "air_date": "01 Mar 2017",
+    "topic": "Language for clinching the deal",
+    "phrases_count": 3,
+    "transcript_turns": 45,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/35-briefing-the-manager"
+  },
+  {
+    "slug": "36-working-with-someone-new",
+    "title": "The power struggle",
+    "episode_id": "170308",
+    "air_date": "08 Mar 2017",
+    "topic": "Language for working with someone new",
+    "phrases_count": 4,
+    "transcript_turns": 54,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/36-working-with-someone-new"
+  },
+  {
+    "slug": "37-dealing-with-difficult-staff",
+    "title": "Rachel the rabbit!",
+    "episode_id": "170315",
+    "air_date": "15 Mar 2017",
+    "topic": "Language for dealing with a difficult colleague",
+    "phrases_count": 3,
+    "transcript_turns": 49,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/37-dealing-with-difficult-staff"
+  },
+  {
+    "slug": "38-language-for-good-customer-relations",
+    "title": "Oranges and lemons",
+    "episode_id": "170322",
+    "air_date": "22 Mar 2017",
+    "topic": "Language for maintaining good customer relations",
+    "phrases_count": 4,
+    "transcript_turns": 48,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/38-language-for-good-customer-relations"
+  },
+  {
+    "slug": "39-disciplining-a-member-of-staff",
+    "title": "A step too far",
+    "episode_id": "170329",
+    "air_date": "29 Mar 2017",
+    "topic": "Language for giving someone a verbal warning",
+    "phrases_count": 3,
+    "transcript_turns": 49,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/39-disciplining-a-member-of-staff"
+  },
+  {
+    "slug": "40-language-to-use-in-an-appraisal",
+    "title": "The Appraisal",
+    "episode_id": "170405",
+    "air_date": "05 Apr 2017",
+    "topic": "Language to use in an appraisal",
+    "phrases_count": 4,
+    "transcript_turns": 50,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/40-language-to-use-in-an-appraisal"
+  },
+  {
+    "slug": "41-language-for-health-and-safety",
+    "title": "Doing it by the book",
+    "episode_id": "170412",
+    "air_date": "12 Apr 2017",
+    "topic": "Language to use in a health and safety report",
+    "phrases_count": 4,
+    "transcript_turns": 44,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/41-language-for-health-and-safety"
+  },
+  {
+    "slug": "42-language-writing-a-proposal",
+    "title": "The dinner date",
+    "episode_id": "170419",
+    "air_date": "19 Apr 2017",
+    "topic": "Language to use in a business proposal",
+    "phrases_count": 6,
+    "transcript_turns": 47,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/42-language-writing-a-proposal"
+  },
+  {
+    "slug": "43-language-to-use-in-research",
+    "title": "Doing your homework",
+    "episode_id": "170426",
+    "air_date": "26 Apr 2017",
+    "topic": "Language to use in customer research",
+    "phrases_count": 5,
+    "transcript_turns": 56,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/43-language-to-use-in-research"
+  },
+  {
+    "slug": "44-language-to-in-dealing-with-it-support",
+    "title": "Computer crisis",
+    "episode_id": "170503",
+    "air_date": "03 May 2017",
+    "topic": "Language to use in dealing with IT (information technology) problems",
+    "phrases_count": 5,
+    "transcript_turns": 52,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/44-language-to-in-dealing-with-it-support"
+  },
+  {
+    "slug": "45-language-for-making-an-elevator-pitch",
+    "title": "The plastic aubergine",
+    "episode_id": "170510",
+    "air_date": "10 May 2017",
+    "topic": "Language to use in an 'elevator pitch'",
+    "phrases_count": 5,
+    "transcript_turns": 49,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/45-language-for-making-an-elevator-pitch"
+  },
+  {
+    "slug": "46-language-for-being-in-charge",
+    "title": "Acting up",
+    "episode_id": "170517",
+    "air_date": "17 May 2017",
+    "topic": "Language to use when you're in charge",
+    "phrases_count": 3,
+    "transcript_turns": 38,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/46-language-for-being-in-charge"
+  },
+  {
+    "slug": "47-language-to-clear-up-confusion",
+    "title": "Talking sense",
+    "episode_id": "170524",
+    "air_date": "24 May 2017",
+    "topic": "Language to use for clearing up confusion",
+    "phrases_count": 5,
+    "transcript_turns": 50,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/47-language-to-clear-up-confusion"
+  },
+  {
+    "slug": "48-language-for-networking",
+    "title": "Face-to-face",
+    "episode_id": "170531",
+    "air_date": "31 May 2017",
+    "topic": "Language to for networking",
+    "phrases_count": 5,
+    "transcript_turns": 50,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/48-language-for-networking"
+  },
+  {
+    "slug": "49-language-to-use-in-an-acceptance-speech",
+    "title": "Award-winning!",
+    "episode_id": "170607",
+    "air_date": "07 Jun 2017",
+    "topic": "Language to use when accepting an award",
+    "phrases_count": 4,
+    "transcript_turns": 52,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/49-language-to-use-in-an-acceptance-speech"
+  },
+  {
+    "slug": "50-language-used-making-someone-redundant",
+    "title": "Reality bites",
+    "episode_id": "170614",
+    "air_date": "14 Jun 2017",
+    "topic": "Language to use when making someone redundant",
+    "phrases_count": 3,
+    "transcript_turns": 53,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/50-language-used-making-someone-redundant"
+  },
+  {
+    "slug": "51-language-for-conveying-your-ideas",
+    "title": "Taking shape",
+    "episode_id": "170621",
+    "air_date": "21 Jun 2017",
+    "topic": "Language to use for conveying your ideas to others",
+    "phrases_count": 4,
+    "transcript_turns": 48,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/51-language-for-conveying-your-ideas"
+  },
+  {
+    "slug": "52-language-giving-careers-advice",
+    "title": "So long Denise!",
+    "episode_id": "170628",
+    "air_date": "28 Jun 2017",
+    "topic": "Language for helping others with advice about their career",
+    "phrases_count": 5,
+    "transcript_turns": 48,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/52-language-giving-careers-advice"
+  },
+  {
+    "slug": "53-language-to-use-telephone-message",
+    "title": "Help! We need somebody",
+    "episode_id": "170705",
+    "air_date": "05 Jul 2017",
+    "topic": "Language to use when taking a phone message at a busy time",
+    "phrases_count": 3,
+    "transcript_turns": 34,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/53-language-to-use-telephone-message"
+  },
+  {
+    "slug": "54-language-for-justifying-your-position",
+    "title": "Eating humble pie",
+    "episode_id": "170712",
+    "air_date": "12 Jul 2017",
+    "topic": "Language to use when you need to stand your ground",
+    "phrases_count": 3,
+    "transcript_turns": 53,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/54-language-for-justifying-your-position"
+  },
+  {
+    "slug": "55-language-telling-someone-what-to-do",
+    "title": "To show you the ropes",
+    "episode_id": "170719",
+    "air_date": "19 Jul 2017",
+    "topic": "Language for telling someone what to do",
+    "phrases_count": 4,
+    "transcript_turns": 44,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/55-language-telling-someone-what-to-do"
+  },
+  {
+    "slug": "56-language-for-setting-priorities",
+    "title": "Pushed to the limits",
+    "episode_id": "170726",
+    "air_date": "26 Jul 2017",
+    "topic": "Language to use when trying to set priorities",
+    "phrases_count": 3,
+    "transcript_turns": 50,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/56-language-for-setting-priorities"
+  },
+  {
+    "slug": "57-language-for-booking-a-venue",
+    "title": "A room with a view",
+    "episode_id": "170802",
+    "air_date": "02 Aug 2017",
+    "topic": "Language for booking a venue",
+    "phrases_count": 5,
+    "transcript_turns": 58,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/57-language-for-booking-a-venue"
+  },
+  {
+    "slug": "58-language-for-getting-something-done-quickly",
+    "title": "Pulling out the stops",
+    "episode_id": "170809",
+    "air_date": "09 Aug 2017",
+    "topic": "Language for getting things done quickly",
+    "phrases_count": 4,
+    "transcript_turns": 45,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/58-language-for-getting-something-done-quickly"
+  },
+  {
+    "slug": "59-language-for-presenting-a-new-product",
+    "title": "The show must go on",
+    "episode_id": "170816",
+    "air_date": "16 Aug 2017",
+    "topic": "Language for presenting a new product",
+    "phrases_count": 4,
+    "transcript_turns": 47,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/59-language-for-presenting-a-new-product"
+  },
+  {
+    "slug": "60-language-related-to-getting-the-sack",
+    "title": "Stepping aside",
+    "episode_id": "170823",
+    "air_date": "23 Aug 2017",
+    "topic": "Language related to getting the sack",
+    "phrases_count": 5,
+    "transcript_turns": 53,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/60-language-related-to-getting-the-sack"
+  },
+  {
+    "slug": "61-language-for-offering-and-accepting-promotions",
+    "title": "Decision time",
+    "episode_id": "170830",
+    "air_date": "30 Aug 2017",
+    "topic": "Language relating to being offered and accepting a promotion",
+    "phrases_count": 3,
+    "transcript_turns": 62,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/61-language-for-offering-and-accepting-promotions"
+  },
+  {
+    "slug": "62-language-to-announce-your-decision",
+    "title": "Anna's decision",
+    "episode_id": "170906",
+    "air_date": "06 Sep 2017",
+    "topic": "Language to announce your decision",
+    "phrases_count": 4,
+    "transcript_turns": 19,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/62-language-to-announce-your-decision"
+  },
+  {
+    "slug": "63-language-to-persuade-someone-to-change-their-mind",
+    "title": "Tom's tantrum",
+    "episode_id": "170913",
+    "air_date": "13 Sep 2017",
+    "topic": "Language to persuade someone to change their mind",
+    "phrases_count": 3,
+    "transcript_turns": 24,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/63-language-to-persuade-someone-to-change-their-mind"
+  },
+  {
+    "slug": "64-language-for-getting-down-to-business",
+    "title": "Something's missing",
+    "episode_id": "170920",
+    "air_date": "20 Sep 2017",
+    "topic": "Language for getting down to business",
+    "phrases_count": 4,
+    "transcript_turns": 23,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/64-language-for-getting-down-to-business"
+  },
+  {
+    "slug": "65-language-to-say-youve-changed-your-mind",
+    "title": "Last call for Tom",
+    "episode_id": "170927",
+    "air_date": "27 Sep 2017",
+    "topic": "Language to say you've changed your mind",
+    "phrases_count": 3,
+    "transcript_turns": 32,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/65-language-to-say-youve-changed-your-mind"
+  },
+  {
+    "slug": "66-language-for-a-wedding-day",
+    "title": "The Wedding Day",
+    "episode_id": "171004",
+    "air_date": "04 Oct 2017",
+    "topic": "Language for a wedding",
+    "phrases_count": 3,
+    "transcript_turns": 29,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/66-language-for-a-wedding-day"
+  },
+  {
+    "slug": "english-at-work-intro",
+    "title": "An Introduction",
+    "episode_id": "160701",
+    "air_date": "01 Jul 2016",
+    "topic": null,
+    "phrases_count": 3,
+    "transcript_turns": 21,
+    "url": "https://www.bbc.co.uk/learningenglish/english/features/english-at-work/english-at-work-intro"
+  }
+]

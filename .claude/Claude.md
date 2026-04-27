@@ -104,6 +104,7 @@ speakeasy/
 | vocabulary | V0.5 | 翻译生词本收藏（软删除，无 FSRS） |
 | ask_threads | V0.7 | 跨页面通用追问 thread（scope + ref_type/ref_id） |
 | ask_messages | V0.7 | 追问 thread 的消息列表 |
+| bbc_eaw_episodes | V0.7.x | BBC English at Work 67 集语料（共享，不绑 user_id），见 `docs/datasets/bbc_eaw.md` |
 
 ### API 接口清单
 
