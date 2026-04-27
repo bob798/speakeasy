@@ -6,11 +6,9 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useAuthFetch } from '@/composables/useAuthFetch'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const { authFetchJson } = useAuthFetch()
 
 const email = ref('')
 const password = ref('')
@@ -25,17 +23,24 @@ async function onLogin() {
   submitting.value = true
   error.value = ''
   try {
-    const data = await authFetchJson('/auth/login', {
-      email: email.value,
-      password: password.value,
+    // 登录用密码换 token · 本身不需要 token，直接 fetch（不走 useAuthFetch 避免 401 触发 logout 跳转）
+    const resp = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.value, password: password.value }),
     })
+    const data = await resp.json().catch(() => ({}))
+    if (!resp.ok) {
+      error.value = data.detail || data.error || '邮箱或密码错误'
+      return
+    }
     authStore.setAuth(data.token, data.user)
 
     const redirect = localStorage.getItem('v2:__redirect_after_login') || '/'
     localStorage.removeItem('v2:__redirect_after_login')
     router.push(redirect)
   } catch (err) {
-    error.value = err.message || '登录失败'
+    error.value = err.message || '网络错误，请稍后重试'
   } finally {
     submitting.value = false
   }
