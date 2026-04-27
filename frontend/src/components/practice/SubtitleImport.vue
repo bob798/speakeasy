@@ -11,7 +11,13 @@ import { getErrorMessage } from '@/composables/useAuthFetch'
 
 const emit = defineEmits(['imported'])
 
-const { importSubtitles, listSources, getSource } = usePractice()
+const {
+  importSubtitles,
+  listSources,
+  getSource,
+  listEawEpisodes,
+  getEawEpisode,
+} = usePractice()
 
 const mode = ref('url') // url | manual
 const url = ref('')
@@ -24,6 +30,8 @@ const statusError = ref(false)
 
 const history = ref([])
 const historyLoading = ref(false)
+const eawEpisodes = ref([])
+const eawLoading = ref(false)
 
 async function onImport(useCookies = false) {
   if (submitting.value) return
@@ -112,6 +120,33 @@ async function pickHistory(sourceId) {
   }
 }
 
+async function loadEaw() {
+  eawLoading.value = true
+  try {
+    const data = await listEawEpisodes(100)
+    eawEpisodes.value = data.items || []
+  } catch {
+    /* 静默 · BBC EAW 没数据不阻塞 */
+  } finally {
+    eawLoading.value = false
+  }
+}
+
+async function pickEaw(slug) {
+  try {
+    const ep = await getEawEpisode(slug)
+    // PracticePlayer.cardBySegIdx 用 source.id 区分；用 slug 字符串作 id
+    ep.id = `eaw:${slug}`
+    emit('imported', ep)
+  } catch (err) {
+    const msg = getErrorMessage(err)
+    if (msg) {
+      status.value = msg
+      statusError.value = true
+    }
+  }
+}
+
 function loadSample() {
   manualText.value = `Hold tight please!
 This is Anna, on a bus going to an interview for a job as a sales executive at Tip Top Trading.
@@ -128,7 +163,10 @@ Timekeeping is important to me.`
   statusError.value = false
 }
 
-onMounted(loadHistory)
+onMounted(() => {
+  loadHistory()
+  loadEaw()
+})
 
 defineExpose({ refreshHistory: loadHistory })
 </script>
@@ -151,7 +189,24 @@ defineExpose({ refreshHistory: loadHistory })
       </div>
     </section>
 
-    <h4 v-if="history.length" class="new-import-h">新导入</h4>
+    <!-- BBC English at Work 公共语料 -->
+    <section v-if="eawEpisodes.length" class="history-row eaw-row">
+      <h4>📚 BBC English at Work · {{ eawEpisodes.length }} 集</h4>
+      <div class="history-chips">
+        <button
+          v-for="ep in eawEpisodes"
+          :key="ep.slug"
+          class="hist-chip eaw-chip"
+          :title="ep.description || ep.topic || ''"
+          @click="pickEaw(ep.slug)"
+        >
+          <span class="kind">🎓</span>
+          <span class="title">{{ ep.title || ep.slug }}</span>
+        </button>
+      </div>
+    </section>
+
+    <h4 v-if="history.length || eawEpisodes.length" class="new-import-h">新导入</h4>
 
     <div class="tabs">
       <button class="tab" :class="{ active: mode === 'url' }" @click="mode = 'url'">
@@ -244,6 +299,13 @@ defineExpose({ refreshHistory: loadHistory })
   max-width: 220px;
   touch-action: manipulation;
   transition: all var(--duration) var(--ease);
+}
+.eaw-row h4 {
+  color: var(--accent);
+}
+.eaw-chip {
+  background: var(--accent-soft);
+  border-color: transparent;
 }
 .hist-chip:active {
   background: var(--accent-soft);

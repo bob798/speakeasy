@@ -27,6 +27,8 @@ const API_PREFIXES = [
   '/static/audio_cache',
   '/static/tts_cache',
   '/legacy',
+  '/bbc-eaw',
+  '/stats',
 ]
 
 export default defineConfig({

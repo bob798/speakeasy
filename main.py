@@ -16,6 +16,7 @@ from app.routers.translate import router as translate_router
 from app.routers.auth import router as auth_router
 from app.routers.ask import router as ask_router
 from app.routers.stats import router as stats_router
+from app.routers.bbc_eaw import router as bbc_eaw_router
 
 
 # ── V0.8 前端重构挂载策略（Pass 3 plan §4 + Critic B1-B5）────────────
@@ -46,6 +47,7 @@ API_PREFIXES = (
     "assessment/",
     "settings/",
     "stats/",
+    "bbc-eaw/",
     "health",
     "debug/",
     "legacy/",
@@ -84,6 +86,7 @@ app.include_router(translate_router)
 app.include_router(auth_router)
 app.include_router(ask_router)
 app.include_router(stats_router)
+app.include_router(bbc_eaw_router)
 
 # 数据目录挂载（audio_cache、tts_cache 等）——无论新旧前端都要读
 app.mount("/static", StaticFiles(directory="static"), name="static")
