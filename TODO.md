@@ -17,7 +17,19 @@
 
 ---
 
-1. 导出聊天内容，比如导出我的测试内容，让ai修正
+## V0.8 候选（已迁移到 GitHub Issues）
+
+> 详细方案与讨论以 GitHub Issue 为准，本文件仅留索引。
+
+- [#6](https://github.com/bob798/speakeasy/issues/6) — 连读解释通俗化 + 模式知识库
+- [#7](https://github.com/bob798/speakeasy/issues/7) — 追问入口下沉到解读弹窗底部
+- [#8](https://github.com/bob798/speakeasy/issues/8) — 历史缓存解读的刷新机制
+
+---
+
+### TODO 杂项（未排期）
+
+1. 导出聊天内容，比如导出我的测试内容，让 ai 修正
 2. 定义聊天标题
 
-*TODO.md — 最后更新 2026-03-12*
+*TODO.md — 最后更新 2026-04-26*

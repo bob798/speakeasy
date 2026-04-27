@@ -4,7 +4,9 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath, URL } from 'node:url'
 
 // FastAPI 后端开发服务器
-const BACKEND = 'http://localhost:8000'
+// 用 127.0.0.1 而不是 localhost：避免 Node 20+ 把 localhost 优先解析为 IPv6 (::1)
+// 而 uvicorn 默认只绑 IPv4，导致 ECONNREFUSED ::1:8000
+const BACKEND = 'http://127.0.0.1:8000'
 
 // dev 时需要代理到 FastAPI 的路径前缀（13 类 API）
 const API_PREFIXES = [
