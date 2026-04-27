@@ -5,7 +5,7 @@
  *   - 错误状态正确处理（不静默切到二栏空白）
  *   - 4 段示例库（带文案）一键导入
  */
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { usePractice } from '@/composables/usePractice'
 import { getErrorMessage } from '@/composables/useAuthFetch'
 
@@ -32,6 +32,27 @@ const history = ref([])
 const historyLoading = ref(false)
 const eawEpisodes = ref([])
 const eawLoading = ref(false)
+const drawer = ref(null) // 'history' | 'eaw' | null
+const eawSearch = ref('')
+
+const filteredEaw = computed(() => {
+  const q = eawSearch.value.trim().toLowerCase()
+  if (!q) return eawEpisodes.value
+  return eawEpisodes.value.filter(
+    (e) =>
+      (e.title || '').toLowerCase().includes(q) ||
+      (e.topic || '').toLowerCase().includes(q) ||
+      (e.description || '').toLowerCase().includes(q)
+  )
+})
+
+function openDrawer(which) {
+  drawer.value = which
+  eawSearch.value = ''
+}
+function closeDrawer() {
+  drawer.value = null
+}
 
 async function onImport(useCookies = false) {
   if (submitting.value) return
@@ -107,6 +128,7 @@ async function loadHistory() {
 }
 
 async function pickHistory(sourceId) {
+  closeDrawer()
   try {
     const src = await getSource(sourceId)
     src.id = sourceId  // 确保 id 存在，PracticePlayer cardBySegIdx 用
@@ -133,6 +155,7 @@ async function loadEaw() {
 }
 
 async function pickEaw(slug) {
+  closeDrawer()
   try {
     const ep = await getEawEpisode(slug)
     // PracticePlayer.cardBySegIdx 用 source.id 区分；用 slug 字符串作 id
@@ -173,37 +196,32 @@ defineExpose({ refreshHistory: loadHistory })
 
 <template>
   <div class="import-panel">
-    <!-- 历史列表 · 默认可见 -->
-    <section v-if="history.length" class="history-row">
-      <h4>历史字幕 · 点击重新练习</h4>
-      <div class="history-chips">
-        <button
-          v-for="s in history"
-          :key="s.id"
-          class="hist-chip"
-          @click="pickHistory(s.id)"
-        >
-          <span class="kind">{{ s.source_type === 'manual' ? '📋' : (s.source_type === 'youtube' ? '🎬' : '📺') }}</span>
-          <span class="title">{{ s.title || '(未命名)' }}</span>
-        </button>
-      </div>
-    </section>
-
-    <!-- BBC English at Work 公共语料 -->
-    <section v-if="eawEpisodes.length" class="history-row eaw-row">
-      <h4>📚 BBC English at Work · {{ eawEpisodes.length }} 集</h4>
-      <div class="history-chips">
-        <button
-          v-for="ep in eawEpisodes"
-          :key="ep.slug"
-          class="hist-chip eaw-chip"
-          :title="ep.description || ep.topic || ''"
-          @click="pickEaw(ep.slug)"
-        >
-          <span class="kind">🎓</span>
-          <span class="title">{{ ep.title || ep.slug }}</span>
-        </button>
-      </div>
+    <!-- 字幕来源 · 抽屉触发器 -->
+    <section v-if="history.length || eawEpisodes.length" class="source-grid">
+      <button
+        v-if="eawEpisodes.length"
+        class="source-card eaw-card"
+        @click="openDrawer('eaw')"
+      >
+        <span class="ico">📚</span>
+        <span class="info">
+          <span class="t">BBC English at Work</span>
+          <span class="sub">{{ eawEpisodes.length }} 集 · 公共语料</span>
+        </span>
+        <span class="chev">›</span>
+      </button>
+      <button
+        v-if="history.length"
+        class="source-card"
+        @click="openDrawer('history')"
+      >
+        <span class="ico">🕒</span>
+        <span class="info">
+          <span class="t">我的历史字幕</span>
+          <span class="sub">{{ history.length }} 条 · 点击重新练习</span>
+        </span>
+        <span class="chev">›</span>
+      </button>
     </section>
 
     <h4 v-if="history.length || eawEpisodes.length" class="new-import-h">新导入</h4>
@@ -248,6 +266,67 @@ defineExpose({ refreshHistory: loadHistory })
 
     <p v-if="status" class="status" :class="{ error: statusError }">{{ status }}</p>
   </div>
+
+  <!-- 抽屉 · 竖向列表 -->
+  <Teleport to="body">
+    <Transition name="drawer">
+      <div v-if="drawer" class="drawer-overlay" @click.self="closeDrawer">
+        <aside class="drawer">
+          <header class="drawer-head">
+            <h3 v-if="drawer === 'eaw'">📚 BBC English at Work · {{ eawEpisodes.length }}</h3>
+            <h3 v-else>🕒 我的历史字幕 · {{ history.length }}</h3>
+            <button class="close" @click="closeDrawer" aria-label="关闭">×</button>
+          </header>
+
+          <div v-if="drawer === 'eaw'" class="drawer-body">
+            <input
+              v-model="eawSearch"
+              class="search"
+              placeholder="搜索集名 / 主题..."
+            />
+            <ul class="vlist">
+              <li
+                v-for="ep in filteredEaw"
+                :key="ep.slug"
+                class="vitem eaw-vitem"
+                @click="pickEaw(ep.slug)"
+              >
+                <div class="vrow">
+                  <span class="vico">🎓</span>
+                  <span class="vtitle">{{ ep.title || ep.slug }}</span>
+                </div>
+                <div v-if="ep.topic || ep.description" class="vmeta">
+                  <span v-if="ep.topic" class="vtopic">{{ ep.topic }}</span>
+                  <span v-if="ep.description" class="vdesc">{{ ep.description }}</span>
+                </div>
+              </li>
+              <li v-if="!filteredEaw.length" class="vempty">无匹配集</li>
+            </ul>
+          </div>
+
+          <div v-else class="drawer-body">
+            <ul class="vlist">
+              <li
+                v-for="s in history"
+                :key="s.id"
+                class="vitem"
+                @click="pickHistory(s.id)"
+              >
+                <div class="vrow">
+                  <span class="vico">{{ s.source_type === 'manual' ? '📋' : (s.source_type === 'youtube' ? '🎬' : '📺') }}</span>
+                  <span class="vtitle">{{ s.title || '(未命名)' }}</span>
+                </div>
+                <div v-if="s.created_at" class="vmeta">
+                  <span class="vdate">{{ s.created_at.slice(0, 10) }}</span>
+                </div>
+              </li>
+              <li v-if="!history.length" class="vempty">还没有历史字幕</li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -257,68 +336,229 @@ defineExpose({ refreshHistory: loadHistory })
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.history-row {
-  margin-bottom: var(--space-4);
-  padding-bottom: var(--space-4);
-  border-bottom: 1px dashed var(--border);
-}
-.history-row h4,
 .new-import-h {
-  margin: 0 0 var(--space-2);
+  margin: var(--space-4) 0 var(--space-2);
   font-size: 11px;
   color: var(--text-3);
   letter-spacing: 0.5px;
   text-transform: uppercase;
   font-weight: 600;
 }
-.new-import-h {
-  margin-top: var(--space-3);
-}
-.history-chips {
-  display: flex;
+
+/* 字幕来源 · 双卡片入口 */
+.source-grid {
+  display: grid;
   gap: var(--space-2);
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: thin;
+  margin-bottom: var(--space-3);
 }
-.history-chips::-webkit-scrollbar {
-  height: 4px;
-}
-.hist-chip {
-  display: inline-flex;
+.source-card {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px var(--space-3);
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-size: 13px;
-  color: var(--text-1);
-  white-space: nowrap;
-  flex-shrink: 0;
-  max-width: 220px;
+  text-align: left;
+  cursor: pointer;
   touch-action: manipulation;
-  transition: all var(--duration) var(--ease);
+  transition: background var(--duration) var(--ease),
+    border-color var(--duration) var(--ease);
 }
-.eaw-row h4 {
-  color: var(--accent);
+.source-card:active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
-.eaw-chip {
+.source-card.eaw-card {
   background: var(--accent-soft);
   border-color: transparent;
 }
-.hist-chip:active {
-  background: var(--accent-soft);
-  transform: scale(0.96);
-}
-.hist-chip .kind {
-  font-size: 14px;
+.source-card .ico {
+  font-size: 24px;
   flex-shrink: 0;
 }
-.hist-chip .title {
+.source-card .info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.source-card .info .t {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-1);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+.source-card.eaw-card .info .t {
+  color: var(--accent);
+}
+.source-card .info .sub {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.source-card .chev {
+  font-size: 24px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+/* 抽屉 */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+}
+.drawer {
+  width: 100%;
+  max-width: 420px;
+  height: 100dvh;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+}
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  padding-top: calc(var(--safe-top) + var(--space-3));
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+.drawer-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.drawer-head .close {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--text-2);
+  border-radius: 50%;
+  background: transparent;
+}
+.drawer-head .close:active {
+  background: var(--bg);
+}
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4) calc(var(--safe-bottom) + var(--space-4));
+}
+.search {
+  width: 100%;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  font-size: 14px;
+  outline: none;
+}
+.search:focus {
+  border-color: var(--accent);
+}
+.vlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.vitem {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background var(--duration) var(--ease);
+}
+.vitem:hover {
+  background: var(--bg-elevated);
+}
+.vitem:active {
+  background: var(--accent-soft);
+  transform: scale(0.99);
+}
+.eaw-vitem {
+  border-left: 3px solid var(--accent);
+}
+.vrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.vico {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.vtitle {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-1);
+  flex: 1;
+  min-width: 0;
+}
+.vmeta {
+  margin-top: 4px;
+  margin-left: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.4;
+}
+.vtopic {
+  padding: 1px 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 8px;
+  font-size: 11px;
+}
+.vdesc {
+  flex: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.vempty {
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.drawer-enter-active,
+.drawer-leave-active {
+  transition: opacity 0.2s ease;
+}
+.drawer-enter-active .drawer,
+.drawer-leave-active .drawer {
+  transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.drawer-enter-from,
+.drawer-leave-to {
+  opacity: 0;
+}
+.drawer-enter-from .drawer,
+.drawer-leave-to .drawer {
+  transform: translateX(100%);
 }
 .tabs {
   display: flex;
