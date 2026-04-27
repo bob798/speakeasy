@@ -6,17 +6,31 @@
  *   - 💡 按钮 = sentence explain
  *   - 单词解读入口搬到 PracticePlayer
  */
-import { computed } from 'vue'
+import { computed, watch, nextTick, useTemplateRef } from 'vue'
 import { usePracticeStore } from '@/stores/practice'
 
 const emit = defineEmits(['select', 'explain'])
 const store = usePracticeStore()
 
 const items = computed(() => store.segments)
+const listRef = useTemplateRef('listRef')
+
+// 当前句变化时滚到可见位置（抽屉打开 / 跳句 / 进入页面）
+watch(
+  () => store.currentIdx,
+  async () => {
+    await nextTick()
+    const el = listRef.value?.querySelector('.item.active')
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
-  <ul class="sentences">
+  <ul ref="listRef" class="sentences">
     <li
       v-for="(seg, i) in items"
       :key="i"

@@ -25,6 +25,7 @@ const { createCards } = usePractice()
 const explainOpen = ref(false)
 const explainTarget = ref(null)
 const toast = ref({ show: false, text: '', type: 'info' })
+const listDrawerOpen = ref(false)
 
 // 必须有 source 且至少有一段；空段时仍展示导入页面，避免卡死
 const hasSource = computed(
@@ -125,6 +126,7 @@ function getAuthHeaders() {
 
 function onSelect(idx) {
   store.setCurrentIdx(idx)
+  listDrawerOpen.value = false  // 选完关抽屉（手机端）
 }
 
 function onExplain(payload) {
@@ -168,23 +170,34 @@ onDeactivated(() => {
     <header class="topbar">
       <RouterLink class="back" to="/">← 返回</RouterLink>
       <div class="title">发音练习</div>
-      <button
-        v-if="hasSource"
-        class="new-btn"
-        @click="onNewImport"
-        title="重新导入字幕"
-      >
-        🔄 重新导入
-      </button>
-      <span v-else class="placeholder" />
+      <div class="topbar-right">
+        <!-- 手机端打开句子列表抽屉 -->
+        <button
+          v-if="hasSource"
+          class="list-btn mobile-only"
+          @click="listDrawerOpen = true"
+          :title="`句子列表 ${store.currentIdx + 1}/${store.segments.length}`"
+        >
+          📜 {{ store.currentIdx + 1 }}/{{ store.segments.length }}
+        </button>
+        <button
+          v-if="hasSource"
+          class="new-btn"
+          @click="onNewImport"
+          title="重新导入字幕"
+        >
+          🔄
+        </button>
+      </div>
     </header>
 
     <div v-if="!hasSource" class="import-wrap">
       <SubtitleImport @imported="onImported" />
     </div>
 
-    <div v-else class="two-col">
-      <aside class="left">
+    <div v-else class="layout">
+      <!-- 桌面端左栏 · 手机端通过抽屉展示同一组件 -->
+      <aside class="left desktop-only">
         <div class="progress">
           <div class="progress-bar" :style="{ width: `${store.progressPct}%` }"></div>
         </div>
@@ -203,6 +216,35 @@ onDeactivated(() => {
         />
       </main>
     </div>
+
+    <!-- 手机端句子列表抽屉 -->
+    <Teleport to="body">
+      <Transition name="list-drawer">
+        <div
+          v-if="listDrawerOpen && hasSource"
+          class="list-drawer-overlay"
+          @click.self="listDrawerOpen = false"
+        >
+          <aside class="list-drawer">
+            <header class="ld-head">
+              <h3>📜 句子列表 · {{ store.currentIdx + 1 }}/{{ store.segments.length }}</h3>
+              <button class="ld-close" @click="listDrawerOpen = false" aria-label="关闭">×</button>
+            </header>
+            <div class="ld-progress">
+              <div class="ld-progress-bar" :style="{ width: `${store.progressPct}%` }"></div>
+            </div>
+            <div class="ld-stats">
+              {{ store.totalPracticed }}/{{ store.segments.length }} 已练 ·
+              Again: {{ store.ratingResults.again }} ·
+              Good: {{ store.ratingResults.good }}
+            </div>
+            <div class="ld-body">
+              <SentenceList @select="onSelect" @explain="onExplain" />
+            </div>
+          </aside>
+        </div>
+      </Transition>
+    </Teleport>
 
     <ExplanationModal v-model:open="explainOpen" :target="explainTarget" />
 
@@ -237,7 +279,13 @@ onDeactivated(() => {
   color: var(--text-2);
   font-size: 14px;
 }
-.new-btn {
+.topbar-right {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+.new-btn,
+.list-btn {
   padding: 6px var(--space-3);
   border-radius: var(--radius-sm);
   background: var(--accent);
@@ -246,13 +294,19 @@ onDeactivated(() => {
   font-weight: 500;
   transition: background var(--duration) var(--ease);
   touch-action: manipulation;
+  white-space: nowrap;
+}
+.list-btn {
+  background: var(--bg-elevated);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+}
+.new-btn:active,
+.list-btn:active {
+  transform: scale(0.96);
 }
 .new-btn:active {
   background: var(--accent-hover);
-  transform: scale(0.96);
-}
-.placeholder {
-  width: 80px;  /* 占位让 title 居中 */
 }
 .import-wrap {
   max-width: 560px;
@@ -260,14 +314,36 @@ onDeactivated(() => {
   margin: var(--space-5) auto;
   padding: 0 var(--space-4);
 }
-.two-col {
+
+/* 默认：手机单栏（PracticePlayer 全宽），左栏隐藏 */
+.layout {
   flex: 1;
-  display: grid;
-  grid-template-columns: minmax(220px, 36%) 1fr;
-  gap: var(--space-3);
+  display: block;
   padding: var(--space-3) var(--space-4);
   min-height: 0;
 }
+.desktop-only {
+  display: none;
+}
+.mobile-only {
+  display: inline-flex;
+}
+
+/* ≥768px：双栏，桌面端原布局 */
+@media (min-width: 768px) {
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(220px, 36%) 1fr;
+    gap: var(--space-3);
+  }
+  .desktop-only {
+    display: flex;
+  }
+  .mobile-only {
+    display: none;
+  }
+}
+
 .left {
   display: flex;
   flex-direction: column;
@@ -320,12 +396,84 @@ onDeactivated(() => {
   opacity: 0;
 }
 
-@media (max-width: 768px) {
-  .two-col {
-    grid-template-columns: 1fr;
-  }
-  .left {
-    max-height: 40vh;
-  }
+/* 句子列表抽屉 · 手机端从左滑入 */
+.list-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  display: flex;
+}
+.list-drawer {
+  width: 90%;
+  max-width: 380px;
+  height: 100dvh;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+}
+.ld-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  padding-top: calc(var(--safe-top) + var(--space-3));
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+.ld-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.ld-close {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--text-2);
+  border-radius: 50%;
+  background: transparent;
+}
+.ld-progress {
+  height: 4px;
+  background: var(--border);
+}
+.ld-progress-bar {
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--duration) var(--ease);
+}
+.ld-stats {
+  padding: 6px var(--space-4);
+  font-size: 11px;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--border);
+}
+.ld-body {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: calc(var(--safe-bottom) + var(--space-3));
+}
+
+.list-drawer-enter-active,
+.list-drawer-leave-active {
+  transition: opacity 0.2s ease;
+}
+.list-drawer-enter-active .list-drawer,
+.list-drawer-leave-active .list-drawer {
+  transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.list-drawer-enter-from,
+.list-drawer-leave-to {
+  opacity: 0;
+}
+.list-drawer-enter-from .list-drawer,
+.list-drawer-leave-to .list-drawer {
+  transform: translateX(-100%);
 }
 </style>
