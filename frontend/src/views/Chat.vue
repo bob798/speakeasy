@@ -130,7 +130,12 @@ function onBubbleExplain(content) {
   explainTarget.value = {
     type: 'sentence',
     content,
-    context: { source: 'chat', session_id: chatStore.sessionId },
+    context: {
+      source: 'chat',
+      session_id: chatStore.sessionId,
+      vocab_source_type: 'chat',
+      vocab_source_ref: chatStore.sessionId || null,
+    },
   }
   explainOpen.value = true
 }

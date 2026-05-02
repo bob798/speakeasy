@@ -5,12 +5,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 
-from app.services.translate_service import (
-    translate_text,
-    save_vocabulary,
-    list_vocabulary,
-    delete_vocabulary,
-)
+from app.services.translate_service import translate_text
+from app.services.vocab_service import save_item, list_items, delete_item
 from app.routers.auth import get_current_user_id
 from app.logger import get_logger
 
@@ -66,22 +62,25 @@ async def do_translate(req: TranslateRequest):
 
 # ── 生词本 CRUD（登录才能用）──────────────────────────────
 
+# 旧端点：薄代理到新 vocab_service（V0.10 起统一走 /vocab）
+
 @router.post("/translate/vocabulary", status_code=201)
 async def create_vocabulary(
     req: VocabularyCreate,
     user_id: str = Depends(get_current_user_id),
 ):
     try:
-        item = save_vocabulary(
+        return save_item(
             user_id=user_id,
             source_text=req.source_text,
             translated_text=req.translated_text,
             direction=req.direction,
             context=req.context,
+            item_type="sentence",
+            source_type="translate",
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
-    return item
 
 
 @router.get("/translate/vocabulary")
@@ -90,7 +89,7 @@ async def get_vocabulary(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
-    items = list_vocabulary(user_id=user_id, limit=limit, offset=offset)
+    items = list_items(user_id=user_id, limit=limit, offset=offset)
     return {"items": items, "count": len(items)}
 
 
@@ -99,7 +98,7 @@ async def remove_vocabulary(
     vocab_id: int,
     user_id: str = Depends(get_current_user_id),
 ):
-    ok = delete_vocabulary(vocab_id, user_id)
+    ok = delete_item(vocab_id, user_id)
     if not ok:
         raise HTTPException(404, "生词本条目不存在")
     return {"deleted": True, "id": vocab_id}

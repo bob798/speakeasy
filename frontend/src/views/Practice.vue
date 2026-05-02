@@ -16,8 +16,11 @@ import SubtitleImport from '@/components/practice/SubtitleImport.vue'
 import SentenceList from '@/components/practice/SentenceList.vue'
 import PracticePlayer from '@/components/practice/PracticePlayer.vue'
 import ExplanationModal from '@/components/ExplanationModal.vue'
+import { useRouter } from 'vue-router'
 
 defineOptions({ name: 'Practice' })
+
+const router = useRouter()
 
 const store = usePracticeStore()
 const { createCards } = usePractice()
@@ -31,6 +34,17 @@ const listDrawerOpen = ref(false)
 const hasSource = computed(
   () => !!store.currentSource && (store.segments?.length || 0) > 0
 )
+
+const isBbcSource = computed(() => {
+  const s = store.currentSource
+  return !!s && (s.source_type === 'bbc_eaw' || s.type === 'bbc_eaw')
+})
+
+function gotoBbcReview() {
+  const slug = store.currentSource?.slug || store.currentSource?.id
+  if (!slug) return
+  router.push({ name: 'bbc-review', params: { slug } })
+}
 
 function showToast(text, type = 'info', duration = 2500) {
   toast.value = { show: true, text, type }
@@ -140,9 +154,16 @@ function onExplain(payload) {
     target = { type: payload.type, content: payload.content }
     if (payload.sentence) target.sentence = payload.sentence
   }
+  // 来源识别：BBC EAW 走 bbc_eaw 域，便于联动文章级 SRS；其它走 practice
+  const src = store.currentSource || {}
+  const isBbc = src.source_type === 'bbc_eaw' || src.type === 'bbc_eaw'
+  const vocabRef = isBbc
+    ? { vocab_source_type: 'bbc_eaw', vocab_source_ref: src.slug || src.id || null }
+    : { vocab_source_type: 'practice', vocab_source_ref: src.id || src.source_id || null }
   target.context = {
     source: 'practice',
-    source_id: store.currentSource?.id,
+    source_id: src.id,
+    ...vocabRef,
     ...(target.sentence ? { sentence: target.sentence } : {}),
   }
   explainTarget.value = target
@@ -179,6 +200,14 @@ onDeactivated(() => {
           :title="`句子列表 ${store.currentIdx + 1}/${store.segments.length}`"
         >
           📜 {{ store.currentIdx + 1 }}/{{ store.segments.length }}
+        </button>
+        <button
+          v-if="hasSource && isBbcSource"
+          class="bbc-btn"
+          @click="gotoBbcReview"
+          title="开始/继续这篇 BBC 文章的 SRS 复习"
+        >
+          📖 复习
         </button>
         <button
           v-if="hasSource"
@@ -285,7 +314,8 @@ onDeactivated(() => {
   align-items: center;
 }
 .new-btn,
-.list-btn {
+.list-btn,
+.bbc-btn {
   padding: 6px var(--space-3);
   border-radius: var(--radius-sm);
   background: var(--accent);
@@ -300,6 +330,16 @@ onDeactivated(() => {
   background: var(--bg-elevated);
   color: var(--text-1);
   border: 1px solid var(--border);
+}
+.bbc-btn {
+  background: rgba(61, 107, 79, 0.18);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.bbc-btn:active {
+  transform: scale(0.96);
+  background: var(--accent);
+  color: var(--text-inverse);
 }
 .new-btn:active,
 .list-btn:active {

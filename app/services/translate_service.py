@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session as OrmSession
 from sqlalchemy.exc import IntegrityError
 
 from app.models.db import engine, Vocabulary, TranslationCache
+from app.services import vocab_service
 from app.prompts.translate import (
     TRANSLATE_BATCH_ZH2EN_PROMPT,
     TRANSLATE_BATCH_EN2ZH_PROMPT,
@@ -172,7 +173,7 @@ async def translate_text(text: str, direction: str) -> str:
     return "\n".join(r if r is not None else "" for r in results)
 
 
-# ── 生词本 CRUD（保持原有行为）─────────────────────────────
+# ── 生词本 CRUD（V0.10 起为 vocab_service 的薄代理）────────
 
 def save_vocabulary(
     user_id: str,
@@ -181,25 +182,22 @@ def save_vocabulary(
     direction: str,
     context: Optional[str] = None,
 ) -> Dict:
+    # 沿用旧契约的输入校验
     if direction not in VALID_DIRECTIONS:
         raise ValueError(f"无效的翻译方向: {direction}，可选值: zh2en / en2zh")
     if not source_text or not source_text.strip():
         raise ValueError("源文本不能为空")
     if not translated_text or not translated_text.strip():
         raise ValueError("译文不能为空")
-    with OrmSession(engine) as s:
-        v = Vocabulary(
-            user_id=user_id,
-            source_text=source_text,
-            translated_text=translated_text,
-            direction=direction,
-            context=context,
-            status="active",
-        )
-        s.add(v)
-        s.commit()
-        s.refresh(v)
-        return _vocab_to_dict(v)
+    return vocab_service.save_item(
+        user_id=user_id,
+        source_text=source_text,
+        translated_text=translated_text,
+        direction=direction,
+        context=context,
+        item_type="sentence",
+        source_type="translate",
+    )
 
 
 def list_vocabulary(
@@ -207,36 +205,8 @@ def list_vocabulary(
     limit: int = 50,
     offset: int = 0,
 ) -> List[Dict]:
-    with OrmSession(engine) as s:
-        items = (
-            s.query(Vocabulary)
-            .filter_by(user_id=user_id, status="active")
-            .order_by(Vocabulary.created_at.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
-        return [_vocab_to_dict(v) for v in items]
+    return vocab_service.list_items(user_id=user_id, limit=limit, offset=offset)
 
 
 def delete_vocabulary(vocab_id: int, user_id: str) -> bool:
-    with OrmSession(engine) as s:
-        v = s.query(Vocabulary).filter_by(id=vocab_id, user_id=user_id).first()
-        if not v:
-            return False
-        v.status = "deleted"
-        s.commit()
-        return True
-
-
-def _vocab_to_dict(v: Vocabulary) -> Dict:
-    return {
-        "id": v.id,
-        "user_id": v.user_id,
-        "source_text": v.source_text,
-        "translated_text": v.translated_text,
-        "direction": v.direction,
-        "context": v.context,
-        "status": v.status,
-        "created_at": v.created_at.isoformat() if v.created_at else None,
-    }
+    return vocab_service.delete_item(vocab_id, user_id)

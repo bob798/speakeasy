@@ -15,6 +15,7 @@ export const API = {
   MEMORY: '/memory',
   PRACTICE: '/practice',
   TRANSLATE: '/translate',
+  VOCAB: '/vocab',
   AUTH: '/auth',
   ASK: '/ask',
   SETTINGS: '/settings',

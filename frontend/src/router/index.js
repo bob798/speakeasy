@@ -7,6 +7,8 @@ const Practice = () => import('@/views/Practice.vue')
 const Translate = () => import('@/views/Translate.vue')
 const Memory = () => import('@/views/Memory.vue')
 const Review = () => import('@/views/Review.vue')
+const ReviewHome = () => import('@/views/ReviewHome.vue')
+const BbcArticleReview = () => import('@/views/BbcArticleReview.vue')
 const Login = () => import('@/views/Login.vue')
 const NotFound = () => import('@/views/NotFound.vue')
 
@@ -34,9 +36,21 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/review',
+      name: 'review-home',
+      component: ReviewHome,
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/review/:sessionId',
       name: 'review',
       component: Review,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/bbc-review/:slug',
+      name: 'bbc-review',
+      component: BbcArticleReview,
       meta: { requiresAuth: true },
     },
     { path: '/login', name: 'login', component: Login, meta: { requiresAuth: false } },

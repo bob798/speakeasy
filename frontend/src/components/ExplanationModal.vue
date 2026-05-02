@@ -30,6 +30,31 @@ const { authFetch, authFetchJson } = useAuthFetch()
 const askPanelRef = useTemplateRef('askPanelRef')
 const ttsLoading = ref(false)
 
+// ── 收藏到生词本（V0.10）─────────────────────────────────────
+const starState = ref('idle')   // idle | saving | saved | error
+const starError = ref('')
+
+function deriveVocabSource() {
+  // 来源由父组件透传到 target.context；下面的 fallback 兼容老调用
+  const ctx = props.target?.context || {}
+  // 父组件优先：显式传入 vocab_source_type / vocab_source_ref
+  if (ctx.vocab_source_type) {
+    return {
+      source_type: ctx.vocab_source_type,
+      source_ref: ctx.vocab_source_ref || null,
+    }
+  }
+  // 老路径推断
+  if (ctx.source === 'chat') {
+    return { source_type: 'chat', source_ref: ctx.session_id || null }
+  }
+  if (ctx.source === 'practice') {
+    return { source_type: 'practice', source_ref: ctx.source_id || null }
+  }
+  // 解读页 / 其它
+  return { source_type: 'translate', source_ref: null }
+}
+
 const data = ref({
   // Sentence fields
   meaning: '',
@@ -77,6 +102,58 @@ function reset() {
   }
   error.value = ''
   activeTab.value = 'explain'
+  starState.value = 'idle'
+  starError.value = ''
+}
+
+async function saveToVocab() {
+  if (!props.target?.content || starState.value === 'saving') return
+  starState.value = 'saving'
+  starError.value = ''
+  const { source_type, source_ref } = deriveVocabSource()
+  // 拼一份解释 JSON（按 type 取相关字段）
+  const exp = data.value
+  const explanationPayload = props.target.type === 'word'
+    ? {
+        phonetic: exp.phonetic,
+        pos: exp.pos,
+        definitions: exp.definitions,
+        examples: exp.examples,
+        synonyms: exp.synonyms,
+        antonyms: exp.antonyms,
+      }
+    : {
+        meaning: exp.meaning,
+        grammar: exp.grammar,
+        phrases: exp.phrases,
+        liaison: exp.liaison,
+      }
+  // 句子用 sentence；word 单 token；多 token 视作 phrase
+  let item_type = 'sentence'
+  if (props.target.type === 'word') {
+    const tokens = props.target.content.trim().split(/\s+/)
+    item_type = tokens.length === 1 ? 'word' : 'phrase'
+  }
+  const translated = props.target.type === 'word'
+    ? (exp.definitions?.[0] || '')
+    : (exp.meaning || '')
+
+  try {
+    await authFetchJson(API.VOCAB, {
+      source_text: props.target.content,
+      translated_text: translated,
+      direction: 'en2zh',
+      context: props.target.sentence || '',
+      item_type,
+      source_type,
+      source_ref,
+      explanation_json: JSON.stringify(explanationPayload),
+    })
+    starState.value = 'saved'
+  } catch (err) {
+    starError.value = getErrorMessage(err, '收藏失败')
+    starState.value = 'error'
+  }
 }
 
 async function fetchWord() {
@@ -244,6 +321,17 @@ onBeforeUnmount(() => {
             <span class="content">{{ target?.content }}</span>
             <span v-if="data.phonetic" class="ipa">{{ data.phonetic }}</span>
           </div>
+          <button
+            class="star-btn"
+            :class="{ saved: starState === 'saved', saving: starState === 'saving', error: starState === 'error' }"
+            @click="saveToVocab"
+            :disabled="!target?.content || starState === 'saving' || starState === 'saved'"
+            :aria-label="starState === 'saved' ? '已收藏' : '收藏到生词本'"
+            :title="starState === 'error' ? (starError || '收藏失败') : (starState === 'saved' ? '已加入生词本' : '收藏到生词本')"
+          >
+            <span v-if="starState === 'saving'" class="spin">⏳</span>
+            <span v-else>{{ starState === 'saved' ? '★' : '☆' }}</span>
+          </button>
           <button
             class="play-btn"
             :class="{ playing: ttsPlaying, loading: ttsLoading }"
@@ -452,6 +540,31 @@ onBeforeUnmount(() => {
   font-family: Georgia, 'SF Pro Text', serif;
   font-size: 13px;
   margin-top: 2px;
+}
+.star-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 18px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  flex-shrink: 0;
+  transition: transform var(--duration) var(--ease), background var(--duration) var(--ease);
+}
+.star-btn:active {
+  transform: scale(0.92);
+}
+.star-btn.saved {
+  color: #c89b3c;
+  background: rgba(200, 155, 60, 0.16);
+  cursor: default;
+}
+.star-btn.error {
+  color: #b0403a;
+  background: rgba(176, 64, 58, 0.12);
+}
+.star-btn:disabled {
+  opacity: 0.6;
 }
 .play-btn {
   width: 36px;

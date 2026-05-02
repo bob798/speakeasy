@@ -9,7 +9,7 @@ import { API } from '@/config'
 
 const { authFetch, authFetchJson } = useAuthFetch()
 
-const tab = ref('profile') // profile | facts | cards
+const tab = ref('profile') // profile | facts | cards | vocab
 const profile = ref(null)
 const facts = ref([])
 const cards = ref([])
@@ -17,6 +17,85 @@ const factsOffset = ref(0)
 const factsTotal = ref(0)
 const cardsLoading = ref(false)
 const toast = ref('')
+
+// ── V0.10 生词本 ─────────────────────────────────────────
+const vocab = ref([])
+const vocabFilter = ref('all') // all | word | phrase | sentence | due
+const vocabLoading = ref(false)
+const vocabExpandedId = ref(null)
+
+const SOURCE_LABEL = {
+  translate: '解读',
+  bbc_eaw: 'BBC',
+  practice: '练习',
+  chat: '对话',
+}
+
+const TYPE_LABEL = { word: '词', phrase: '短语', sentence: '句' }
+
+async function loadVocab() {
+  vocabLoading.value = true
+  try {
+    const params = new URLSearchParams({ limit: '500' })
+    if (vocabFilter.value === 'due') {
+      params.set('due', 'true')
+    } else if (vocabFilter.value !== 'all') {
+      params.set('item_type', vocabFilter.value)
+    }
+    const resp = await authFetch(`${API.VOCAB}?${params.toString()}`)
+    if (!resp.ok) throw new Error('加载失败')
+    const data = await resp.json()
+    vocab.value = data.items || []
+  } catch (err) {
+    toast.value = getErrorMessage(err)
+  } finally {
+    vocabLoading.value = false
+  }
+}
+
+async function rateVocab(id, rating) {
+  try {
+    await authFetchJson(`${API.VOCAB}/${id}/rate`, { rating })
+    toast.value = `已记录 · ${rating}`
+    setTimeout(() => (toast.value = ''), 1200)
+    // due 列表评完移除；其它列表更新 due 字段
+    if (vocabFilter.value === 'due') {
+      vocab.value = vocab.value.filter((v) => v.id !== id)
+    } else {
+      await loadVocab()
+    }
+  } catch (err) {
+    toast.value = getErrorMessage(err, '评分失败')
+  }
+}
+
+async function deleteVocab(id) {
+  if (!confirm('确定删除？')) return
+  try {
+    const resp = await authFetch(`${API.VOCAB}/${id}`, { method: 'DELETE' })
+    if (!resp.ok) throw new Error('删除失败')
+    vocab.value = vocab.value.filter((v) => v.id !== id)
+  } catch (err) {
+    toast.value = getErrorMessage(err)
+  }
+}
+
+function toggleExpand(id) {
+  vocabExpandedId.value = vocabExpandedId.value === id ? null : id
+}
+
+function dueRelative(due) {
+  if (!due) return ''
+  const dt = new Date(due)
+  const now = Date.now()
+  const diff = dt.getTime() - now
+  if (diff <= 0) return '到期'
+  const days = Math.round(diff / 86400000)
+  if (days === 0) return '今天'
+  if (days === 1) return '明天'
+  if (days < 30) return `${days} 天后`
+  return dt.toISOString().slice(0, 10)
+}
 
 async function loadProfile() {
   try {
@@ -89,11 +168,16 @@ async function deleteCard(id) {
   }
 }
 
+import { watch } from 'vue'
+
 onMounted(async () => {
   await loadProfile()
   await loadFacts()
   await loadCards()
+  await loadVocab()
 })
+
+watch(vocabFilter, () => loadVocab())
 </script>
 
 <template>
@@ -111,6 +195,9 @@ onMounted(async () => {
       </button>
       <button :class="{ active: tab === 'cards' }" @click="tab = 'cards'">
         语法卡 ({{ cards.length }})
+      </button>
+      <button :class="{ active: tab === 'vocab' }" @click="tab = 'vocab'">
+        生词本 ({{ vocab.length }})
       </button>
     </nav>
 
@@ -163,6 +250,45 @@ onMounted(async () => {
         >
           加载更多（{{ factsOffset }}/{{ factsTotal }})
         </button>
+      </section>
+
+      <!-- Vocab Tab (V0.10) -->
+      <section v-show="tab === 'vocab'" class="vocab">
+        <div class="filter-bar">
+          <button :class="{ on: vocabFilter === 'all' }" @click="vocabFilter = 'all'">全部</button>
+          <button :class="{ on: vocabFilter === 'word' }" @click="vocabFilter = 'word'">词</button>
+          <button :class="{ on: vocabFilter === 'phrase' }" @click="vocabFilter = 'phrase'">短语</button>
+          <button :class="{ on: vocabFilter === 'sentence' }" @click="vocabFilter = 'sentence'">句</button>
+          <button :class="{ on: vocabFilter === 'due' }" @click="vocabFilter = 'due'">今日复习</button>
+        </div>
+        <div v-if="vocabLoading" class="empty">加载中...</div>
+        <ul v-else-if="vocab.length">
+          <li v-for="v in vocab" :key="v.id" class="vocab-item" :class="{ expanded: vocabExpandedId === v.id }">
+            <div class="v-head" @click="toggleExpand(v.id)">
+              <span class="v-type">{{ TYPE_LABEL[v.item_type] || v.item_type }}</span>
+              <span class="v-text">{{ v.source_text }}</span>
+              <span class="v-due" :class="{ overdue: v.is_due }">{{ dueRelative(v.due) }}</span>
+            </div>
+            <div v-if="v.translated_text" class="v-translation">{{ v.translated_text }}</div>
+            <div v-if="vocabExpandedId === v.id" class="v-detail">
+              <div v-if="v.context" class="v-context">📍 {{ v.context }}</div>
+              <div class="v-meta">
+                <span class="v-source">来源：{{ SOURCE_LABEL[v.source_type] || v.source_type }}</span>
+                <span v-if="v.created_at">{{ v.created_at.slice(0, 10) }}</span>
+              </div>
+              <div class="rate-row">
+                <button class="rate again" @click="rateVocab(v.id, 'again')">Again</button>
+                <button class="rate hard" @click="rateVocab(v.id, 'hard')">Hard</button>
+                <button class="rate good" @click="rateVocab(v.id, 'good')">Good</button>
+                <button class="rate easy" @click="rateVocab(v.id, 'easy')">Easy</button>
+                <button class="del-btn" @click.stop="deleteVocab(v.id)">删除</button>
+              </div>
+            </div>
+          </li>
+        </ul>
+        <p v-else class="empty">
+          {{ vocabFilter === 'due' ? '今日没有待复习的条目 ✨' : '生词本还是空的，去解读页加 ⭐ 收藏吧' }}
+        </p>
       </section>
 
       <!-- Cards Tab -->
@@ -369,6 +495,109 @@ ul {
 .empty {
   padding: var(--space-6);
   text-align: center;
+  color: var(--text-3);
+}
+.vocab .filter-bar {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+.vocab .filter-bar button {
+  padding: 4px 12px;
+  font-size: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-2);
+}
+.vocab .filter-bar button.on {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border-color: var(--accent);
+}
+.vocab-item {
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.vocab-item.expanded {
+  border-color: var(--accent);
+}
+.v-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.v-type {
+  padding: 2px 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.v-text {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-1);
+  word-break: break-word;
+}
+.v-due {
+  font-size: 11px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+.v-due.overdue {
+  color: #c89b3c;
+  font-weight: 500;
+}
+.v-translation {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-2);
+  padding-left: 38px;
+}
+.v-detail {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.v-context {
+  font-size: 12px;
+  color: var(--text-2);
+  font-style: italic;
+}
+.v-meta {
+  display: flex;
+  gap: var(--space-3);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.rate-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.rate {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+.rate.again { background: rgba(198, 70, 58, 0.12); color: #c6463a; }
+.rate.hard  { background: rgba(176, 121, 26, 0.12); color: #b0791a; }
+.rate.good  { background: var(--accent-soft); color: var(--accent); }
+.rate.easy  { background: rgba(61, 107, 79, 0.18); color: var(--accent); }
+.del-btn {
+  margin-left: auto;
+  padding: 6px 10px;
+  font-size: 11px;
   color: var(--text-3);
 }
 .toast {

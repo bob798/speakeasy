@@ -153,6 +153,10 @@ onMounted(() => {
         <span class="ico">🌐</span>
         <span class="name">翻译 · 生词本</span>
       </RouterLink>
+      <RouterLink to="/review" class="sec-item">
+        <span class="ico">📝</span>
+        <span class="name">今日复习</span>
+      </RouterLink>
       <RouterLink to="/memory" class="sec-item">
         <span class="ico">🧠</span>
         <span class="name">记忆管理</span>
@@ -360,7 +364,7 @@ textarea {
 .secondary {
   margin-top: auto;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--space-2);
   padding-top: var(--space-3);
   border-top: 1px solid var(--border);

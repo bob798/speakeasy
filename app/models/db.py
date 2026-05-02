@@ -149,14 +149,25 @@ class SubtitleSource(Base):
 class Vocabulary(Base):
     __tablename__ = "vocabulary"
 
-    id              = Column(Integer, primary_key=True, autoincrement=True)
-    user_id         = Column(String, nullable=False, index=True)
-    source_text     = Column(String, nullable=False)
-    translated_text = Column(String, nullable=False)
-    direction       = Column(String, nullable=False)   # 'zh2en' | 'en2zh'
-    context         = Column(String, nullable=True)
-    created_at      = Column(DateTime, default=datetime.utcnow)
-    status          = Column(String, nullable=False, default="active")  # active | deleted
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    user_id          = Column(String, nullable=False, index=True)
+    source_text      = Column(String, nullable=False)
+    translated_text  = Column(String, nullable=False)
+    direction        = Column(String, nullable=False)   # 'zh2en' | 'en2zh'
+    context          = Column(String, nullable=True)
+    created_at       = Column(DateTime, default=datetime.utcnow)
+    status           = Column(String, nullable=False, default="active")  # active | deleted
+    # ── V0.10 生词本 + FSRS（P1）──────────────────────────────
+    item_type        = Column(String, nullable=False, default="sentence")  # word | phrase | sentence
+    source_type      = Column(String, nullable=False, default="translate") # translate | bbc_eaw | practice | chat
+    source_ref       = Column(String, nullable=True)                       # bbc slug / session_id / null
+    explanation_json = Column(String, nullable=True)                       # 复用 ExplanationCache 输出
+    fsrs_card_data   = Column(String, nullable=False, default="")
+    last_reviewed_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "source_text", "source_ref", name="uq_vocab_user_text_ref"),
+    )
 
 
 class TranslationCache(Base):
@@ -240,6 +251,38 @@ class BbcEawEpisode(Base):
     source_html_path   = Column(String, nullable=True)                 # data/bbc_eaw/raw/<slug>.html
     created_at         = Column(DateTime, default=datetime.utcnow)
     updated_at         = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ── V0.10 BBC 文章级 SRS ──────────────────────────────────
+# 每个 (user, slug) 一张 FSRS 卡，文章作为复习单元
+# 题目按 slug 共享，懒加载首次复习时由 LLM 生成
+
+class BbcArticleCard(Base):
+    __tablename__ = "bbc_article_cards"
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    user_id          = Column(String, nullable=False, index=True)
+    slug             = Column(String, nullable=False, index=True)         # 关联 BbcEawEpisode.slug
+    fsrs_card_data   = Column(String, nullable=False, default="")
+    status           = Column(String, nullable=False, default="active")   # active | deleted
+    first_studied_at = Column(DateTime, default=datetime.utcnow)
+    last_reviewed_at = Column(DateTime, nullable=True)
+    review_count     = Column(Integer, nullable=False, default=0)
+
+    __table_args__ = (UniqueConstraint("user_id", "slug", name="uq_bbc_card_user_slug"),)
+
+
+class BbcArticleQuestion(Base):
+    __tablename__ = "bbc_article_questions"
+
+    id            = Column(Integer, primary_key=True, autoincrement=True)
+    slug          = Column(String, nullable=False, index=True)
+    qtype         = Column(String, nullable=False)                   # cloze | back_translate | recall_prompt
+    prompt        = Column(String, nullable=False)
+    answer        = Column(String, nullable=False, default="")
+    segment_idx   = Column(Integer, nullable=True)                   # transcript 句序号（可空）
+    phrases_used  = Column(String, nullable=False, default="[]")     # JSON: ["..."]
+    created_at    = Column(DateTime, default=datetime.utcnow)
 
 
 # Sync engine for ORM operations (tests, memory_service, review_service)
