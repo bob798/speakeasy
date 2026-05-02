@@ -24,11 +24,157 @@ const props = defineProps({
 })
 
 const { stream: sseStream, streaming, abort: abortStream } = useSSE()
-const { enqueue: ttsEnqueue, clear: ttsClear, playing: ttsPlaying } = useTTS()
+const { enqueue: ttsEnqueue, clear: ttsClear, stop: ttsStop, playing: ttsPlaying } = useTTS()
 const { authFetch, authFetchJson } = useAuthFetch()
 
 const askPanelRef = useTemplateRef('askPanelRef')
 const ttsLoading = ref(false)
+
+// ── 免提模式（V0.10）─────────────────────────────────────────
+// localStorage 持久化；word: target 循环 N 次；sentence: target → narration → phrases 序列
+const HANDSFREE_KEY = 'v0.10:handsfree'
+const handsFreeMode = ref(loadHandsFree())
+const sequencePlaying = ref(false)
+let _sequenceGen = 0           // 每次启动 / 取消自增；旧 sequence 检查代际后退出
+const WORD_LOOP_COUNT = 3
+const WORD_LOOP_GAP_MS = 1200
+const SENTENCE_GAP_MS = 800
+const SENTENCE_LOOP = 1        // 整套序列重复几次
+
+function loadHandsFree() {
+  try {
+    return localStorage.getItem(HANDSFREE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function setHandsFree(v) {
+  handsFreeMode.value = v
+  try {
+    localStorage.setItem(HANDSFREE_KEY, v ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+  if (!v) {
+    cancelSequence()
+  } else {
+    // 立即触发当前内容的播放（如果已加载完）
+    maybeStartSequence()
+  }
+}
+
+function cancelSequence() {
+  _sequenceGen++
+  sequencePlaying.value = false
+  ttsClear()
+}
+
+function _sleep(ms, gen) {
+  return new Promise((resolve) => {
+    const t = setTimeout(() => resolve(), ms)
+    // 取消时让 sleep 立即返回（通过代际检测）
+    const check = setInterval(() => {
+      if (gen !== _sequenceGen) {
+        clearTimeout(t)
+        clearInterval(check)
+        resolve()
+      }
+    }, 80)
+  })
+}
+
+function _speakAndWait(text, gen) {
+  // 单条 speak · 等播完（playing false → true → false）才 resolve
+  return new Promise((resolve) => {
+    if (!text || gen !== _sequenceGen) return resolve()
+    let started = false
+    const unwatch = watch(
+      ttsPlaying,
+      (v) => {
+        if (gen !== _sequenceGen) {
+          unwatch()
+          return resolve()
+        }
+        if (v) started = true
+        else if (started) {
+          unwatch()
+          resolve()
+        }
+      },
+    )
+    // 兜底超时（防 onerror 未触发）：30s
+    setTimeout(() => {
+      unwatch()
+      resolve()
+    }, 30000)
+    ttsClear()
+    ttsEnqueue(text)
+  })
+}
+
+async function _runWordSequence(gen) {
+  const word = props.target?.content
+  if (!word) return
+  for (let i = 0; i < WORD_LOOP_COUNT; i++) {
+    if (gen !== _sequenceGen) return
+    await _speakAndWait(word, gen)
+    if (gen !== _sequenceGen) return
+    if (i < WORD_LOOP_COUNT - 1) await _sleep(WORD_LOOP_GAP_MS, gen)
+  }
+}
+
+async function _runSentenceSequence(gen) {
+  const sentence = props.target?.content
+  const narration = data.value.narration
+  const phrases = (data.value.phrases || [])
+    .map((p) => (typeof p === 'string' ? p : p.phrase))
+    .filter(Boolean)
+
+  for (let loop = 0; loop < SENTENCE_LOOP; loop++) {
+    if (sentence) {
+      await _speakAndWait(sentence, gen)
+      if (gen !== _sequenceGen) return
+      await _sleep(SENTENCE_GAP_MS, gen)
+    }
+    if (gen !== _sequenceGen) return
+    if (narration) {
+      await _speakAndWait(narration, gen)
+      if (gen !== _sequenceGen) return
+      await _sleep(SENTENCE_GAP_MS, gen)
+    }
+    for (const phrase of phrases) {
+      if (gen !== _sequenceGen) return
+      await _speakAndWait(phrase, gen)
+      await _sleep(SENTENCE_GAP_MS, gen)
+    }
+  }
+}
+
+async function startSequence() {
+  cancelSequence()
+  _sequenceGen++
+  const gen = _sequenceGen
+  sequencePlaying.value = true
+  try {
+    if (props.target?.type === 'word') {
+      await _runWordSequence(gen)
+    } else {
+      await _runSentenceSequence(gen)
+    }
+  } finally {
+    if (gen === _sequenceGen) {
+      sequencePlaying.value = false
+    }
+  }
+}
+
+function maybeStartSequence() {
+  if (!handsFreeMode.value) return
+  if (!open.value || !props.target?.content) return
+  if (loading.value) return  // 等内容加载完再启动
+  startSequence()
+}
 
 // ── 收藏到生词本（V0.10）─────────────────────────────────────
 const starState = ref('idle')   // idle | saving | saved | error
@@ -246,6 +392,8 @@ async function fetchExplanation() {
   } else {
     await fetchSentence()
   }
+  // 内容加载完 · 免提模式下自动启动播放序列
+  maybeStartSequence()
 }
 
 watch(
@@ -255,13 +403,14 @@ watch(
       fetchExplanation()
     } else if (!isOpen) {
       abortStream()
-      ttsClear()
+      cancelSequence()
     }
   }
 )
 
 async function playTarget() {
   if (!props.target?.content) return
+  cancelSequence()  // 用户主动播放 · 取消自动序列
   ttsLoading.value = true
   // 监听 playing → 变 true 后关掉 loading；或 1.5s 超时兜底
   const t = setTimeout(() => (ttsLoading.value = false), 2000)
@@ -277,6 +426,7 @@ async function playTarget() {
 
 async function playNarration() {
   if (!data.value.narration) return
+  cancelSequence()
   ttsLoading.value = true
   const t = setTimeout(() => (ttsLoading.value = false), 2000)
   const stop = watch(ttsPlaying, (v) => {
@@ -287,6 +437,15 @@ async function playNarration() {
     }
   })
   ttsEnqueue(data.value.narration, { manual: true })
+}
+
+function toggleHandsFree() {
+  setHandsFree(!handsFreeMode.value)
+}
+
+function stopSequenceManual() {
+  cancelSequence()
+  ttsStop()
 }
 
 watch(activeTab, async (tab) => {
@@ -306,6 +465,7 @@ function refId() {
 }
 
 onBeforeUnmount(() => {
+  cancelSequence()
   ttsClear()
   abortStream()
 })
@@ -321,6 +481,15 @@ onBeforeUnmount(() => {
             <span class="content">{{ target?.content }}</span>
             <span v-if="data.phonetic" class="ipa">{{ data.phonetic }}</span>
           </div>
+          <button
+            class="hf-btn"
+            :class="{ on: handsFreeMode, sequencing: sequencePlaying }"
+            @click="toggleHandsFree"
+            :aria-label="handsFreeMode ? '关闭免提模式' : '开启免提模式'"
+            :title="handsFreeMode ? '免提模式开启 · 自动循环播放（再点关闭）' : '免提模式 · 进解读自动循环播放'"
+          >
+            <span>🎧</span>
+          </button>
           <button
             class="star-btn"
             :class="{ saved: starState === 'saved', saving: starState === 'saving', error: starState === 'error' }"
@@ -345,6 +514,14 @@ onBeforeUnmount(() => {
           </button>
           <button class="close" @click="close" aria-label="关闭">×</button>
         </header>
+
+        <div v-if="sequencePlaying" class="seq-indicator" @click="stopSequenceManual">
+          <span class="seq-dot"></span>
+          <span class="seq-text">
+            {{ target?.type === 'word' ? '免提模式 · 单词循环中' : '免提模式 · 序列播放中' }}
+          </span>
+          <span class="seq-stop">点击停止</span>
+        </div>
 
         <nav class="tabs">
           <button
@@ -541,6 +718,64 @@ onBeforeUnmount(() => {
   font-size: 13px;
   margin-top: 2px;
 }
+.hf-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 16px;
+  color: var(--text-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+  transition: transform var(--duration) var(--ease), background var(--duration) var(--ease);
+}
+.hf-btn:active { transform: scale(0.92); }
+.hf-btn.on {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.hf-btn.sequencing {
+  animation: hf-pulse 1.6s ease-in-out infinite;
+}
+@keyframes hf-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  50% { box-shadow: 0 0 0 5px transparent; }
+}
+
+.seq-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px var(--space-4);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+.seq-indicator:active { opacity: 0.7; }
+.seq-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: seq-pulse 1.2s ease-in-out infinite;
+}
+@keyframes seq-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+.seq-text { flex: 1; }
+.seq-stop {
+  font-size: 11px;
+  color: var(--text-3);
+  padding: 2px 8px;
+  background: var(--bg-elevated);
+  border-radius: 999px;
+}
+
 .star-btn {
   width: 36px;
   height: 36px;
