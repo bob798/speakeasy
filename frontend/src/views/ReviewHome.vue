@@ -9,9 +9,10 @@
  * 文章 → /bbc-review/:slug
  * 生词 → 内联评分（FSRS 推进）
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthFetch, getErrorMessage } from '@/composables/useAuthFetch'
+import { useVoiceCommand } from '@/composables/useVoiceCommand'
 import { API } from '@/config'
 
 const router = useRouter()
@@ -24,6 +25,7 @@ const error = ref('')
 const toast = ref('')
 
 const totalDue = computed(() => articles.value.length + vocab.value.length)
+const focusVocab = computed(() => vocab.value[0] || null)
 
 async function loadAll() {
   loading.value = true
@@ -63,6 +65,93 @@ function reviewArticle(slug) {
 
 const TYPE_LABEL = { word: '词', phrase: '短语', sentence: '句' }
 
+// ── 语音控制 demo（V0.10 P8）────────────────────────────────
+// 命令直接打到「焦点条目」（vocab 列表第一项）
+// 评完后第一项被移除，下一项自动成为焦点
+function rateFocus(rating) {
+  if (!focusVocab.value) {
+    showToast('没有待复习的生词了')
+    return
+  }
+  rateVocab(focusVocab.value.id, rating)
+}
+
+function reviewFirstArticle() {
+  if (!articles.value.length) {
+    showToast('没有待复习的文章')
+    return
+  }
+  reviewArticle(articles.value[0].slug)
+}
+
+const voice = useVoiceCommand({
+  commands: {
+    again: () => rateFocus('again'),
+    hard:  () => rateFocus('hard'),
+    good:  () => rateFocus('good'),
+    easy:  () => rateFocus('easy'),
+    skip:  () => rateFocus('good'),    // 跳过 = good（FSRS 略推）
+    review: () => reviewFirstArticle(),
+    back:  () => router.push('/'),
+  },
+  aliases: {
+    // 中文 again
+    '再来':   'again',
+    '不会':   'again',
+    '错了':   'again',
+    '重来':   'again',
+    // hard
+    '难':     'hard',
+    '有点难': 'hard',
+    '困难':   'hard',
+    // good
+    '好的':   'good',
+    '可以':   'good',
+    '会了':   'good',
+    '记得':   'good',
+    '对':     'good',
+    // easy
+    '简单':   'easy',
+    '太容易': 'easy',
+    '熟':     'easy',
+    // skip
+    '跳过':   'skip',
+    '下一个': 'skip',
+    '下一':   'skip',
+    // review
+    '复习':   'review',
+    '开始复习': 'review',
+    // back
+    '返回':   'back',
+    '退出':   'back',
+    '回去':   'back',
+  },
+  onMatched: (cmd, text) => {
+    showToast(`听到「${text}」→ ${cmd}`, 1500)
+  },
+  onUnmatched: (text) => {
+    showToast(`没听懂「${text}」`, 1500)
+  },
+  onError: (err) => {
+    if (err.type === 'PERMISSION_DENIED') {
+      showToast('请允许麦克风权限')
+    } else if (err.type === 'UNSUPPORTED') {
+      showToast(err.message || '当前环境不支持语音')
+    } else {
+      showToast(`语音错误：${err.type}`)
+    }
+  },
+})
+
+function toggleVoice() {
+  if (voice.active.value) voice.stop()
+  else voice.start()
+}
+
+onBeforeUnmount(() => {
+  voice.stop()
+})
+
 onMounted(loadAll)
 </script>
 
@@ -71,8 +160,29 @@ onMounted(loadAll)
     <header class="topbar">
       <RouterLink class="back" to="/">← 返回</RouterLink>
       <div class="title">今日复习</div>
-      <span />
+      <button
+        class="voice-btn"
+        :class="{ on: voice.active.value, listening: voice.listening.value }"
+        @click="toggleVoice"
+        :title="voice.active.value ? '语音控制开启 · 再点关闭' : '语音控制 · 用「Again/Hard/Good/Easy/跳过/复习/返回」操控'"
+      >
+        🎤
+      </button>
     </header>
+
+    <!-- 语音状态条 -->
+    <div v-if="voice.active.value" class="voice-banner" @click="toggleVoice">
+      <span class="vb-dot" :class="{ active: voice.listening.value }"></span>
+      <span class="vb-text">
+        <template v-if="voice.listening.value">听中…</template>
+        <template v-else-if="voice.lastHeard.value">
+          上次：{{ voice.lastHeard.value }}
+          <span v-if="voice.lastCommand.value" class="vb-cmd">→ {{ voice.lastCommand.value }}</span>
+        </template>
+        <template v-else>语音模式开启</template>
+      </span>
+      <span class="vb-stop">点击关闭</span>
+    </div>
 
     <main class="body">
       <div v-if="loading" class="state">加载中…</div>
@@ -103,9 +213,15 @@ onMounted(loadAll)
         <section v-if="vocab.length" class="block">
           <h3>📒 生词条目 · {{ vocab.length }}</h3>
           <ul class="vocab-list">
-            <li v-for="v in vocab" :key="v.id" class="vocab-item">
+            <li
+              v-for="(v, idx) in vocab"
+              :key="v.id"
+              class="vocab-item"
+              :class="{ focus: voice.active.value && idx === 0 }"
+            >
               <div class="vi-head">
                 <span class="vi-type">{{ TYPE_LABEL[v.item_type] || v.item_type }}</span>
+                <span v-if="voice.active.value && idx === 0" class="vi-focus-tag">语音焦点</span>
                 <span class="vi-text">{{ v.source_text }}</span>
               </div>
               <div v-if="v.translated_text" class="vi-trans">{{ v.translated_text }}</div>
@@ -144,6 +260,77 @@ onMounted(loadAll)
 }
 .back { color: var(--text-2); }
 .title { font-weight: 600; color: var(--accent); }
+.voice-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  flex-shrink: 0;
+  transition: all var(--duration) var(--ease);
+}
+.voice-btn:active { transform: scale(0.92); }
+.voice-btn.on {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border-color: var(--accent);
+}
+.voice-btn.listening {
+  animation: voice-pulse 1.4s ease-in-out infinite;
+}
+@keyframes voice-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  50% { box-shadow: 0 0 0 8px transparent; }
+}
+
+.voice-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px var(--space-4);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+.voice-banner:active { opacity: 0.7; }
+.vb-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-3);
+  flex-shrink: 0;
+}
+.vb-dot.active {
+  background: var(--accent);
+  animation: vb-blink 1s ease-in-out infinite;
+}
+@keyframes vb-blink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.4); }
+}
+.vb-text { flex: 1; word-break: break-word; }
+.vb-cmd {
+  margin-left: var(--space-2);
+  padding: 2px 8px;
+  background: var(--accent);
+  color: var(--text-inverse);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.vb-stop {
+  font-size: 11px;
+  color: var(--text-3);
+  padding: 2px 8px;
+  background: var(--bg-elevated);
+  border-radius: 999px;
+  flex-shrink: 0;
+}
 .body {
   max-width: 720px;
   margin: 0 auto;
@@ -211,6 +398,19 @@ onMounted(loadAll)
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  transition: border-color var(--duration) var(--ease), box-shadow var(--duration) var(--ease);
+}
+.vocab-item.focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.vi-focus-tag {
+  padding: 2px 8px;
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-size: 10px;
+  border-radius: 999px;
+  font-weight: 500;
 }
 .vi-head {
   display: flex;
