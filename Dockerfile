@@ -27,6 +27,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制后端源码（含 frontend/ 但 dist/ 会被下面覆盖）
 COPY . .
 
+# 版本标签（构建时可通过 --build-arg 覆盖）
+ARG APP_VERSION=""
+LABEL app.version="${APP_VERSION}"
+
 # 用 Stage 1 构建好的 dist 覆盖 frontend/dist
 COPY --from=frontend-build /build/dist ./frontend/dist
 

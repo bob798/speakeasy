@@ -109,9 +109,19 @@ if SPA_AVAILABLE and os.path.isdir(os.path.join(FRONTEND_DIST, "assets")):
 
 
 # ── 系统端点（保持不变）────────────────────────────────────────
+def _read_version() -> str:
+    """读取 VERSION 文件，缺失时返回 dev"""
+    try:
+        return open("VERSION").read().strip()
+    except FileNotFoundError:
+        return "dev"
+
+APP_VERSION = _read_version()
+
+
 @app.get("/health")
 async def health():
-    return {"status": "ok", "spa_available": SPA_AVAILABLE}
+    return {"status": "ok", "version": APP_VERSION, "spa_available": SPA_AVAILABLE}
 
 
 @app.get("/.well-known/appspecific/com.chrome.devtools.json")
