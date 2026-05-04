@@ -19,6 +19,7 @@ from app.routers.stats import router as stats_router
 from app.routers.bbc_eaw import router as bbc_eaw_router
 from app.routers.bbc_review import router as bbc_review_router
 from app.routers.vocab import router as vocab_router
+from app.routers.model import router as model_router
 
 
 # ── V0.8 前端重构挂载策略（Pass 3 plan §4 + Critic B1-B5）────────────
@@ -93,6 +94,7 @@ app.include_router(stats_router)
 app.include_router(bbc_eaw_router)
 app.include_router(bbc_review_router)
 app.include_router(vocab_router)
+app.include_router(model_router)
 
 # 数据目录挂载（audio_cache、tts_cache 等）——无论新旧前端都要读
 app.mount("/static", StaticFiles(directory="static"), name="static")

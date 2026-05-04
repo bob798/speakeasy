@@ -4,7 +4,7 @@ from typing import AsyncGenerator
 import httpx
 import anthropic
 from openai import OpenAI
-from app.config import MAX_TOKENS, MODEL_NAME
+from app.config import MAX_TOKENS, MODEL_NAME, MODEL_REGISTRY, get_scene_model, runtime_model
 from app.prompts.system import SYSTEM_PROMPT
 from app.prompts.summary import SUMMARY_PROMPT
 from app.logger import get_logger
@@ -34,9 +34,14 @@ PROVIDER_CONFIG = {
     "zhipu": {
         "env_key": "ZHIPU_API_KEY",
         "base_url": "https://open.bigmodel.cn/api/paas/v4",
-        "default_model": "doubao-1-5-pro-32k-250115",
+        "default_model": "glm-4-7-251222",
     },
 }
+
+
+def _active_model() -> str:
+    """获取运行时活跃模型名（支持热切换）"""
+    return runtime_model.model
 
 
 def _get_provider() -> str:
@@ -116,12 +121,12 @@ class AnthropicClient(BaseModelClient):
         )
 
     def chat(self, message: str, history: list[dict]) -> str:
-        logger.info("调用 Anthropic chat model=%s history_turns=%d", MODEL_NAME, len(history))
+        logger.info("调用 Anthropic chat model=%s history_turns=%d", _active_model(), len(history))
         t0 = time.time()
         try:
             messages = history + [{"role": "user", "content": message}]
             response = self.client.messages.create(
-                model=MODEL_NAME,
+                model=_active_model(),
                 max_tokens=MAX_TOKENS,
                 system=SYSTEM_PROMPT,
                 messages=messages,
@@ -135,20 +140,20 @@ class AnthropicClient(BaseModelClient):
             raise Exception(f"Anthropic API 调用失败：{e}")
 
     async def chat_stream(self, message: str, history: list[dict]) -> AsyncGenerator[str, None]:
-        logger.info("调用 Anthropic chat_stream model=%s history_turns=%d", MODEL_NAME, len(history))
+        logger.info("调用 Anthropic chat_stream model=%s history_turns=%d", _active_model(), len(history))
         messages = history + [{"role": "user", "content": message}]
         with self.client.messages.stream(
-            model=MODEL_NAME, max_tokens=MAX_TOKENS, system=SYSTEM_PROMPT,
+            model=_active_model(), max_tokens=MAX_TOKENS, system=SYSTEM_PROMPT,
             messages=messages
         ) as stream:
             for text in stream.text_stream:
                 yield text
 
     async def chat_stream_messages(self, messages: list[dict]) -> AsyncGenerator[str, None]:
-        logger.info("调用 Anthropic chat_stream_messages model=%s", MODEL_NAME)
+        logger.info("调用 Anthropic chat_stream_messages model=%s", _active_model())
         system = next((m["content"] for m in messages if m.get("role") == "system"), None)
         user_messages = [m for m in messages if m.get("role") != "system"]
-        kwargs = {"model": MODEL_NAME, "max_tokens": MAX_TOKENS, "messages": user_messages}
+        kwargs = {"model": _active_model(), "max_tokens": MAX_TOKENS, "messages": user_messages}
         if system:
             kwargs["system"] = system
         with self.client.messages.stream(**kwargs) as stream:
@@ -156,12 +161,12 @@ class AnthropicClient(BaseModelClient):
                 yield text
 
     def generate_summary(self, history: list[dict]) -> str:
-        logger.info("调用 Anthropic summary model=%s", MODEL_NAME)
+        logger.info("调用 Anthropic summary model=%s", _active_model())
         t0 = time.time()
         try:
             prompt = SUMMARY_PROMPT + self._format_history(history)
             response = self.client.messages.create(
-                model=MODEL_NAME,
+                model=_active_model(),
                 max_tokens=256,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -177,7 +182,7 @@ class AnthropicClient(BaseModelClient):
         # Extract system message if present (Anthropic uses separate param)
         system = next((m["content"] for m in messages if m.get("role") == "system"), None)
         user_messages = [m for m in messages if m.get("role") != "system"]
-        kwargs = {"model": MODEL_NAME, "max_tokens": max_tokens, "messages": user_messages}
+        kwargs = {"model": _active_model(), "max_tokens": max_tokens, "messages": user_messages}
         if system:
             kwargs["system"] = system
         response = self.client.messages.create(**kwargs)
@@ -201,7 +206,7 @@ class OpenAICompatibleClient(BaseModelClient):
         )
 
     def chat(self, message: str, history: list[dict]) -> str:
-        logger.info("调用 %s chat model=%s history_turns=%d", self.provider, MODEL_NAME, len(history))
+        logger.info("调用 %s chat model=%s history_turns=%d", self.provider, _active_model(), len(history))
         t0 = time.time()
         try:
             messages = (
@@ -210,7 +215,7 @@ class OpenAICompatibleClient(BaseModelClient):
                 + [{"role": "user", "content": message}]
             )
             response = self.client.chat.completions.create(
-                model=MODEL_NAME,
+                model=_active_model(),
                 max_tokens=MAX_TOKENS,
                 messages=messages,
             )
@@ -223,14 +228,14 @@ class OpenAICompatibleClient(BaseModelClient):
             raise Exception(f"{self.provider} API 调用失败：{e}")
 
     async def chat_stream(self, message: str, history: list[dict]) -> AsyncGenerator[str, None]:
-        logger.info("调用 %s chat_stream model=%s history_turns=%d", self.provider, MODEL_NAME, len(history))
+        logger.info("调用 %s chat_stream model=%s history_turns=%d", self.provider, _active_model(), len(history))
         messages = (
             [{"role": "system", "content": SYSTEM_PROMPT}]
             + history
             + [{"role": "user", "content": message}]
         )
         resp = self.client.chat.completions.create(
-            model=MODEL_NAME, max_tokens=MAX_TOKENS, stream=True,
+            model=_active_model(), max_tokens=MAX_TOKENS, stream=True,
             messages=messages
         )
         for chunk in resp:
@@ -239,9 +244,9 @@ class OpenAICompatibleClient(BaseModelClient):
                 yield delta
 
     async def chat_stream_messages(self, messages: list[dict]) -> AsyncGenerator[str, None]:
-        logger.info("调用 %s chat_stream_messages model=%s", self.provider, MODEL_NAME)
+        logger.info("调用 %s chat_stream_messages model=%s", self.provider, _active_model())
         resp = self.client.chat.completions.create(
-            model=MODEL_NAME, max_tokens=MAX_TOKENS, stream=True,
+            model=_active_model(), max_tokens=MAX_TOKENS, stream=True,
             messages=messages
         )
         for chunk in resp:
@@ -250,12 +255,12 @@ class OpenAICompatibleClient(BaseModelClient):
                 yield delta
 
     def generate_summary(self, history: list[dict]) -> str:
-        logger.info("调用 %s summary model=%s", self.provider, MODEL_NAME)
+        logger.info("调用 %s summary model=%s", self.provider, _active_model())
         t0 = time.time()
         try:
             prompt = SUMMARY_PROMPT + self._format_history(history)
             response = self.client.chat.completions.create(
-                model=MODEL_NAME,
+                model=_active_model(),
                 max_tokens=256,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -269,7 +274,7 @@ class OpenAICompatibleClient(BaseModelClient):
 
     def _complete_sync_messages(self, messages: list, max_tokens: int) -> str:
         response = self.client.chat.completions.create(
-            model=MODEL_NAME,
+            model=_active_model(),
             max_tokens=max_tokens,
             messages=messages,
         )
@@ -298,3 +303,24 @@ class ClaudeService:
 
 # V0.2a 别名
 get_model_client = get_client
+
+
+# ──────────────────────────────────────────────
+# 按场景获取客户端（支持不同场景用不同模型）
+# ──────────────────────────────────────────────
+def get_scene_client(scene: str = "default") -> tuple[BaseModelClient, str]:
+    """
+    返回 (client, model_name)。
+    调用方用返回的 model_name 覆盖请求中的 model 参数。
+
+    用法:
+        client, model = get_scene_client("explain")
+        # 然后在调用时传 model=model 而非全局 MODEL_NAME
+    """
+    provider, model_name = get_scene_model(scene)
+    if provider not in PROVIDER_CONFIG:
+        raise ValueError(f"不支持的 provider: '{provider}'")
+    if provider == "anthropic":
+        return AnthropicClient(), model_name
+    else:
+        return OpenAICompatibleClient(provider), model_name
