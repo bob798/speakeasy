@@ -26,19 +26,25 @@ jobs:
           username: ${{ secrets.ALIYUN_USERNAME }}
           password: ${{ secrets.ALIYUN_PASSWORD }}
 
-      - name: Read version
+      - name: Generate version
         id: version
-        run: echo "ver=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+        run: |
+          BASE=$(cat VERSION | tr -d '\n')
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          DATE=$(date -u +%Y%m%d)
+          FULL="${BASE}-${DATE}-${SHORT_SHA}"
+          echo "full=$FULL" >> "$GITHUB_OUTPUT"
+          echo "Generated version: $FULL"
 
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          build-args: APP_VERSION=${{ steps.version.outputs.ver }}
+          build-args: APP_VERSION=${{ steps.version.outputs.full }}
           tags: |
             ${{ env.IMAGE_PATH }}:latest
-            ${{ env.IMAGE_PATH }}:v${{ steps.version.outputs.ver }}
+            ${{ env.IMAGE_PATH }}:v${{ steps.version.outputs.full }}
             ${{ env.IMAGE_PATH }}:${{ github.sha }}
 
   deploy:

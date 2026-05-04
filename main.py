@@ -110,10 +110,24 @@ if SPA_AVAILABLE and os.path.isdir(os.path.join(FRONTEND_DIST, "assets")):
 
 # ── 系统端点（保持不变）────────────────────────────────────────
 def _read_version() -> str:
-    """读取 VERSION 文件，缺失时返回 dev"""
+    """
+    版本号来源优先级：
+    1. APP_VERSION 环境变量（CI 构建时注入，如 0.10-20260504-5216d48）
+    2. VERSION 文件 + 本地 git sha（开发环境）
+    3. dev
+    """
+    import os, subprocess
+    env_ver = os.environ.get("APP_VERSION")
+    if env_ver:
+        return env_ver
     try:
-        return open("VERSION").read().strip()
-    except FileNotFoundError:
+        base = open("VERSION").read().strip()
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "--short=7", "HEAD"],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+        return f"{base}-dev-{sha}"
+    except Exception:
         return "dev"
 
 APP_VERSION = _read_version()
