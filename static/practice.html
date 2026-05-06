@@ -198,7 +198,7 @@ body { font-family:'Sora','PingFang SC','Noto Sans SC',system-ui,sans-serif; bac
 .explain-backdrop.show { display:block; }
 .explain-drawer { position:fixed; top:0; right:0; bottom:0; width:min(460px, 90vw); background:var(--elevated); box-shadow:-4px 0 24px rgba(0,0,0,0.12); z-index:999; transform:translateX(100%); transition:transform 0.25s cubic-bezier(0.2,0.8,0.2,1); display:flex; flex-direction:column; }
 .explain-drawer.show { transform:translateX(0); }
-.explain-header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; padding:14px 18px; border-bottom:1px solid var(--border); }
+.explain-header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; padding:14px 18px 10px; }
 .explain-title { flex:1; min-width:0; font-size:15px; font-weight:600; color:var(--text-1); line-height:1.45; word-break:break-word; white-space:normal; }
 .explain-header button { flex-shrink:0; }
 .explain-close { padding:4px 10px; border-radius:6px; color:var(--text-2); font-size:16px; transition:all 0.15s; }
@@ -222,9 +222,10 @@ body { font-family:'Sora','PingFang SC','Noto Sans SC',system-ui,sans-serif; bac
 .explain-body .loading { color:var(--text-3); font-style:italic; text-align:center; padding:32px 0; }
 .explain-body .error { color:var(--rec); background:var(--rec-dim); padding:10px; border-radius:6px; }
 .explain-footer { padding:12px 18px; border-top:1px solid var(--border); display:flex; align-items:center; gap:8px; background:var(--overlay); }
-.explain-header .title-speak { padding:4px 8px; border-radius:6px; color:var(--text-2); font-size:14px; margin-right:4px; }
-.explain-header .title-speak:hover { background:var(--overlay); color:var(--accent); }
-.explain-header .title-speak:disabled { opacity:0.45; cursor:wait; }
+.explain-actions { display:flex; gap:6px; padding:8px 18px; border-bottom:1px solid var(--border); }
+.explain-actions .title-speak { padding:4px 10px; border-radius:6px; color:var(--text-2); font-size:12px; border:1px solid var(--border); background:var(--elevated); transition:all 0.15s; }
+.explain-actions .title-speak:hover { background:var(--overlay); color:var(--accent); border-color:var(--accent); }
+.explain-actions .title-speak:disabled { opacity:0.45; cursor:wait; }
 .explain-body .example { position:relative; padding:6px 30px 6px 10px; background:var(--overlay); border-radius:6px; margin-bottom:6px; }
 .explain-body .example .mini-speak { position:absolute; right:4px; top:4px; padding:2px 6px; border-radius:4px; font-size:12px; color:var(--text-3); opacity:0; transition:opacity 0.1s; }
 .explain-body .example:hover .mini-speak { opacity:1; }
@@ -395,9 +396,11 @@ body { font-family:'Sora','PingFang SC','Noto Sans SC',system-ui,sans-serif; bac
   <aside class="explain-drawer" id="explainDrawer" aria-hidden="true">
     <div class="explain-header">
       <div class="explain-title" id="explainTitle">解读</div>
-      <button class="title-speak" id="explainTitleSpeak" onclick="drawerSpeakTitle()" title="朗读原文">🔊</button>
-      <button class="title-speak" id="explainNarrationBtn" onclick="playExplainNarration()" title="讲给我听">▶️</button>
       <button class="explain-close" onclick="closeExplain()" title="关闭">✕</button>
+    </div>
+    <div class="explain-actions">
+      <button class="title-speak" id="explainTitleSpeak" onclick="drawerSpeakTitle()" title="朗读原文">🔊 朗读</button>
+      <button class="title-speak" id="explainNarrationBtn" onclick="playExplainNarration()" title="讲给我听">▶️ 讲解</button>
     </div>
     <div class="explain-meta" id="explainMeta"></div>
     <div class="explain-body" id="explainBody"></div>
