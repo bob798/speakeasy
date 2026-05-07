@@ -8,13 +8,15 @@
 - POST /polish/cards/{id}/rate FSRS 评分
 - GET  /polish/due          到期复习卡（P1 用）
 """
+import asyncio
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.routers.auth import get_current_user_id
 from app.services import polish_service
+from app.services import polish_facts as polish_facts_service
 from app.logger import get_logger
 
 logger = get_logger("polish")
@@ -44,7 +46,7 @@ class PolishCardCreate(BaseModel):
     explanation: str = ""
     context: Optional[str] = None
     category: str = ""
-    init_fsrs: bool = False
+    init_fsrs: bool = True   # P1 · 默认入 FSRS 队列
 
 
 class RateRequest(BaseModel):
@@ -57,7 +59,7 @@ async def polish_text(
     user_id: str = Depends(get_current_user_id),
 ):
     try:
-        return await polish_service.polish_text(req.text)
+        return await polish_service.polish_text(req.text, user_id=user_id)
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception as e:
@@ -68,21 +70,49 @@ async def polish_text(
 @router.post("/polish/chat")
 async def polish_chat(
     req: PolishChatRequest,
+    background_tasks: BackgroundTasks,
     user_id: str = Depends(get_current_user_id),
 ):
     try:
         history = [t.model_dump() for t in (req.history or [])]
-        return await polish_service.polish_chat_once(
+        result = await polish_service.polish_chat_once(
             original=req.original,
             current_polished=req.current_polished,
             user_instruction=req.instruction,
             history=history,
+            user_id=user_id,
         )
+        # P1 · 后台异步抽取写作偏好（≥2 轮才会真正抽 · 见 polish_facts.MIN_HISTORY_FOR_EXTRACTION）
+        next_history = list(history) + [
+            {"role": "user", "content": req.instruction},
+            {"role": "assistant", "content": result.get("summary", "")},
+        ]
+        background_tasks.add_task(
+            _safe_extract_facts,
+            user_id,
+            req.original,
+            result.get("polished", req.current_polished),
+            next_history,
+        )
+        return result
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception as e:
         logger.error("polish_chat 失败: %s", e, exc_info=True)
         raise HTTPException(503, "润色服务暂时不可用，请稍后重试")
+
+
+async def _safe_extract_facts(user_id: str, original: str, polished: str, history: list):
+    """背景任务包装 · 任何异常吃掉，不影响主请求"""
+    try:
+        await polish_facts_service.extract_and_save_writing_facts(
+            user_id=user_id,
+            original=original,
+            polished=polished,
+            chat_history=history,
+        )
+    except Exception as e:
+        logger.warning("polish facts background extraction failed: %s", e)
 
 
 @router.post("/polish/cards", status_code=201)

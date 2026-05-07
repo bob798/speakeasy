@@ -23,6 +23,7 @@ from app.services.fsrs_utils import (
     get_due_date,
     RATING_MAP,
 )
+from app.services.polish_facts import build_polish_addon
 from app.logger import get_logger
 
 logger = get_logger("polish_service")
@@ -39,17 +40,24 @@ def _strip_code_fences(raw: str) -> str:
     return raw.strip()
 
 
-async def polish_text(text: str) -> Dict:
+async def polish_text(text: str, user_id: Optional[str] = None) -> Dict:
     """一次性润色 · 返回 {polished, segments, overall_note}"""
     if not text or not text.strip():
         raise ValueError("输入文本不能为空")
     if len(text) > MAX_INPUT_LEN:
         raise ValueError(f"输入文本不能超过 {MAX_INPUT_LEN} 字符")
 
+    # P1 · 注入用户偏好 + 高频错误（如有）
+    system = POLISH_SYSTEM_PROMPT
+    if user_id:
+        addon = build_polish_addon(user_id)
+        if addon:
+            system = POLISH_SYSTEM_PROMPT + "\n" + addon
+
     client = get_client()
     raw = await client.complete(
         [
-            {"role": "system", "content": POLISH_SYSTEM_PROMPT},
+            {"role": "system", "content": system},
             {"role": "user", "content": text},
         ],
         max_tokens=2000,
@@ -92,12 +100,19 @@ async def polish_chat_once(
     current_polished: str,
     user_instruction: str,
     history: Optional[List[Dict]] = None,
+    user_id: Optional[str] = None,
 ) -> Dict:
     """根据用户指令在 current_polished 基础上再调一轮 · 返回 {polished, summary}"""
     if not user_instruction.strip():
         raise ValueError("指令不能为空")
 
-    messages = [{"role": "system", "content": POLISH_CHAT_SYSTEM_PROMPT}]
+    system = POLISH_CHAT_SYSTEM_PROMPT
+    if user_id:
+        addon = build_polish_addon(user_id)
+        if addon:
+            system = POLISH_CHAT_SYSTEM_PROMPT + "\n" + addon
+
+    messages = [{"role": "system", "content": system}]
     # 起始上下文：原文 + 当前版本
     messages.append(
         {
@@ -155,7 +170,7 @@ def save_card(
     explanation: str = "",
     context: Optional[str] = None,
     category: str = "",
-    init_fsrs: bool = False,
+    init_fsrs: bool = True,   # P1 · 默认入 FSRS 队列，方便后续到期复习
 ) -> Dict:
     if not original.strip() or not polished.strip():
         raise ValueError("original / polished 不能为空")

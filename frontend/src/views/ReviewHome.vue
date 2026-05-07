@@ -20,27 +20,49 @@ const { authFetch, authFetchJson } = useAuthFetch()
 
 const articles = ref([])
 const vocab = ref([])
+const polishCards = ref([])
 const loading = ref(true)
 const error = ref('')
 const toast = ref('')
 
-const totalDue = computed(() => articles.value.length + vocab.value.length)
+const totalDue = computed(
+  () => articles.value.length + vocab.value.length + polishCards.value.length
+)
 const focusVocab = computed(() => vocab.value[0] || null)
+
+const POLISH_CATEGORY_LABEL = {
+  grammar: '语法',
+  word_choice: '用词',
+  style: '风格',
+  structure: '结构',
+}
 
 async function loadAll() {
   loading.value = true
   error.value = ''
   try {
-    const [a, v] = await Promise.all([
+    const [a, v, p] = await Promise.all([
       authFetch(`${API.BASE}/bbc-eaw/due`).then((r) => (r.ok ? r.json() : { items: [] })),
       authFetch(`${API.VOCAB}?due=true&limit=200`).then((r) => (r.ok ? r.json() : { items: [] })),
+      authFetch(`${API.POLISH}/due`).then((r) => (r.ok ? r.json() : { items: [] })),
     ])
     articles.value = a.items || []
     vocab.value = v.items || []
+    polishCards.value = p.items || []
   } catch (err) {
     error.value = getErrorMessage(err, '加载失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function ratePolish(id, rating) {
+  try {
+    await authFetchJson(`${API.POLISH}/cards/${id}/rate`, { rating })
+    polishCards.value = polishCards.value.filter((c) => c.id !== id)
+    showToast(`已记录 · ${rating}`)
+  } catch (err) {
+    showToast(getErrorMessage(err, '评分失败'))
   }
 }
 
@@ -205,6 +227,30 @@ onMounted(loadAll)
               <div class="ai-meta">
                 <span class="rev-cnt">复习 {{ a.review_count }}×</span>
                 <span class="chev">›</span>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <section v-if="polishCards.length" class="block">
+          <h3>✍️ 写作卡片 · {{ polishCards.length }}</h3>
+          <ul class="polish-list">
+            <li v-for="c in polishCards" :key="c.id" class="polish-item">
+              <div class="pi-head">
+                <span v-if="c.category" class="pi-cat">{{ POLISH_CATEGORY_LABEL[c.category] || c.category }}</span>
+                <span class="pi-rev-cnt">复习 {{ c.review_count }}×</span>
+              </div>
+              <div class="pi-diff">
+                <span class="pi-from">{{ c.original }}</span>
+                <span class="pi-arrow">→</span>
+                <span class="pi-to">{{ c.polished }}</span>
+              </div>
+              <p v-if="c.explanation" class="pi-expl">{{ c.explanation }}</p>
+              <div class="rate-row">
+                <button class="rate again" @click="ratePolish(c.id, 'again')">Again</button>
+                <button class="rate hard"  @click="ratePolish(c.id, 'hard')">Hard</button>
+                <button class="rate good"  @click="ratePolish(c.id, 'good')">Good</button>
+                <button class="rate easy"  @click="ratePolish(c.id, 'easy')">Easy</button>
               </div>
             </li>
           </ul>
@@ -392,6 +438,68 @@ onMounted(loadAll)
   color: var(--text-3);
 }
 .chev { font-size: 18px; }
+
+.polish-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.polish-item {
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.pi-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: 4px;
+}
+.pi-cat {
+  padding: 2px 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  border-radius: 999px;
+}
+.pi-rev-cnt {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-left: auto;
+}
+.pi-diff {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+.pi-from {
+  text-decoration: line-through;
+  color: #c6463a;
+  background: rgba(198, 70, 58, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.pi-to {
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.pi-arrow { color: var(--text-3); }
+.pi-expl {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
 
 .vocab-item {
   padding: var(--space-3);
