@@ -16,6 +16,7 @@ export const API = {
   PRACTICE: '/practice',
   TRANSLATE: '/translate',
   VOCAB: '/vocab',
+  POLISH: '/polish',
   AUTH: '/auth',
   ASK: '/ask',
   SETTINGS: '/settings',
