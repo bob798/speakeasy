@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.models.db import engine, ExplanationCache, UserProfile
 from app.prompts.explain import EXPLAIN_SENTENCE_PROMPT, EXPLAIN_WORD_PROMPT
+from app.knowledge import liaison_prompt_block
 from app.services.model_client import get_client
 from app.logger import get_logger
 
@@ -27,7 +28,7 @@ MAX_TEXT_LEN = 2000
 _DEFAULT_LEVEL = "B1"
 
 # Prompt 输出 schema 版本；变更 schema（如新增字段）或语言规则时加 1，使旧 cache 自动失效
-_SCHEMA_VERSION = 5     # bump: 强化 liaison 穷尽枚举（"what sales" 类被遗漏）
+_SCHEMA_VERSION = 6     # V0.11 #6 · liaison KB 注入 · 通俗化 tip 风格
 
 # Prompt 文本哈希（V0.11 #8）：prompt 微调即让旧 cache 自动失效，无需手 bump _SCHEMA_VERSION
 # 取 8 字符已足够区分任何 prompt 版本
@@ -210,7 +211,10 @@ async def explain_text(
 
     prompt_level = cefr_level or _DEFAULT_LEVEL
     if kind == "sentence":
-        system_prompt = EXPLAIN_SENTENCE_PROMPT.format(cefr_level=prompt_level)
+        system_prompt = EXPLAIN_SENTENCE_PROMPT.format(
+            cefr_level=prompt_level,
+            liaison_kb=liaison_prompt_block(),
+        )
     else:
         system_prompt = EXPLAIN_WORD_PROMPT.format(
             cefr_level=prompt_level,
@@ -282,7 +286,13 @@ async def stream_sentence_explanation(
             return
 
     prompt_level = cefr_level or _DEFAULT_LEVEL
-    system_prompt = EXPLAIN_SENTENCE_PROMPT.format(cefr_level=prompt_level) + _STREAM_FORMAT_HINT
+    system_prompt = (
+        EXPLAIN_SENTENCE_PROMPT.format(
+            cefr_level=prompt_level,
+            liaison_kb=liaison_prompt_block(),
+        )
+        + _STREAM_FORMAT_HINT
+    )
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": text},
