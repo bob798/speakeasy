@@ -302,7 +302,7 @@ async function saveToVocab() {
   }
 }
 
-async function fetchWord() {
+async function fetchWord(refresh = false) {
   // 1. IPA 快拿（本地秒出 · 不阻塞主请求）
   try {
     const p = await authFetchJson(`${API.PRACTICE}/explain/phonetic`, {
@@ -320,6 +320,7 @@ async function fetchWord() {
       text: props.target.content,
       kind: 'word',
       context: props.target.sentence || '',
+      refresh,
     })
     const exp = resp.explanation || {}
     Object.assign(data.value, {
@@ -340,12 +341,12 @@ async function fetchWord() {
   }
 }
 
-async function fetchSentence() {
+async function fetchSentence(refresh = false) {
   loading.value = true
   try {
     await sseStream(
       `${API.PRACTICE}/explain/stream`,
-      { text: props.target.content }, // ✨ 修 422：只发 text
+      { text: props.target.content, refresh },
       {
         mode: 'ndjson',
         onEvent: (evt) => {
@@ -384,16 +385,31 @@ async function fetchSentence() {
   }
 }
 
-async function fetchExplanation() {
+async function fetchExplanation(refresh = false) {
   reset()
   if (!props.target) return
   if (props.target.type === 'word') {
-    await fetchWord()
+    await fetchWord(refresh)
   } else {
-    await fetchSentence()
+    await fetchSentence(refresh)
   }
   // 内容加载完 · 免提模式下自动启动播放序列
   maybeStartSequence()
+}
+
+// ── #8 手动重生成（防误点：confirm + 3s 节流由后端兜底）────
+const refreshing = ref(false)
+async function refreshExplanation() {
+  if (refreshing.value) return
+  if (!props.target?.content) return
+  if (!confirm('重新解读会消耗一次 LLM 调用，确定继续？')) return
+  refreshing.value = true
+  cancelSequence()
+  try {
+    await fetchExplanation(true)
+  } finally {
+    refreshing.value = false
+  }
 }
 
 watch(
@@ -481,6 +497,16 @@ onBeforeUnmount(() => {
             <span class="content">{{ target?.content }}</span>
             <span v-if="data.phonetic" class="ipa">{{ data.phonetic }}</span>
           </div>
+          <button
+            class="refresh-btn"
+            :class="{ refreshing }"
+            @click="refreshExplanation"
+            :disabled="refreshing || loading"
+            aria-label="重新解读"
+            title="觉得这条解读不对？重新生成（消耗一次 LLM 调用）"
+          >
+            <span :class="{ spin: refreshing }">🔄</span>
+          </button>
           <button
             class="hf-btn"
             :class="{ on: handsFreeMode, sequencing: sequencePlaying }"
@@ -718,6 +744,20 @@ onBeforeUnmount(() => {
   font-size: 13px;
   margin-top: 2px;
 }
+.refresh-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 14px;
+  color: var(--text-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+  transition: transform var(--duration) var(--ease);
+}
+.refresh-btn:active { transform: scale(0.92); }
+.refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.refresh-btn.refreshing { color: var(--accent); }
 .hf-btn {
   width: 36px;
   height: 36px;
