@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "description": "连读/弱读/失爆/同化模式知识库 · V0.11 #6 · 用于解读 prompt 注入与前端展示",
+  "patterns": [
+    {
+      "pattern_id": "vv_j",
+      "name": "元音+元音 用 /j/ 衔接",
+      "trigger": "前词以 /i/ /eɪ/ /aɪ/ /ɔɪ/ 等带 i 收尾的元音结束，下一词以元音开头",
+      "plain": "前一个词的尾音是「i」类元音（你/嘴角往两边咧的那种），后面接元音时舌头会自动滑出一个轻轻的 y 音衔接",
+      "feel": "听起来像中间多了个轻轻的 y · 例：see it 听感「si-yit」、I am 听感「ai-yam」",
+      "examples": ["he is", "see it", "say it", "they are", "I am"],
+      "tip": "不是真的多读了 y，而是嘴型在两个元音间过渡产生的"
+    },
+    {
+      "pattern_id": "vv_w",
+      "name": "元音+元音 用 /w/ 衔接",
+      "trigger": "前词以 /uː/ /oʊ/ /aʊ/ 等带 u 收尾的元音结束，下一词以元音开头",
+      "plain": "前一个词的尾音是「u/o」类圆唇音，后面接元音时嘴唇放开会带出一个轻轻的 w 音",
+      "feel": "听起来像中间多了个轻轻的 w · 例：do it 听感「du-wit」、go on 听感「gou-won」",
+      "examples": ["do it", "go on", "you are", "two of", "now and"],
+      "tip": "和 j 连读对称：一个是嘴角咧开过渡，一个是嘴唇圆起过渡"
+    },
+    {
+      "pattern_id": "cv_linking",
+      "name": "辅音+元音 直接连读",
+      "trigger": "前词以辅音结尾，下一词以元音开头",
+      "plain": "前词尾辅音不收住，直接当作下一词的开头滑过去",
+      "feel": "两词听起来像一个词 · 例：that was 听感「thatwas」、an apple 听感「a-napple」",
+      "examples": ["that was", "an apple", "come in", "wake up", "what about"],
+      "tip": "最高频的连读类型，老外说话默认就是这样的"
+    },
+    {
+      "pattern_id": "t_flap",
+      "name": "T-flap（/t/ 浊化成 /d/ 或弹音）",
+      "trigger": "美式英语中，/t/ 处在两个元音之间或元音后接 /r/+元音",
+      "plain": "美式里 /t/ 夹在元音中间会软化成像 d 或快速的弹舌音",
+      "feel": "'t' 不再清脆 · 例：get it 听感「ge-rit」、a lot of 听感「a-lah-rov」、water 听感「wah-der」",
+      "examples": ["get it", "a lot of", "water", "later", "but I"],
+      "tip": "英式发音通常保留 /t/ 或变成喉塞音 /ʔ/，这是美式特征"
+    },
+    {
+      "pattern_id": "consonant_absorption",
+      "name": "相同/相近辅音吞音",
+      "trigger": "前词尾辅音与下一词首辅音相同或同部位（/t/+/t/、/d/+/d/、/p/+/b/ 等）",
+      "plain": "两个相同/相近辅音相邻时只发一次，第一个被吃掉",
+      "feel": "两个 t 听起来像一个 · 例：bus stop 听感「buh-stop」、good day 听感「guh-day」",
+      "examples": ["bus stop", "good day", "what time", "next time", "stop pushing"],
+      "tip": "用力发两次反而不自然"
+    },
+    {
+      "pattern_id": "ndt_release",
+      "name": "n / d / t 失爆（不送气）",
+      "trigger": "前词尾 /t/ /d/ /p/ /k/ 后接其他辅音",
+      "plain": "尾辅音不释放气流，舌位/唇位到位但不爆破，直接接下一辅音",
+      "feel": "尾音含住 · 例：good night 听感「guh(d) night」、actor 听感「ac(t)tor」、helped 听感「help(t)」",
+      "examples": ["good night", "next day", "stopped by", "looked back", "what's"],
+      "tip": "中国人最容易把每个尾音都送气念清楚，反而不地道"
+    },
+    {
+      "pattern_id": "h_deletion",
+      "name": "h 弱化/脱落",
+      "trigger": "代词或助动词中 he/him/his/her/has/had/have，紧跟在其他词后",
+      "plain": "句子中 he/him/her 等的 h 经常被吞掉，只剩元音",
+      "feel": "听不到 h · 例：give him 听感「give-im」、tell her 听感「tell-er」、has he 听感「has-i」",
+      "examples": ["give him", "tell her", "did he", "for him", "with her"],
+      "tip": "句首的 he/her 通常保留 h，只在句中被吞"
+    },
+    {
+      "pattern_id": "weak_form",
+      "name": "弱读虚词",
+      "trigger": "to/of/and/can/for/her/him/them/that/the/a 等虚词处于非重读位置",
+      "plain": "虚词不重读时元音坍缩为 /ə/（schwa），听起来非常轻、非常短",
+      "feel": "虚词糊成一团 · 例：want to 听感「wanna」/「want-ə」、of the 听感「ə-thə」、can you 听感「kən-yə」",
+      "examples": ["want to", "going to", "of the", "and I", "can you", "for him"],
+      "tip": "学母语者那样吞虚词，是听起来流利的关键"
+    },
+    {
+      "pattern_id": "yod_coalescence",
+      "name": "同化（/t/+/j/ → /tʃ/、/d/+/j/ → /dʒ/）",
+      "trigger": "/t/ /d/ /s/ /z/ 后紧接 /j/（you / your / yet 等）",
+      "plain": "前后两个辅音融合成一个新辅音（ch / j 音）",
+      "feel": "听起来像 ch 或 j · 例：don't you 听感「doncha」、what you 听感「whacha」、got you 听感「gotcha」、did you 听感「dija」",
+      "examples": ["don't you", "what you", "got you", "did you", "could you"],
+      "tip": "口语中很常见，正式书面或老电影发音里可能保留分开发音"
+    },
+    {
+      "pattern_id": "contraction",
+      "name": "缩约形式",
+      "trigger": "代词 + be / have / would / will / not 等组合",
+      "plain": "代词与助动词或否定融为一个音节",
+      "feel": "缩成一团 · 例：I am → I'm、going to → gonna、want to → wanna、he is → he's",
+      "examples": ["I'm", "he's", "wanna", "gonna", "shouldn't", "I'll"],
+      "tip": "口语必备，写作中酌情使用"
+    }
+  ]
+}

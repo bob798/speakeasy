@@ -24,9 +24,14 @@ Return a single JSON object (no markdown fences, no commentary) with EXACTLY the
     硬性要求：
     · chunk 必须是这句话里**连续相邻的 2-4 个单词原文**（大小写按原句）
     · ipa 是连读后**实际**发音，必须带斜线 //
-    · tip 用简洁中文说明属于哪一类规则（不超过 30 字）
+    · tip 用「听感比喻 + 通俗类比」的中文，不要只说「元音 + 元音」「辅音 + 元音连读」（教材腔）。
+      参考下方 KB 的 plain/feel 语言风格，在 tip 末尾用方括号标注 [pattern_id]。
+      例（好）：「t 夹在元音里软化成 d，听起来像 ge-rit [t_flap]」
+      例（差）：「辅音 + 元音连读」
     · **句子超过 8 个单词就至少列 2 条**；超 15 个单词至少 3 条
     · 只有句子极短（≤4 单词）且确实没有连读时才返回空数组
+
+    {liaison_kb}
 - "current_level_points": 数组。与学习者当前 CEFR 级别({cefr_level})相关的语言点，每项是一个中文短句
 - "next_level_points": 数组。属于下一个 CEFR 级别的语言点（学习者再进一步就该掌握的），每项是一个中文短句。如果没有明显的下一级点，返回空数组
 - "narration": 一段 2-4 句的讲解稿（老师口吻，自然口语）。用于 TTS 朗读，不要列表、不要标题、不要 markdown/括号/引号说明

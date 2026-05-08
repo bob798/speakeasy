@@ -5,6 +5,7 @@ const Home = () => import('@/views/Home.vue')
 const Chat = () => import('@/views/Chat.vue')
 const Practice = () => import('@/views/Practice.vue')
 const Translate = () => import('@/views/Translate.vue')
+const Polish = () => import('@/views/Polish.vue')
 const Memory = () => import('@/views/Memory.vue')
 const Review = () => import('@/views/Review.vue')
 const ReviewHome = () => import('@/views/ReviewHome.vue')
@@ -27,6 +28,12 @@ const router = createRouter({
       path: '/translate',
       name: 'translate',
       component: Translate,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/polish',
+      name: 'polish',
+      component: Polish,
       meta: { requiresAuth: true },
     },
     {

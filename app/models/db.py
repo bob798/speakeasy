@@ -285,6 +285,29 @@ class BbcArticleQuestion(Base):
     created_at    = Column(DateTime, default=datetime.utcnow)
 
 
+# ── V0.11 写作教练 polish ───────────────────────────────
+# 原文 → 优化后对比 + 逐处解释；高频纠正可走 FSRS 进入复习
+
+class PolishCard(Base):
+    __tablename__ = "polish_cards"
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    user_id          = Column(String, nullable=False, index=True)
+    original         = Column(String, nullable=False)
+    polished         = Column(String, nullable=False)
+    explanation      = Column(String, nullable=False, default="")
+    context          = Column(String, nullable=True)                  # 原文上下文（整段）
+    category         = Column(String, nullable=False, default="")     # grammar|word_choice|style|structure
+    fsrs_card_data   = Column(String, nullable=False, default="")
+    status           = Column(String, nullable=False, default="active")  # active|deleted
+    last_reviewed_at = Column(DateTime, nullable=True)
+    review_count     = Column(Integer, nullable=False, default=0)
+    created_at       = Column(DateTime, default=datetime.utcnow)
+    updated_at       = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("user_id", "original", "polished", name="uq_polish_user_orig_polished"),)
+
+
 # Sync engine for ORM operations (tests, memory_service, review_service)
 import os as _os
 _DB_PATH = _os.environ.get("SPEAKEASY_DB_PATH", "./speakeasy.db")

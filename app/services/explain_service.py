@@ -3,6 +3,7 @@
 import hashlib
 import json
 import re
+import time
 from typing import Dict, Optional
 
 from sqlalchemy.orm import Session as OrmSession
@@ -10,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.models.db import engine, ExplanationCache, UserProfile
 from app.prompts.explain import EXPLAIN_SENTENCE_PROMPT, EXPLAIN_WORD_PROMPT
+from app.knowledge import liaison_prompt_block
 from app.services.model_client import get_client
 from app.logger import get_logger
 
@@ -26,14 +28,43 @@ MAX_TEXT_LEN = 2000
 _DEFAULT_LEVEL = "B1"
 
 # Prompt 输出 schema 版本；变更 schema（如新增字段）或语言规则时加 1，使旧 cache 自动失效
-_SCHEMA_VERSION = 5     # bump: 强化 liaison 穷尽枚举（"what sales" 类被遗漏）
+_SCHEMA_VERSION = 6     # V0.11 #6 · liaison KB 注入 · 通俗化 tip 风格
+
+# Prompt 文本哈希（V0.11 #8）：prompt 微调即让旧 cache 自动失效，无需手 bump _SCHEMA_VERSION
+# 取 8 字符已足够区分任何 prompt 版本
+_PROMPT_HASH = hashlib.sha256(
+    (EXPLAIN_SENTENCE_PROMPT + "|||" + EXPLAIN_WORD_PROMPT).encode("utf-8")
+).hexdigest()[:8]
+
+# 手动 refresh 防滥用：同 (user, text_hash) 的 force 间隔下限（秒）
+_REFRESH_DEBOUNCE_SEC = 3.0
+_refresh_log: Dict[str, float] = {}
 
 
 # ── Helpers ──────────────────────────────────────────────────
 
 def _hash_text(text: str) -> str:
-    # schema 版本纳入 hash，避免旧 cache 命中
-    return hashlib.sha256(f"v{_SCHEMA_VERSION}:{text}".encode("utf-8")).hexdigest()
+    # schema 版本 + prompt hash 都纳入，任何一处变了就 cache miss
+    return hashlib.sha256(
+        f"v{_SCHEMA_VERSION}:{_PROMPT_HASH}:{text}".encode("utf-8")
+    ).hexdigest()
+
+
+def _check_refresh_debounce(user_id: str, text_hash: str) -> bool:
+    """同用户对同文本的强制刷新 3s 内只允许一次"""
+    key = f"{user_id}:{text_hash}"
+    now = time.time()
+    last = _refresh_log.get(key, 0.0)
+    if now - last < _REFRESH_DEBOUNCE_SEC:
+        return False
+    _refresh_log[key] = now
+    # 简单 LRU：超过 1000 条砍掉一半最旧的
+    if len(_refresh_log) > 1000:
+        cutoff = sorted(_refresh_log.values())[500]
+        for k in list(_refresh_log.keys()):
+            if _refresh_log[k] < cutoff:
+                del _refresh_log[k]
+    return True
 
 
 def _normalize_level(level: Optional[str]) -> str:
@@ -71,7 +102,7 @@ def _cache_get(text: str, kind: str, cefr_level: str) -> Optional[Dict]:
     return None
 
 
-def _cache_set(text: str, kind: str, cefr_level: str, explanation: Dict) -> None:
+def _cache_set(text: str, kind: str, cefr_level: str, explanation: Dict, overwrite: bool = False) -> None:
     h = _hash_text(text)
     with OrmSession(engine) as s:
         existing = (
@@ -80,6 +111,11 @@ def _cache_set(text: str, kind: str, cefr_level: str, explanation: Dict) -> None
             .first()
         )
         if existing:
+            if overwrite:
+                existing.explanation = json.dumps(explanation, ensure_ascii=False)
+                existing.source_text = text
+                existing.hit_count = 1   # 重生成清零计数
+                s.commit()
             return
         s.add(
             ExplanationCache(
@@ -146,11 +182,13 @@ async def explain_text(
     kind: str,
     user_id: str,
     context: str = "",
+    force: bool = False,
 ) -> Dict:
     """
     生成句子/单词解读。
     :param kind: 'sentence' | 'word'
     :param context: word 模式下提供所在句子，sentence 模式下忽略
+    :param force: True 时跳过缓存，重新生成并覆盖；带 3s debounce
     """
     if not text or not text.strip():
         raise ValueError("解读内容不能为空")
@@ -163,13 +201,20 @@ async def explain_text(
     cefr_level = _get_user_level(user_id)
     cache_level = cefr_level or _DEFAULT_LEVEL
 
-    cached = _cache_get(text, kind, cache_level)
-    if cached is not None:
-        return {"explanation": cached, "cefr_level": cache_level, "cached": True}
+    if force:
+        if not _check_refresh_debounce(user_id, _hash_text(text)):
+            raise ValueError("刷新过于频繁，请稍后再试")
+    else:
+        cached = _cache_get(text, kind, cache_level)
+        if cached is not None:
+            return {"explanation": cached, "cefr_level": cache_level, "cached": True}
 
     prompt_level = cefr_level or _DEFAULT_LEVEL
     if kind == "sentence":
-        system_prompt = EXPLAIN_SENTENCE_PROMPT.format(cefr_level=prompt_level)
+        system_prompt = EXPLAIN_SENTENCE_PROMPT.format(
+            cefr_level=prompt_level,
+            liaison_kb=liaison_prompt_block(),
+        )
     else:
         system_prompt = EXPLAIN_WORD_PROMPT.format(
             cefr_level=prompt_level,
@@ -185,8 +230,8 @@ async def explain_text(
     raw = await client.complete(messages, max_tokens=2000)
     explanation = _parse_explanation(raw)
 
-    _cache_set(text, kind, cache_level, explanation)
-    return {"explanation": explanation, "cefr_level": cache_level, "cached": False}
+    _cache_set(text, kind, cache_level, explanation, overwrite=force)
+    return {"explanation": explanation, "cefr_level": cache_level, "cached": False, "regenerated": force}
 
 
 # ── Streaming (sentence only; word 解读量小，仍走整块) ─────
@@ -211,6 +256,7 @@ Each line is a complete standalone JSON object. Separate lines with a single \\n
 async def stream_sentence_explanation(
     text: str,
     user_id: str,
+    force: bool = False,
 ):
     """Async generator yielding (raw_text, is_final) tuples.
 
@@ -218,6 +264,7 @@ async def stream_sentence_explanation(
     否则：
       - 流式产出一行行 NDJSON 字段对象
       - 结束后额外 yield 一个 {"_done": True} 事件
+    :param force: True 时跳过缓存重新生成（带 3s debounce）
     """
     if not text or not text.strip():
         raise ValueError("解读内容不能为空")
@@ -228,13 +275,24 @@ async def stream_sentence_explanation(
     cefr_level = _get_user_level(user_id)
     cache_level = cefr_level or _DEFAULT_LEVEL
 
-    cached = _cache_get(text, "sentence", cache_level)
-    if cached is not None:
-        yield json.dumps({"_cached": True, "cefr_level": cache_level, "explanation": cached}, ensure_ascii=False)
-        return
+    if force:
+        if not _check_refresh_debounce(user_id, _hash_text(text)):
+            yield json.dumps({"_error": "刷新过于频繁，请稍后再试"}, ensure_ascii=False)
+            return
+    else:
+        cached = _cache_get(text, "sentence", cache_level)
+        if cached is not None:
+            yield json.dumps({"_cached": True, "cefr_level": cache_level, "explanation": cached}, ensure_ascii=False)
+            return
 
     prompt_level = cefr_level or _DEFAULT_LEVEL
-    system_prompt = EXPLAIN_SENTENCE_PROMPT.format(cefr_level=prompt_level) + _STREAM_FORMAT_HINT
+    system_prompt = (
+        EXPLAIN_SENTENCE_PROMPT.format(
+            cefr_level=prompt_level,
+            liaison_kb=liaison_prompt_block(),
+        )
+        + _STREAM_FORMAT_HINT
+    )
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": text},
@@ -275,5 +333,5 @@ async def stream_sentence_explanation(
             pass
 
     if collected:
-        _cache_set(text, "sentence", cache_level, collected)
-    yield json.dumps({"_done": True, "cefr_level": cache_level}, ensure_ascii=False)
+        _cache_set(text, "sentence", cache_level, collected, overwrite=force)
+    yield json.dumps({"_done": True, "cefr_level": cache_level, "regenerated": force}, ensure_ascii=False)

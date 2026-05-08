@@ -61,6 +61,7 @@ class ExplainRequest(BaseModel):
     text: str
     kind: str                     # 'sentence' | 'word'
     context: Optional[str] = ""   # word 模式下可提供所在句子
+    refresh: bool = False         # V0.11 #8 · 跳过缓存强制重新生成
 
 
 # ── 字幕缓存工具 ─────────────────────────────────────────
@@ -279,6 +280,7 @@ async def practice_explain(
             kind=req.kind,
             user_id=user_id,
             context=req.context or "",
+            force=req.refresh,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -302,6 +304,7 @@ async def practice_explain_phonetic(req: QuickPhoneticRequest):
 
 class StreamExplainRequest(BaseModel):
     text: str
+    refresh: bool = False         # V0.11 #8
 
 
 @router.post("/practice/explain/stream")
@@ -322,7 +325,7 @@ async def practice_explain_stream(
 
     async def event_stream():
         try:
-            async for line in stream_sentence_explanation(req.text, user_id):
+            async for line in stream_sentence_explanation(req.text, user_id, force=req.refresh):
                 yield line + "\n"
         except ValueError as e:
             import json as _json
