@@ -20,6 +20,7 @@ from app.routers.bbc_eaw import router as bbc_eaw_router
 from app.routers.bbc_review import router as bbc_review_router
 from app.routers.vocab import router as vocab_router
 from app.routers.polish import router as polish_router
+from app.routers.model import router as model_router
 
 
 # ── V0.8 前端重构挂载策略（Pass 3 plan §4 + Critic B1-B5）────────────
@@ -96,6 +97,7 @@ app.include_router(bbc_eaw_router)
 app.include_router(bbc_review_router)
 app.include_router(vocab_router)
 app.include_router(polish_router)
+app.include_router(model_router)
 
 # 数据目录挂载（audio_cache、tts_cache 等）——无论新旧前端都要读
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -110,9 +112,33 @@ if SPA_AVAILABLE and os.path.isdir(os.path.join(FRONTEND_DIST, "assets")):
 
 
 # ── 系统端点（保持不变）────────────────────────────────────────
+def _read_version() -> str:
+    """
+    版本号来源优先级：
+    1. APP_VERSION 环境变量（CI 构建时注入，如 0.10-20260504-5216d48）
+    2. VERSION 文件 + 本地 git sha（开发环境）
+    3. dev
+    """
+    import os, subprocess
+    env_ver = os.environ.get("APP_VERSION")
+    if env_ver:
+        return env_ver
+    try:
+        base = open("VERSION").read().strip()
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "--short=7", "HEAD"],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+        return f"{base}-dev-{sha}"
+    except Exception:
+        return "dev"
+
+APP_VERSION = _read_version()
+
+
 @app.get("/health")
 async def health():
-    return {"status": "ok", "spa_available": SPA_AVAILABLE}
+    return {"status": "ok", "version": APP_VERSION, "spa_available": SPA_AVAILABLE}
 
 
 @app.get("/.well-known/appspecific/com.chrome.devtools.json")
