@@ -151,28 +151,13 @@ async function _runWordSequence(gen) {
 
 async function _runSentenceSequence(gen) {
   const sentence = props.target?.content
-  const narration = data.value.narration
-  const phrases = (data.value.phrases || [])
-    .map((p) => (typeof p === 'string' ? p : p.phrase))
-    .filter(Boolean)
+  if (!sentence) return
 
-  for (let loop = 0; loop < SENTENCE_LOOP; loop++) {
-    if (sentence) {
-      await _speakAndWait(sentence, gen)
-      if (gen !== _sequenceGen) return
-      await _sleep(SENTENCE_GAP_MS, gen)
-    }
+  for (let i = 0; i < WORD_LOOP_COUNT; i++) {
     if (gen !== _sequenceGen) return
-    if (narration) {
-      await _speakAndWait(narration, gen)
-      if (gen !== _sequenceGen) return
-      await _sleep(SENTENCE_GAP_MS, gen)
-    }
-    for (const phrase of phrases) {
-      if (gen !== _sequenceGen) return
-      await _speakAndWait(phrase, gen)
-      await _sleep(SENTENCE_GAP_MS, gen)
-    }
+    await _speakAndWait(sentence, gen)
+    if (gen !== _sequenceGen) return
+    if (i < WORD_LOOP_COUNT - 1) await _sleep(WORD_LOOP_GAP_MS, gen)
   }
 }
 
