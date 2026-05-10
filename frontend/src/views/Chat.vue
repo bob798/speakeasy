@@ -17,6 +17,7 @@ import { useChatStore } from '@/stores/chat'
 import { useChat } from '@/composables/useChat'
 import { useTTS } from '@/composables/useTTS'
 import { useAuthFetch, getErrorMessage } from '@/composables/useAuthFetch'
+import { useScrollLock } from '@/composables/useScrollLock'
 import { API } from '@/config'
 import ChatBubble from '@/components/chat/ChatBubble.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
@@ -34,6 +35,7 @@ const { enqueue: ttsEnqueue, clear: ttsClear, playing: ttsPlaying } = useTTS()
 const { authFetch } = useAuthFetch()
 
 const sidebarOpen = ref(false)
+useScrollLock(sidebarOpen)
 const settingsOpen = ref(false)
 const scrollBox = useTemplateRef('scrollBox')
 const chatInputRef = useTemplateRef('chatInputRef')

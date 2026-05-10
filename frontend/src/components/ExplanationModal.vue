@@ -15,6 +15,7 @@ import { ref, watch, computed, nextTick, onBeforeUnmount, useTemplateRef } from 
 import { useSSE } from '@/composables/useSSE'
 import { useTTS } from '@/composables/useTTS'
 import { useAuthFetch, getErrorMessage } from '@/composables/useAuthFetch'
+import { useScrollLock } from '@/composables/useScrollLock'
 import { API } from '@/config'
 import AskPanel from './AskPanel.vue'
 
@@ -27,13 +28,15 @@ const { stream: sseStream, streaming, abort: abortStream } = useSSE()
 const { enqueue: ttsEnqueue, clear: ttsClear, stop: ttsStop, playing: ttsPlaying } = useTTS()
 const { authFetch, authFetchJson } = useAuthFetch()
 
+useScrollLock(open)
 const askPanelRef = useTemplateRef('askPanelRef')
 const ttsLoading = ref(false)
 
-// ── 免提模式（V0.10）─────────────────────────────────────────
+// ── 自动播放（V0.10.1）─────────────────────────────────────────
+// 解读内容加载完成后自动循环播放语音（从免提模式中解耦）
 // localStorage 持久化；word: target 循环 N 次；sentence: target → narration → phrases 序列
-const HANDSFREE_KEY = 'v0.10:handsfree'
-const handsFreeMode = ref(loadHandsFree())
+const AUTOPLAY_KEY = 'v0.10:autoplay-explain'
+const autoPlayExplain = ref(loadAutoPlay())
 const sequencePlaying = ref(false)
 let _sequenceGen = 0           // 每次启动 / 取消自增；旧 sequence 检查代际后退出
 const WORD_LOOP_COUNT = 5
@@ -41,11 +44,33 @@ const WORD_LOOP_GAP_MS = 1200
 const SENTENCE_GAP_MS = 800
 const SENTENCE_LOOP = 1        // 整套序列重复几次
 
+// 免提模式保留（#17 后续增强用）
+const HANDSFREE_KEY = 'v0.10:handsfree'
+const handsFreeMode = ref(loadHandsFree())
+
+function loadAutoPlay() {
+  try {
+    return localStorage.getItem(AUTOPLAY_KEY) !== '0'  // 默认开启
+  } catch { return true }
+}
+
 function loadHandsFree() {
   try {
     return localStorage.getItem(HANDSFREE_KEY) === '1'
   } catch {
     return false
+  }
+}
+
+function setAutoPlay(v) {
+  autoPlayExplain.value = v
+  try {
+    localStorage.setItem(AUTOPLAY_KEY, v ? '1' : '0')
+  } catch { /* ignore */ }
+  if (!v) {
+    cancelSequence()
+  } else {
+    maybeStartSequence()
   }
 }
 
@@ -170,7 +195,7 @@ async function startSequence() {
 }
 
 function maybeStartSequence() {
-  if (!handsFreeMode.value) return
+  if (!autoPlayExplain.value) return      // 改为检查自动播放开关
   if (!open.value || !props.target?.content) return
   if (loading.value) return  // 等内容加载完再启动
   startSequence()
@@ -340,17 +365,37 @@ async function fetchWord() {
   }
 }
 
+// ── rAF 分批渲染 ──────────────────────────────────────────
+const _pendingUpdates = new Map()
+let _rafId = null
+
+function _flushUpdates() {
+  _rafId = null
+  if (_pendingUpdates.size === 0) return
+  for (const [field, value] of _pendingUpdates) {
+    data.value[field] = value
+  }
+  _pendingUpdates.clear()
+}
+
+function _scheduleUpdate(field, value) {
+  _pendingUpdates.set(field, value)
+  if (!_rafId) {
+    _rafId = requestAnimationFrame(_flushUpdates)
+  }
+}
+
 async function fetchSentence() {
   loading.value = true
   try {
     await sseStream(
       `${API.PRACTICE}/explain/stream`,
-      { text: props.target.content }, // ✨ 修 422：只发 text
+      { text: props.target.content },
       {
         mode: 'ndjson',
         onEvent: (evt) => {
           if (evt._cached && evt.explanation) {
-            // 缓存命中：整体回填
+            // 缓存命中：整体回填（单次赋值，不需 rAF）
             const exp = evt.explanation
             Object.assign(data.value, {
               meaning: exp.meaning || '',
@@ -369,7 +414,7 @@ async function fetchSentence() {
             return
           }
           if (evt.field && evt.value != null && evt.field in data.value) {
-            data.value[evt.field] = evt.value
+            _scheduleUpdate(evt.field, evt.value)
           }
         },
         onError: (err) => {
@@ -380,6 +425,12 @@ async function fetchSentence() {
   } catch (err) {
     error.value = getErrorMessage(err, '解读失败')
   } finally {
+    // 确保剩余更新刷入
+    if (_rafId) {
+      cancelAnimationFrame(_rafId)
+      _rafId = null
+    }
+    _flushUpdates()
     loading.value = false
   }
 }
@@ -439,10 +490,6 @@ async function playNarration() {
   ttsEnqueue(data.value.narration, { manual: true })
 }
 
-function toggleHandsFree() {
-  setHandsFree(!handsFreeMode.value)
-}
-
 function stopSequenceManual() {
   cancelSequence()
   ttsStop()
@@ -468,6 +515,10 @@ onBeforeUnmount(() => {
   cancelSequence()
   ttsClear()
   abortStream()
+  if (_rafId) {
+    cancelAnimationFrame(_rafId)
+    _rafId = null
+  }
 })
 </script>
 
@@ -483,12 +534,12 @@ onBeforeUnmount(() => {
           </div>
           <button
             class="hf-btn"
-            :class="{ on: handsFreeMode, sequencing: sequencePlaying }"
-            @click="toggleHandsFree"
-            :aria-label="handsFreeMode ? '关闭免提模式' : '开启免提模式'"
-            :title="handsFreeMode ? '免提模式开启 · 自动循环播放（再点关闭）' : '免提模式 · 进解读自动循环播放'"
+            :class="{ on: autoPlayExplain, sequencing: sequencePlaying }"
+            @click="setAutoPlay(!autoPlayExplain)"
+            :aria-label="autoPlayExplain ? '关闭自动播放' : '开启自动播放'"
+            :title="autoPlayExplain ? '自动播放开启（点击关闭）' : '自动播放关闭（点击开启）'"
           >
-            <span>🎧</span>
+            <span>{{ autoPlayExplain ? '🔊' : '🔇' }}</span>
           </button>
           <button
             class="star-btn"
@@ -518,7 +569,7 @@ onBeforeUnmount(() => {
         <div v-if="sequencePlaying" class="seq-indicator" @click="stopSequenceManual">
           <span class="seq-dot"></span>
           <span class="seq-text">
-            {{ target?.type === 'word' ? '免提模式 · 单词循环中' : '免提模式 · 序列播放中' }}
+            {{ target?.type === 'word' ? '单词循环播放中' : '序列播放中' }}
           </span>
           <span class="seq-stop">点击停止</span>
         </div>

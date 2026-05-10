@@ -40,7 +40,7 @@ async def extract_and_save_facts(
 
     try:
         client = get_client()
-        raw = await client.complete(prompt, max_tokens=500)
+        raw = await client.complete(prompt, max_tokens=500, scene="facts")
 
         # Strip markdown code fences if present
         raw = raw.strip()

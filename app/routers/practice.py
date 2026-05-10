@@ -339,7 +339,7 @@ async def practice_explain_stream(
 
 class PracticeTTSRequest(BaseModel):
     text: str = ""
-    provider: str = "edge"   # edge | openai | original
+    provider: str = ""       # azure | edge | openai | original（空=使用默认）
     voice: str = "jenny"
     speed: str = "+0%"
     segment_path: Optional[str] = None
@@ -358,7 +358,8 @@ async def practice_tts(req: PracticeTTSRequest):
         raise HTTPException(400, "text is required")
 
     try:
-        audio, media_type = await multi_tts(req.text, req.provider, req.voice, req.speed)
+        provider = req.provider if req.provider else None  # None = 使用默认
+        audio, media_type = await multi_tts(req.text, provider, req.voice, req.speed)
         return Response(
             content=audio,
             media_type=media_type,

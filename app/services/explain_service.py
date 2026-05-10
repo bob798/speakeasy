@@ -182,7 +182,7 @@ async def explain_text(
         {"role": "user", "content": text},
     ]
     client = get_client()
-    raw = await client.complete(messages, max_tokens=2000)
+    raw = await client.complete(messages, max_tokens=2000, scene="explain")
     explanation = _parse_explanation(raw)
 
     _cache_set(text, kind, cache_level, explanation)
@@ -243,7 +243,7 @@ async def stream_sentence_explanation(
     client = get_client()
     buffer = ""
     collected: Dict[str, object] = {}
-    async for chunk in client.chat_stream_messages(messages):
+    async for chunk in client.chat_stream_messages(messages, scene="explain"):
         buffer += chunk
         # 按换行拆行；最后一段可能不完整，留在 buffer
         while "\n" in buffer:

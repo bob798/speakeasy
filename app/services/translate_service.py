@@ -123,7 +123,7 @@ async def _translate_batch(lines: List[str], direction: str) -> List[str]:
         {"role": "user", "content": user_payload},
     ]
     client = get_client()
-    raw = await client.complete(messages, max_tokens=4000)
+    raw = await client.complete(messages, max_tokens=4000, scene="translate")
     return _parse_batch_response(raw, len(lines))
 
 

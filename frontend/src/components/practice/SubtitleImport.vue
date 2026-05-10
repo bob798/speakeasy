@@ -6,6 +6,7 @@
  *   - 4 段示例库（带文案）一键导入
  */
 import { ref, computed, onMounted } from 'vue'
+import { useScrollLock } from '@/composables/useScrollLock'
 import { usePractice } from '@/composables/usePractice'
 import { getErrorMessage } from '@/composables/useAuthFetch'
 
@@ -33,6 +34,8 @@ const historyLoading = ref(false)
 const eawEpisodes = ref([])
 const eawLoading = ref(false)
 const drawer = ref(null) // 'history' | 'eaw' | null
+const drawerOpen = computed(() => !!drawer.value)
+useScrollLock(drawerOpen)
 const eawSearch = ref('')
 
 const filteredEaw = computed(() => {
@@ -411,7 +414,7 @@ defineExpose({ refreshHistory: loadHistory })
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
-  z-index: 1000;
+  z-index: var(--z-modal);
   display: flex;
   justify-content: flex-end;
 }

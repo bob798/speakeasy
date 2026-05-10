@@ -115,7 +115,7 @@ async def create_thread(
         {"role": "user", "content": q},
     ]
     client = get_client()
-    answer = (await client.complete(messages, max_tokens=800)).strip()
+    answer = (await client.complete(messages, max_tokens=800, scene="ask")).strip()
 
     with OrmSession(engine) as s:
         s.add(AskMessage(thread_id=thread_id, role="assistant", content=answer))
@@ -168,7 +168,7 @@ async def append_message(
         + [{"role": "user", "content": q}]
     )
     client = get_client()
-    answer = (await client.complete(messages, max_tokens=800)).strip()
+    answer = (await client.complete(messages, max_tokens=800, scene="ask")).strip()
 
     with OrmSession(engine) as s:
         s.add(AskMessage(thread_id=thread_id, role="assistant", content=answer))
