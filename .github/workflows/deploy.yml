@@ -68,5 +68,4 @@ jobs:
           script: |
             set -e
             cd ${{ secrets.VPS_APP_DIR }}
-            git pull --ff-only origin main
             CI=1 SKIP_PULL=1 bash scripts/deploy_vps.sh
