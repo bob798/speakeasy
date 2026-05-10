@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# Speakeasy · VPS 一键部署脚本
+# Speakeasy · VPS 部署脚本（手动 + CI 通用）
 #
-# 在 VPS 上以应用所在目录为 cwd 执行：
-#   cd /opt/speakeasy
-#   ./scripts/deploy_vps.sh                    # 默认拉最新代码 + latest 镜像 + 重建
-#   IMAGE_TAG=v0.9.6 ./scripts/deploy_vps.sh   # 指定镜像 tag
-#   SKIP_PULL=1     ./scripts/deploy_vps.sh    # 跳过 git/docker pull · 仅重启
-#   DRY_RUN=1       ./scripts/deploy_vps.sh    # 只打印将执行的命令
+# 使用方式：
+#   手动：cd /opt/speakeasy && ./scripts/deploy_vps.sh
+#   CI：  通过 GitHub Actions ssh-action 调用，环境变量由 CI 注入
 #
-# 前置：
-#   1. cwd 是 git 仓库（本地代码用于读 docker-compose.yml）
-#   2. .env.production 存在，含 JWT_SECRET 与 OPENROUTER_API_KEY 等
-#   3. .env 含 ALIYUN_REGISTRY/USERNAME/PASSWORD/NAMESPACE（用于 ACR 登录）
-#   4. 已加入 docker compose 网络 liboboa（external: true）
+# 环境变量：
+#   IMAGE_TAG       镜像 tag（默认 latest）
+#   SKIP_PULL       跳过 git pull 和 docker pull，仅重启（默认 0）
+#   DRY_RUN         只打印命令不执行（默认 0）
+#   CI              CI 模式：跳过交互提示（GitHub Actions 自动设置）
+#   APP_IMAGE       完整镜像路径（CI 模式注入，覆盖自动拼接）
+#   ALIYUN_REGISTRY ACR 地址（CI 模式注入）
+#   ALIYUN_USERNAME ACR 用户名（CI 模式注入）
+#   ALIYUN_PASSWORD ACR 密码（CI 模式注入）
 
 set -euo pipefail
 
@@ -36,6 +37,7 @@ COMPOSE_FILE="docker-compose.yml"
 HEALTH_URL="http://localhost:8000/health"
 HEALTH_TIMEOUT_SEC=60
 IMAGE_TAG="${IMAGE_TAG:-latest}"
+IS_CI="${CI:-0}"
 
 # ── 前置检查 ─────────────────────────────────────────
 say "环境前置检查"
@@ -45,79 +47,87 @@ say "环境前置检查"
 command -v docker >/dev/null || die "未安装 docker"
 docker compose version >/dev/null 2>&1 || die "docker compose v2 未启用"
 
-# .env.production 里 $ 未转义会让 compose 警告 "variable not set"
-if grep -nE '(^|=).*[^$]\$[a-zA-Z_]' .env.production >/dev/null; then
-  warn ".env.production 里有未转义的 \$，compose 会把它当变量插值。建议改成 \$\$"
-  grep -nE '(^|=).*[^$]\$[a-zA-Z_]' .env.production || true
-fi
-
 # JWT_SECRET 持久化检查
 if ! grep -q '^JWT_SECRET=' .env.production; then
-  warn ".env.production 没有 JWT_SECRET · 容器重启用户登录会全失效"
-  read -rp "现在生成一个随机 JWT_SECRET 写入 .env.production？(y/N) " ans
-  if [[ "${ans,,}" == "y" ]]; then
+  if [[ "$IS_CI" != "0" ]]; then
+    # CI 模式：自动生成
     SECRET=$(openssl rand -base64 48 | tr -d '\n')
-    # 转义所有 $ 为 $$（base64 中 $ 罕见，但保险）
     SECRET_ESC=${SECRET//\$/\$\$}
     echo "JWT_SECRET=${SECRET_ESC}" >> .env.production
-    ok "已写入 JWT_SECRET（60 天有效期）"
+    ok "自动生成 JWT_SECRET"
+  else
+    warn ".env.production 没有 JWT_SECRET · 容器重启用户登录会全失效"
+    read -rp "现在生成一个随机 JWT_SECRET 写入 .env.production？(y/N) " ans
+    if [[ "${ans,,}" == "y" ]]; then
+      SECRET=$(openssl rand -base64 48 | tr -d '\n')
+      SECRET_ESC=${SECRET//\$/\$\$}
+      echo "JWT_SECRET=${SECRET_ESC}" >> .env.production
+      ok "已写入 JWT_SECRET"
+    fi
   fi
 fi
 
-# ── 1. 拉新代码（compose 文件可能更新）──────────────
-if [[ "${SKIP_PULL:-0}" != "1" ]]; then
+# ── 1. 拉新代码 ──────────────────────────────────────
+if [[ "${SKIP_PULL:-0}" != "1" ]] && [[ -d .git ]]; then
   say "git pull"
-  if [[ -d .git ]]; then
-    BEFORE=$(git rev-parse HEAD)
-    run "git pull --ff-only origin main"
-    AFTER=$(git rev-parse HEAD)
-    if [[ "$BEFORE" != "$AFTER" ]]; then
-      ok "代码更新到 $(git rev-parse --short HEAD)"
-    else
-      ok "代码已是最新 ($(git rev-parse --short HEAD))"
-    fi
+  BEFORE=$(git rev-parse HEAD)
+  run "git pull --ff-only origin main"
+  AFTER=$(git rev-parse HEAD)
+  if [[ "$BEFORE" != "$AFTER" ]]; then
+    ok "代码更新到 $(git rev-parse --short HEAD)"
   else
-    warn "非 git 仓库，跳过 git pull"
+    ok "代码已是最新 ($(git rev-parse --short HEAD))"
   fi
 fi
 
 # ── 2. 登录阿里云 ACR ────────────────────────────────
-if [[ -f .env ]] && grep -q '^ALIYUN_PASSWORD=' .env; then
+if [[ -n "${ALIYUN_PASSWORD:-}" ]] && [[ -n "${ALIYUN_REGISTRY:-}" ]]; then
+  # CI 模式：环境变量已由 GitHub Actions 注入
   say "登录阿里云 ACR"
-  # shellcheck disable=SC1091
+  run "echo \"\$ALIYUN_PASSWORD\" | docker login \"\$ALIYUN_REGISTRY\" -u \"\$ALIYUN_USERNAME\" --password-stdin"
+elif [[ -f .env ]] && grep -q '^ALIYUN_PASSWORD=' .env; then
+  # 手动模式：从 .env 读取
+  say "登录阿里云 ACR（从 .env）"
   set -a; source .env; set +a
-  : "${ALIYUN_REGISTRY:?需要 .env 里设 ALIYUN_REGISTRY}"
+  : "${ALIYUN_REGISTRY:?需要 ALIYUN_REGISTRY}"
   : "${ALIYUN_USERNAME:?需要 ALIYUN_USERNAME}"
   : "${ALIYUN_PASSWORD:?需要 ALIYUN_PASSWORD}"
   : "${ALIYUN_NAMESPACE:?需要 ALIYUN_NAMESPACE}"
   run "echo \"\$ALIYUN_PASSWORD\" | docker login \"\$ALIYUN_REGISTRY\" -u \"\$ALIYUN_USERNAME\" --password-stdin"
-  IMAGE="${ALIYUN_REGISTRY}/${ALIYUN_NAMESPACE}/speakeasy:${IMAGE_TAG}"
-  ok "镜像目标 $IMAGE"
-  # 幂等更新 APP_IMAGE：先删旧的，再追加新值。避免 .env 行数随每次部署增长
-  if grep -q '^APP_IMAGE=' .env; then
-    grep -v '^APP_IMAGE=' .env > .env.tmp
-    mv .env.tmp .env
-  fi
-  echo "APP_IMAGE=$IMAGE" >> .env
-  ok "APP_IMAGE 已写入 .env"
 else
-  warn "没找到 .env 或 ALIYUN_PASSWORD · 跳过 ACR 登录（如已 docker login 过则忽略）"
+  warn "没有 ACR 凭证 · 跳过登录（如已 docker login 过则忽略）"
 fi
 
-# ── 3. 拉镜像 ──────────────────────────────────────
+# ── 3. 设置 APP_IMAGE ────────────────────────────────
+if [[ -n "${APP_IMAGE:-}" ]]; then
+  # CI 模式：APP_IMAGE 已由 workflow 注入
+  ok "镜像 $APP_IMAGE"
+elif [[ -n "${ALIYUN_REGISTRY:-}" ]] && [[ -n "${ALIYUN_NAMESPACE:-}" ]]; then
+  APP_IMAGE="${ALIYUN_REGISTRY}/${ALIYUN_NAMESPACE}/speakeasy:${IMAGE_TAG}"
+  ok "镜像 $APP_IMAGE"
+fi
+
+if [[ -n "${APP_IMAGE:-}" ]]; then
+  # 幂等写入 .env
+  if [[ -f .env ]]; then
+    grep -v '^APP_IMAGE=' .env > .env.tmp && mv .env.tmp .env
+  fi
+  echo "APP_IMAGE=$APP_IMAGE" >> .env
+  ok "APP_IMAGE 已写入 .env"
+fi
+
+# ── 4. 拉镜像 ──────────────────────────────────────
 if [[ "${SKIP_PULL:-0}" != "1" ]]; then
   say "拉取镜像"
   run "docker compose -f $COMPOSE_FILE pull $SERVICE_NAME"
 fi
 
-# ── 4. 重建容器（关键：让新挂载/新 env 生效）─────────
+# ── 5. 重建容器 ──────────────────────────────────────
 say "重建容器（--force-recreate）"
 run "docker compose -f $COMPOSE_FILE up -d --force-recreate $SERVICE_NAME"
-
-# 清旧镜像
 run "docker image prune -f"
 
-# ── 5. 健康检查 ────────────────────────────────────
+# ── 6. 健康检查 ────────────────────────────────────
 say "等待健康检查（最多 ${HEALTH_TIMEOUT_SEC}s）"
 START=$(date +%s)
 HEALTHY=0
@@ -133,13 +143,11 @@ if (( HEALTHY == 1 )); then
 else
   warn "$HEALTH_URL 在 ${HEALTH_TIMEOUT_SEC}s 内未返回 200"
   docker compose -f "$COMPOSE_FILE" logs --tail=80 "$SERVICE_NAME" || true
-  die "部署可能失败 · 查看上方日志，必要时 ./scripts/deploy_vps.sh --rollback（暂未实现）"
+  die "部署失败 · 查看上方日志"
 fi
 
-# ── 6. seeder 与 DB 摘要 ───────────────────────────
+# ── 7. DB 摘要 ───────────────────────────────────
 say "数据校验"
-docker compose -f "$COMPOSE_FILE" logs --tail=200 "$SERVICE_NAME" 2>/dev/null | grep -E "bbc_eaw seeder|create_all|Application startup" | tail -5 || true
-
 docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" python -c "
 import os, sqlite3
 db = os.environ.get('SPEAKEASY_DB_PATH', '/app/data/speakeasy.db')
@@ -152,15 +160,8 @@ print(f'  users      : {cnt(\"users\")}')
 print(f'  bbc_eaw    : {cnt(\"bbc_eaw_episodes\")}')
 print(f'  sessions   : {cnt(\"sessions\")}')
 print(f'  cards      : {cnt(\"pronunciation_cards\")}')
+print(f'  llm_logs   : {cnt(\"llm_call_logs\")}')
 " 2>&1 || warn "DB 摘要查询失败（容器可能还没就绪）"
 
-# ── 7. 收尾 ───────────────────────────────────────
+# ── 8. 收尾 ───────────────────────────────────────
 ok "部署完成 · $(date '+%F %T')"
-echo
-echo "下一步检查清单："
-echo "  1. 浏览器访问 https://<your-domain>/"
-echo "  2. DevTools → Application → Service Workers → Unregister + Cmd-Shift-R"
-echo "  3. 进发音练习 → 应看到 BBC English at Work · 67 集"
-echo
-echo "实时日志：  docker compose -f $COMPOSE_FILE logs -f $SERVICE_NAME"
-echo "回滚镜像：  IMAGE_TAG=<上一版 tag> ./scripts/deploy_vps.sh"
