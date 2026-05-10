@@ -7,7 +7,7 @@
 #
 # 环境变量：
 #   IMAGE_TAG       镜像 tag（默认 latest）
-#   SKIP_PULL       跳过 git pull 和 docker pull，仅重启（默认 0）
+#   SKIP_GIT        跳过 git pull（默认 0，CI 模式建议设 1）
 #   DRY_RUN         只打印命令不执行（默认 0）
 #   CI              CI 模式：跳过交互提示（GitHub Actions 自动设置）
 #   APP_IMAGE       完整镜像路径（CI 模式注入，覆盖自动拼接）
@@ -67,16 +67,13 @@ if ! grep -q '^JWT_SECRET=' .env.production; then
   fi
 fi
 
-# ── 1. 拉新代码 ──────────────────────────────────────
-if [[ "${SKIP_PULL:-0}" != "1" ]] && [[ -d .git ]]; then
+# ── 1. 拉新代码（可选，失败不阻塞部署）────────────────
+if [[ "${SKIP_GIT:-0}" != "1" ]] && [[ -d .git ]]; then
   say "git pull"
-  BEFORE=$(git rev-parse HEAD)
-  run "git pull --ff-only origin main"
-  AFTER=$(git rev-parse HEAD)
-  if [[ "$BEFORE" != "$AFTER" ]]; then
-    ok "代码更新到 $(git rev-parse --short HEAD)"
+  if run "git pull --ff-only origin main 2>&1"; then
+    ok "代码已更新 ($(git rev-parse --short HEAD))"
   else
-    ok "代码已是最新 ($(git rev-parse --short HEAD))"
+    warn "git pull 失败（国内网络问题），继续部署（靠 ACR 镜像）"
   fi
 fi
 
@@ -117,10 +114,8 @@ if [[ -n "${APP_IMAGE:-}" ]]; then
 fi
 
 # ── 4. 拉镜像 ──────────────────────────────────────
-if [[ "${SKIP_PULL:-0}" != "1" ]]; then
-  say "拉取镜像"
-  run "docker compose -f $COMPOSE_FILE pull $SERVICE_NAME"
-fi
+say "拉取镜像"
+run "docker compose -f $COMPOSE_FILE pull $SERVICE_NAME"
 
 # ── 5. 重建容器 ──────────────────────────────────────
 say "重建容器（--force-recreate）"
