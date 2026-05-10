@@ -197,6 +197,42 @@ Human 维护（Claude Code 不代劳）：
   · ADR 的最终确认（Claude 起草，Human 30秒确认即可）
   · User Stories 的方向确认
 
+### Git 与部署规范
+
+**分支流程（强制）：**
+- 所有改动走独立分支 + PR，**不直接提交或合并到 main**
+- 即使 Human 说"合并到 main"，也创建 PR（`gh pr create`）
+- 分支命名：`feat/xxx`、`fix/xxx`、`style/xxx`
+
+**CI/CD 流水线：**
+
+```
+push 到 main → GitHub Actions 自动触发
+  │
+  ├─ Bundle Size Budget（前端变更时）
+  │   └─ 300KB gzip 硬预算（JS 200KB + CSS 100KB），超标即阻止合入
+  │
+  └─ Build and Deploy
+      ├─ Job 1: build-and-push
+      │   ├─ Docker 多阶段构建（前端 npm build + 后端 Python）
+      │   └─ 推送到阿里云 ACR（3 tag：latest / 版本号 / SHA）
+      │
+      └─ Job 2: deploy（AUTO_DEPLOY=true 时执行）
+          ├─ SSH 到腾讯云 VPS（deployer 用户 + 专用密钥）
+          └─ 执行 VPS 上的 scripts/deploy_vps.sh
+              ├─ ACR 登录 → docker compose pull → 重建容器
+              ├─ /health 健康检查（60s 超时）
+              └─ DB 数据摘要校验
+```
+
+**部署约束：**
+- VPS 上的 `scripts/deploy_vps.sh` 必须与仓库保持同步（CI 用 `SKIP_GIT=1` 不会自动更新）
+- 修改 `deploy_vps.sh` 或 `.github/workflows/deploy.yml` 后，需手动同步到 VPS
+- 修改 `docker-compose.yml` 或 `Dockerfile` 后，同样需手动同步到 VPS
+- 不修改 GitHub Secrets（VPS_HOST / VPS_USER / VPS_SSH_KEY / VPS_APP_DIR / ALIYUN_*）
+- 不修改 GitHub Variables（AUTO_DEPLOY）
+- 版本号格式：`{VERSION}-{YYYYMMDD}-{SHORT_SHA}`，VERSION 文件在项目根目录
+
 ---
 
 ## 【版本状态】当前状态
