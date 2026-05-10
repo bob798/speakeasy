@@ -15,6 +15,9 @@ class Settings:
     MODEL_NAME:       str  = os.getenv("MODEL_NAME", "claude-sonnet-4-20250514")
     MODEL_NAME_ALT:   str  = os.getenv("MODEL_NAME_ALT", "")
     ALLOWED_ORIGINS:  str  = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+    AZURE_TTS_KEY:    str  = os.getenv("AZURE_TTS_KEY", "")
+    AZURE_TTS_REGION: str  = os.getenv("AZURE_TTS_REGION", "eastasia")
+    TTS_DEFAULT_PROVIDER: str = os.getenv("TTS_DEFAULT_PROVIDER", "edge")
 
 
 settings = Settings()

@@ -34,7 +34,7 @@ def cleanup():
 
 
 def _mock_stream_client(chunks):
-    async def _gen(messages):
+    async def _gen(messages, **kwargs):
         for c in chunks:
             yield c
     m = MagicMock()

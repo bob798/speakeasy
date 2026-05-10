@@ -1,8 +1,18 @@
 import io
 import hashlib
+import json
 import os
+import re
+import logging
+from typing import Optional
+from xml.sax.saxutils import escape, quoteattr
 
 import edge_tts
+import httpx
+
+from app.config import settings
+
+logger = logging.getLogger("tts_service")
 
 VOICES = {
     "jenny":    "en-US-JennyNeural",
@@ -23,27 +33,82 @@ TTS_CACHE_DIR = "static/tts_cache"
 os.makedirs(TTS_CACHE_DIR, exist_ok=True)
 
 
-async def multi_tts(text: str, provider: str = "edge", voice: str = "jenny", speed: str = "+0%") -> tuple:
-    """Multi-source TTS with disk caching. Returns (audio_bytes, media_type)."""
-    cache_key = hashlib.md5(f"{provider}:{voice}:{speed}:{text}".encode()).hexdigest()
-    cache_path = os.path.join(TTS_CACHE_DIR, f"{cache_key}.mp3")
-    if os.path.exists(cache_path):
-        with open(cache_path, "rb") as f:
-            return f.read(), "audio/mpeg"
+# ── Azure TTS ──────────────────────────────────────────────
 
-    if provider == "edge":
-        voice_name = VOICES.get(voice, VOICES["jenny"])
-        audio = await text_to_speech_with_params(text, voice_name, speed)
-        media_type = "audio/mpeg"
-    elif provider == "openai":
-        audio, media_type = await _openai_tts(text, voice)
-    else:
-        raise ValueError(f"Unknown provider: {provider}")
+def _build_ssml(text: str, voice: str, rate: str,
+                phoneme_map: Optional[dict] = None) -> str:
+    """构建 SSML，支持 phoneme_map 逐词 IPA 纠音。
 
-    with open(cache_path, "wb") as f:
-        f.write(audio)
-    return audio, media_type
+    phoneme_map 示例: {"crisis": "ˈkraɪsɪs", "worries": "ˈwʌriz"}
+    """
+    content = escape(text)
+    if phoneme_map:
+        for word, ipa in phoneme_map.items():
+            pattern = re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
+            replacement = f'<phoneme alphabet="ipa" ph={quoteattr(ipa)}>{escape(word)}</phoneme>'
+            content = pattern.sub(replacement, content)
 
+    return (
+        '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" '
+        f'xml:lang="en-US"><voice name={quoteattr(voice)}>'
+        f'<prosody rate={quoteattr(rate)}>{content}</prosody>'
+        '</voice></speak>'
+    )
+
+
+async def _azure_tts(text: str, voice: str = "en-US-JennyNeural",
+                     rate: str = "+0%", phoneme_map: dict = None) -> tuple:
+    """Azure TTS REST API 调用"""
+    key = settings.AZURE_TTS_KEY
+    region = settings.AZURE_TTS_REGION
+    if not key:
+        raise RuntimeError("AZURE_TTS_KEY not configured")
+
+    ssml = _build_ssml(text, voice, rate, phoneme_map)
+    async with httpx.AsyncClient(trust_env=False) as client:
+        resp = await client.post(
+            f"https://{region}.tts.speech.microsoft.com/cognitiveservices/v1",
+            headers={
+                "Ocp-Apim-Subscription-Key": key,
+                "Content-Type": "application/ssml+xml",
+                "X-Microsoft-OutputFormat": "audio-24khz-96kbitrate-mono-mp3",
+            },
+            content=ssml.encode("utf-8"),
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"Azure TTS failed: HTTP {resp.status_code}")
+        audio = resp.content
+        if not audio:
+            raise RuntimeError("Azure TTS returned empty audio")
+    return audio, "audio/mpeg"
+
+
+# ── Edge TTS ───────────────────────────────────────────────
+
+async def _edge_tts(text: str, voice: str = _DEFAULT_VOICE,
+                    rate: str = _DEFAULT_RATE) -> tuple:
+    """edge-tts 调用"""
+    buf = io.BytesIO()
+    try:
+        communicate = edge_tts.Communicate(text, voice, rate=rate)
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                buf.write(chunk["data"])
+    except Exception:
+        buf = io.BytesIO()
+        communicate = edge_tts.Communicate(text, _DEFAULT_VOICE, rate=_DEFAULT_RATE)
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                buf.write(chunk["data"])
+
+    audio = buf.getvalue()
+    if not audio:
+        raise RuntimeError("edge-tts returned empty audio")
+    return audio, "audio/mpeg"
+
+
+# ── OpenAI TTS ─────────────────────────────────────────────
 
 async def _openai_tts(text: str, voice: str = "alloy") -> tuple:
     """OpenAI TTS (requires OPENAI_API_KEY in env)."""
@@ -64,6 +129,43 @@ async def _openai_tts(text: str, voice: str = "alloy") -> tuple:
     return audio, "audio/mpeg"
 
 
+# ── Multi TTS 统一入口 ────────────────────────────────────
+
+async def multi_tts(text: str, provider: str = None, voice: str = "jenny",
+                    speed: str = "+0%", phoneme_map: dict = None) -> tuple:
+    """Multi-source TTS with disk caching. Returns (audio_bytes, media_type)."""
+    if provider is None:
+        provider = settings.TTS_DEFAULT_PROVIDER
+
+    pm_key = json.dumps(phoneme_map, sort_keys=True) if phoneme_map else ""
+    cache_key = hashlib.md5(f"{provider}:{voice}:{speed}:{pm_key}:{text}".encode()).hexdigest()
+    cache_path = os.path.join(TTS_CACHE_DIR, f"{cache_key}.mp3")
+    if os.path.exists(cache_path):
+        with open(cache_path, "rb") as f:
+            return f.read(), "audio/mpeg"
+
+    voice_name = VOICES.get(voice, voice)
+
+    if provider == "azure":
+        try:
+            audio, media_type = await _azure_tts(text, voice_name, speed, phoneme_map)
+        except Exception as e:
+            logger.warning("Azure TTS 失败，降级 edge-tts: %s", e)
+            audio, media_type = await _edge_tts(text, voice_name, speed)
+    elif provider == "edge":
+        audio, media_type = await _edge_tts(text, voice_name, speed)
+    elif provider == "openai":
+        audio, media_type = await _openai_tts(text, voice)
+    else:
+        raise ValueError(f"Unknown provider: {provider}")
+
+    with open(cache_path, "wb") as f:
+        f.write(audio)
+    return audio, media_type
+
+
+# ── 兼容旧接口 ────────────────────────────────────────────
+
 async def text_to_speech(text: str, voice_key: str = "jenny") -> bytes:
     voice = VOICES.get(voice_key, VOICES["jenny"])
     return await text_to_speech_with_params(text, voice, _DEFAULT_RATE)
@@ -74,28 +176,21 @@ async def text_to_speech_with_params(
     voice: str = _DEFAULT_VOICE,
     rate: str = _DEFAULT_RATE,
 ) -> bytes:
-    """edge-tts 调用，支持显式指定完整 voice 名称和 rate（来自用户设置）"""
+    """主 TTS 入口：azure -> edge -> raise"""
     cache_key = f"{voice}::{rate}::{text}"
 
     if cache_key in _cache:
         return _cache[cache_key]
 
-    buf = io.BytesIO()
-    try:
-        communicate = edge_tts.Communicate(text, voice, rate=rate)
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                buf.write(chunk["data"])
-    except Exception:
-        # 降级到默认音色
-        communicate = edge_tts.Communicate(text, _DEFAULT_VOICE, rate=_DEFAULT_RATE)
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                buf.write(chunk["data"])
-
-    audio = buf.getvalue()
-    if not audio:
-        raise RuntimeError("edge-tts returned empty audio")
+    # 优先 Azure（如已配置 key）
+    if settings.AZURE_TTS_KEY:
+        try:
+            audio, _ = await _azure_tts(text, voice, rate)
+        except Exception as e:
+            logger.warning("Azure TTS 失败，降级 edge-tts: %s", e)
+            audio, _ = await _edge_tts(text, voice, rate)
+    else:
+        audio, _ = await _edge_tts(text, voice, rate)
 
     if len(_cache) >= _CACHE_MAX:
         for k in list(_cache)[:10]:

@@ -8,6 +8,7 @@ from app.config import MAX_TOKENS, MODEL_NAME, MODEL_REGISTRY, get_scene_model, 
 from app.prompts.system import SYSTEM_PROMPT
 from app.prompts.summary import SUMMARY_PROMPT
 from app.logger import get_logger
+from app.services.llm_logger import log_llm_call, StreamLogger
 
 logger = get_logger("model_client")
 
@@ -84,7 +85,7 @@ class BaseModelClient:
     def generate_summary(self, history: list[dict]) -> str:
         raise NotImplementedError
 
-    async def complete(self, messages_or_prompt, max_tokens: int = 1000) -> str:
+    async def complete(self, messages_or_prompt, max_tokens: int = 1000, scene: str = "default") -> str:
         """
         单次 LLM 调用，返回纯文本。
         - 传入 str：单条 prompt，包装成 user message
@@ -96,9 +97,9 @@ class BaseModelClient:
         else:
             messages = [{"role": "user", "content": messages_or_prompt}]
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, lambda: self._complete_sync_messages(messages, max_tokens))
+        return await loop.run_in_executor(None, lambda: self._complete_sync_messages(messages, max_tokens, scene))
 
-    def _complete_sync_messages(self, messages: list, max_tokens: int) -> str:
+    def _complete_sync_messages(self, messages: list, max_tokens: int, scene: str = "default") -> str:
         raise NotImplementedError
 
     def _format_history(self, history: list[dict]) -> str:
@@ -149,44 +150,66 @@ class AnthropicClient(BaseModelClient):
             for text in stream.text_stream:
                 yield text
 
-    async def chat_stream_messages(self, messages: list[dict]) -> AsyncGenerator[str, None]:
+    async def chat_stream_messages(self, messages: list[dict], scene: str = "default") -> AsyncGenerator[str, None]:
         logger.info("调用 Anthropic chat_stream_messages model=%s", _active_model())
+        sl = StreamLogger(scene, "anthropic", _active_model(), messages)
         system = next((m["content"] for m in messages if m.get("role") == "system"), None)
         user_messages = [m for m in messages if m.get("role") != "system"]
         kwargs = {"model": _active_model(), "max_tokens": MAX_TOKENS, "messages": user_messages}
         if system:
             kwargs["system"] = system
-        with self.client.messages.stream(**kwargs) as stream:
-            for text in stream.text_stream:
-                yield text
+        try:
+            with self.client.messages.stream(**kwargs) as stream:
+                for text in stream.text_stream:
+                    sl.on_chunk(text)
+                    yield text
+            sl.finish()
+        except Exception as e:
+            sl.finish(status="error", error_message=str(e))
+            raise
 
     def generate_summary(self, history: list[dict]) -> str:
         logger.info("调用 Anthropic summary model=%s", _active_model())
         t0 = time.time()
+        messages = [{"role": "user", "content": SUMMARY_PROMPT + self._format_history(history)}]
         try:
-            prompt = SUMMARY_PROMPT + self._format_history(history)
             response = self.client.messages.create(
                 model=_active_model(),
                 max_tokens=256,
-                messages=[{"role": "user", "content": prompt}],
+                messages=messages,
             )
             elapsed = time.time() - t0
+            result = response.content[0].text
             logger.info("Anthropic summary 完成 耗时=%.2fs", elapsed)
-            return response.content[0].text
+            log_llm_call("summary", "anthropic", _active_model(), messages, result,
+                         total_ms=int(elapsed * 1000))
+            return result
         except Exception as e:
             elapsed = time.time() - t0
             logger.error("Anthropic summary 失败 耗时=%.2fs error=%s", elapsed, e, exc_info=True)
+            log_llm_call("summary", "anthropic", _active_model(), messages, "",
+                         total_ms=int(elapsed * 1000), status="error", error_message=str(e))
             raise Exception(f"今日一句生成失败：{e}")
 
-    def _complete_sync_messages(self, messages: list, max_tokens: int) -> str:
-        # Extract system message if present (Anthropic uses separate param)
+    def _complete_sync_messages(self, messages: list, max_tokens: int, scene: str = "default") -> str:
+        t0 = time.time()
         system = next((m["content"] for m in messages if m.get("role") == "system"), None)
         user_messages = [m for m in messages if m.get("role") != "system"]
         kwargs = {"model": _active_model(), "max_tokens": max_tokens, "messages": user_messages}
         if system:
             kwargs["system"] = system
-        response = self.client.messages.create(**kwargs)
-        return response.content[0].text
+        try:
+            response = self.client.messages.create(**kwargs)
+            result = response.content[0].text
+            elapsed = time.time() - t0
+            log_llm_call(scene, "anthropic", _active_model(), messages, result,
+                         total_ms=int(elapsed * 1000))
+            return result
+        except Exception as e:
+            elapsed = time.time() - t0
+            log_llm_call(scene, "anthropic", _active_model(), messages, "",
+                         total_ms=int(elapsed * 1000), status="error", error_message=str(e))
+            raise
 
 
 # ──────────────────────────────────────────────
@@ -243,42 +266,65 @@ class OpenAICompatibleClient(BaseModelClient):
             if delta:
                 yield delta
 
-    async def chat_stream_messages(self, messages: list[dict]) -> AsyncGenerator[str, None]:
+    async def chat_stream_messages(self, messages: list[dict], scene: str = "default") -> AsyncGenerator[str, None]:
         logger.info("调用 %s chat_stream_messages model=%s", self.provider, _active_model())
-        resp = self.client.chat.completions.create(
-            model=_active_model(), max_tokens=MAX_TOKENS, stream=True,
-            messages=messages
-        )
-        for chunk in resp:
-            delta = chunk.choices[0].delta.content
-            if delta:
-                yield delta
+        sl = StreamLogger(scene, self.provider, _active_model(), messages)
+        try:
+            resp = self.client.chat.completions.create(
+                model=_active_model(), max_tokens=MAX_TOKENS, stream=True,
+                messages=messages
+            )
+            for chunk in resp:
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    sl.on_chunk(delta)
+                    yield delta
+            sl.finish()
+        except Exception as e:
+            sl.finish(status="error", error_message=str(e))
+            raise
 
     def generate_summary(self, history: list[dict]) -> str:
         logger.info("调用 %s summary model=%s", self.provider, _active_model())
         t0 = time.time()
+        messages = [{"role": "user", "content": SUMMARY_PROMPT + self._format_history(history)}]
         try:
-            prompt = SUMMARY_PROMPT + self._format_history(history)
             response = self.client.chat.completions.create(
                 model=_active_model(),
                 max_tokens=256,
-                messages=[{"role": "user", "content": prompt}],
+                messages=messages,
             )
             elapsed = time.time() - t0
+            result = response.choices[0].message.content
             logger.info("%s summary 完成 耗时=%.2fs", self.provider, elapsed)
-            return response.choices[0].message.content
+            log_llm_call("summary", self.provider, _active_model(), messages, result,
+                         total_ms=int(elapsed * 1000))
+            return result
         except Exception as e:
             elapsed = time.time() - t0
             logger.error("%s summary 失败 耗时=%.2fs error=%s", self.provider, elapsed, e, exc_info=True)
+            log_llm_call("summary", self.provider, _active_model(), messages, "",
+                         total_ms=int(elapsed * 1000), status="error", error_message=str(e))
             raise Exception(f"今日一句生成失败（{self.provider}）：{e}")
 
-    def _complete_sync_messages(self, messages: list, max_tokens: int) -> str:
-        response = self.client.chat.completions.create(
-            model=_active_model(),
-            max_tokens=max_tokens,
-            messages=messages,
-        )
-        return response.choices[0].message.content
+    def _complete_sync_messages(self, messages: list, max_tokens: int, scene: str = "default") -> str:
+        t0 = time.time()
+        try:
+            response = self.client.chat.completions.create(
+                model=_active_model(),
+                max_tokens=max_tokens,
+                messages=messages,
+            )
+            result = response.choices[0].message.content
+            elapsed = time.time() - t0
+            log_llm_call(scene, self.provider, _active_model(), messages, result,
+                         total_ms=int(elapsed * 1000))
+            return result
+        except Exception as e:
+            elapsed = time.time() - t0
+            log_llm_call(scene, self.provider, _active_model(), messages, "",
+                         total_ms=int(elapsed * 1000), status="error", error_message=str(e))
+            raise
 
 
 # ──────────────────────────────────────────────

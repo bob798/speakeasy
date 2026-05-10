@@ -24,7 +24,7 @@ async def analyze_conversation(session_id: str, user_id: str, history: list) -> 
         prompt = REVIEW_PROMPT.format(conversation=conversation_text)
 
         client = get_client()
-        raw = await client.complete(prompt, max_tokens=1000)
+        raw = await client.complete(prompt, max_tokens=1000, scene="review")
 
         # Strip markdown code fences if present
         raw = raw.strip()

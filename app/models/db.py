@@ -308,6 +308,26 @@ class PolishCard(Base):
     __table_args__ = (UniqueConstraint("user_id", "original", "polished", name="uq_polish_user_orig_polished"),)
 
 
+class LlmCallLog(Base):
+    """完整的 LLM 调用日志 — 为模型选型对比积累数据"""
+    __tablename__ = "llm_call_logs"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    scene          = Column(String, nullable=False, default="default")  # chat/explain/review/translate/summary
+    provider       = Column(String, nullable=False)                     # volcengine/anthropic/deepseek/zhipu
+    model          = Column(String, nullable=False)
+    input_messages = Column(String, nullable=False)                     # JSON: 完整 messages 列表
+    output_text    = Column(String, nullable=False, default="")         # 完整输出文本
+    stream         = Column(Boolean, nullable=False, default=False)     # 是否流式调用
+    ttft_ms        = Column(Integer, nullable=True)                     # 首 Token 延迟 (ms)
+    total_ms       = Column(Integer, nullable=True)                     # 总耗时 (ms)
+    input_tokens   = Column(Integer, nullable=True)                     # 输入 token 数（如 API 返回）
+    output_tokens  = Column(Integer, nullable=True)                     # 输出 token 数（如 API 返回）
+    status         = Column(String, nullable=False, default="ok")       # ok / error
+    error_message  = Column(String, nullable=True)
+    created_at     = Column(DateTime, default=datetime.utcnow)
+
+
 # Sync engine for ORM operations (tests, memory_service, review_service)
 import os as _os
 _DB_PATH = _os.environ.get("SPEAKEASY_DB_PATH", "./speakeasy.db")

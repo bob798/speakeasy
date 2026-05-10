@@ -75,7 +75,7 @@ async def chat(
             + history
             + [{"role": "user", "content": req.message}]
         )
-        reply = await client.complete(messages)
+        reply = await client.complete(messages, scene="chat")
 
         if req.session_id:
             await save_message(db, req.session_id, "assistant", reply)
@@ -112,7 +112,7 @@ async def chat_stream(
     async def generate():
         full = []
         try:
-            async for chunk in client.chat_stream_messages(messages):
+            async for chunk in client.chat_stream_messages(messages, scene="chat"):
                 full.append(chunk)
                 yield f"data: {json.dumps({'type': 'delta', 'content': chunk})}\n\n"
 

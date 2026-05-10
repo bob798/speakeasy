@@ -12,6 +12,7 @@ import { ref, computed, onActivated, onDeactivated } from 'vue'
 import { usePracticeStore } from '@/stores/practice'
 import { usePractice } from '@/composables/usePractice'
 import { getErrorMessage } from '@/composables/useAuthFetch'
+import { useScrollLock } from '@/composables/useScrollLock'
 import SubtitleImport from '@/components/practice/SubtitleImport.vue'
 import SentenceList from '@/components/practice/SentenceList.vue'
 import PracticePlayer from '@/components/practice/PracticePlayer.vue'
@@ -29,6 +30,7 @@ const explainOpen = ref(false)
 const explainTarget = ref(null)
 const toast = ref({ show: false, text: '', type: 'info' })
 const listDrawerOpen = ref(false)
+useScrollLock(listDrawerOpen)
 
 // 必须有 source 且至少有一段；空段时仍展示导入页面，避免卡死
 const hasSource = computed(
@@ -441,7 +443,7 @@ onDeactivated(() => {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
-  z-index: 1000;
+  z-index: var(--z-modal);
   display: flex;
 }
 .list-drawer {

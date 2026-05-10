@@ -144,7 +144,7 @@ async def _generate_via_llm(episode: BbcEawEpisode) -> List[Dict]:
         {"role": "user", "content": payload},
     ]
     client = get_client()
-    raw = await client.complete(messages, max_tokens=2000)
+    raw = await client.complete(messages, max_tokens=2000, scene="bbc_question_gen")
     cleaned = _strip_code_fences(raw)
     data = json.loads(cleaned)
 
