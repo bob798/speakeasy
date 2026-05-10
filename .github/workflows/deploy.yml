@@ -65,6 +65,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           envs: APP_IMAGE,ALIYUN_REGISTRY,ALIYUN_USERNAME,ALIYUN_PASSWORD
+          command_timeout: 10m
           script: |
             set -e
             cd ${{ secrets.VPS_APP_DIR }}
