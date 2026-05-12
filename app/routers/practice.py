@@ -351,24 +351,49 @@ class PracticeTTSRequest(BaseModel):
 @router.post("/practice/tts")
 async def practice_tts(req: PracticeTTSRequest):
     """Multi-source TTS with disk caching"""
+    import time
+    import uuid
+    import logging
+    tts_logger = logging.getLogger("practice.tts")
+    rid = uuid.uuid4().hex[:8]
+    t0 = time.time()
+    text_len = len(req.text or "")
+    tts_logger.info(
+        "[tts %s] start provider=%s voice=%s speed=%s text_len=%d preview=%r",
+        rid, req.provider or "(default)", req.voice, req.speed, text_len,
+        (req.text or "")[:40],
+    )
+
     if req.provider == "original":
         if req.segment_path and os.path.exists(req.segment_path):
             with open(req.segment_path, "rb") as f:
-                return Response(content=f.read(), media_type="audio/mpeg")
+                data = f.read()
+            tts_logger.info("[tts %s] ok provider=original bytes=%d ms=%d",
+                            rid, len(data), int((time.time()-t0)*1000))
+            return Response(content=data, media_type="audio/mpeg")
+        tts_logger.warning("[tts %s] 404 segment_path missing: %s", rid, req.segment_path)
         raise HTTPException(404, "Original audio segment not found")
 
     if not req.text:
+        tts_logger.warning("[tts %s] 400 empty text", rid)
         raise HTTPException(400, "text is required")
 
     try:
         provider = req.provider if req.provider else None  # None = 使用默认
         audio, media_type = await multi_tts(req.text, provider, req.voice, req.speed)
+        tts_logger.info(
+            "[tts %s] ok provider=%s bytes=%d ms=%d",
+            rid, req.provider or "(default)", len(audio),
+            int((time.time()-t0)*1000),
+        )
         return Response(
             content=audio,
             media_type=media_type,
             headers={"Cache-Control": "public, max-age=3600"},
         )
     except ValueError as e:
+        tts_logger.warning("[tts %s] 400 ValueError: %s", rid, e)
         raise HTTPException(400, str(e))
     except Exception as e:
+        tts_logger.exception("[tts %s] 503 %s: %s", rid, type(e).__name__, e)
         raise HTTPException(503, f"TTS failed: {e}")
