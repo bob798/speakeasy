@@ -44,7 +44,12 @@
     padding: 24px 8px;
   }
   button { border: none; cursor: pointer; font: inherit; color: inherit; background: transparent; }
+  /* a11y: 仅键盘聚焦可见焦点环；触控点击不显示 */
   button:focus { outline: none; }
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
 
   /* 模拟手机外壳 · 实际端跑时去掉这层 */
   .device {
@@ -141,19 +146,29 @@
     font-weight: 500;
     color: var(--text-1);
     line-height: 1.55;
+    /* 长句 / 超长 token 安全 */
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
   }
 
-  /* 当前句里的单词 · 可点 */
-  .word {
+  /* 当前句里的单词 · 真 <button>，可点 + 键盘可达 */
+  button.word {
     display: inline-block;
     padding: 1px 2px;
     margin: 0 -1px;
     border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
     cursor: pointer;
     transition: background 120ms var(--ease);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
-  .word:active { background: var(--accent-soft); }
-  .word.selected {
+  button.word:active { background: var(--accent-soft); }
+  button.word[aria-pressed="true"] {
     background: var(--accent-soft);
     color: var(--accent);
     text-decoration: underline;
@@ -199,6 +214,45 @@
     gap: var(--space-2);
     z-index: 5;
   }
+  /* coach bar · 引导 + 进度 + 反馈一行 */
+  .coach-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px var(--space-4);
+    background: var(--bg-elevated);
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-2);
+    line-height: 1.35;
+  }
+  .coach-bar .ico { font-size: 14px; flex-shrink: 0; }
+  .coach-bar .progress {
+    color: var(--text-3);
+    margin-right: 2px;
+  }
+  .coach-bar .copy { flex: 1; }
+  .coach-bar.recording { color: #c6463a; }
+
+  /* 横屏：max-height 较小时压缩 */
+  @media (orientation: landscape) and (max-height: 500px) {
+    .dock { padding-bottom: var(--space-2); }
+    .dock-row { gap: var(--space-1); }
+    .dock-btn { min-height: 44px; }
+    .coach-bar { display: none; }
+  }
+
+  /* ⚙ sheet 内常态披露行 */
+  .sheet-footer-note {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    color: var(--text-3);
+    line-height: 1.5;
+  }
+  .sheet-footer-note a { color: var(--accent); text-decoration: underline; }
   .dock-row { display: flex; gap: var(--space-2); }
   .dock-btn {
     flex: 1;
@@ -225,9 +279,9 @@
     animation: rec-pulse 1s infinite;
   }
   .dock-btn.record.recording .label, .dock-btn.record.recording .ico { color: #fff; }
-  .dock-btn:disabled, .dock-btn.disabled {
+  /* aria-disabled 而非 disabled —— 保留 tabindex 与读屏可达 */
+  .dock-btn[aria-disabled="true"] {
     opacity: 0.45;
-    pointer-events: auto; /* 仍可点出 toast */
   }
   @keyframes rec-pulse {
     0%,100% { box-shadow: 0 0 0 0 rgba(198,70,58,0.4); }
@@ -336,28 +390,33 @@
     <!-- 句子列表 -->
     <div class="list" id="list"></div>
 
-    <!-- 底部 dock -->
+    <!-- 底部 dock：coach bar + 4 按钮 -->
     <div class="dock">
+      <div class="coach-bar" id="coachBar" role="status" aria-live="polite">
+        <span class="ico" aria-hidden="true">🎯</span>
+        <span class="progress" id="coachProgress">第 3/9 句</span>
+        <span class="copy" id="coachCopy">先听我读一次</span>
+      </div>
       <div class="dock-row">
-        <button class="dock-btn primary" onclick="onExplain()">
-          <span class="ico">💡</span>
-          <span class="label">解释</span>
-          <span class="sub" id="explainSub">整句</span>
+        <button class="dock-btn primary" id="explainBtn" onclick="onExplain()">
+          <span class="ico" aria-hidden="true">💡</span>
+          <span class="label" id="explainLabel">解释整句</span>
+          <span class="sub" id="explainSub"></span>
         </button>
-        <button class="dock-btn primary" onclick="onSpeak()">
-          <span class="ico">🔊</span>
-          <span class="label">发音</span>
-          <span class="sub" id="speakSub">整句</span>
+        <button class="dock-btn primary" id="speakBtn" onclick="onSpeak()">
+          <span class="ico" aria-hidden="true">🔊</span>
+          <span class="label" id="speakLabel">发音整句</span>
+          <span class="sub" id="speakSub"></span>
         </button>
       </div>
       <div class="dock-row">
-        <button class="dock-btn record" id="recBtn" onclick="onToggleRec()">
-          <span class="ico" id="recIco">🎤</span>
+        <button class="dock-btn record" id="recBtn" onclick="onToggleRec()" aria-pressed="false">
+          <span class="ico" id="recIco" aria-hidden="true">🎤</span>
           <span class="label" id="recLabel">录音</span>
-          <span class="sub" id="recSub">开始录</span>
+          <span class="sub" id="recSub" aria-live="polite">开始录</span>
         </button>
-        <button class="dock-btn disabled" id="playbackBtn" onclick="onPlayback()">
-          <span class="ico">▶</span>
+        <button class="dock-btn" id="playbackBtn" onclick="onPlayback()" aria-disabled="true" aria-label="回放，先录一段">
+          <span class="ico" aria-hidden="true">▶</span>
           <span class="label">回放</span>
           <span class="sub" id="playbackSub">无录音</span>
         </button>
@@ -404,6 +463,12 @@
         </span>
         <span class="sa-chev">›</span>
       </button>
+
+      <div class="sheet-footer-note">
+        ℹ︎ 关于复习评分 · 手机端暂不评分，本次练习不会进入 FSRS 复习计划；
+        如需评分请到桌面端，或关注
+        <a href="https://github.com/bob798/speakeasy/issues/26" target="_blank" rel="noopener">issue #26</a>。
+      </div>
     </div>
 
     <!-- toast -->
@@ -425,11 +490,16 @@
   ];
 
   let currentIdx = 2;
-  let selectedWord = null; // { word, idx } 或 null
+  let selectedWord = null; // { word, display } 或 null
   let recording = false;
+  let recordingSegIdx = null; // 录音绑定的句号；防止切句导致 blob 错位
   let hasRecording = false;
+  let hasPlayedBack = false;
+  let isPlayingTTS = false;
+  let practicedCount = 0; // 本轮已完成的句数（mock）
   let speed = '+0%';
   let engine = 'edge';
+  let lastRequestKey = null; // 异步响应去重
 
   const listEl = document.getElementById('list');
   const explainSub = document.getElementById('explainSub');
@@ -466,8 +536,19 @@
         // 当前句内点词时，不要触发选句
         if (e.target.closest('.word') || e.target.closest('.selected-bar')) return;
         if (i !== currentIdx) {
+          // 状态机约束：切句前停 TTS、确认录音中
+          if (recording) {
+            const ok = confirm('正在录音，停止并切换到这一句？');
+            if (!ok) return;
+            stopRecording(true /*discard*/);
+          }
+          stopTTS();
+          // 离开旧句视作"完成一句"（v0.1 用切句作完成信号；待 #26 评分后改为按 Good/Easy 计）
+          if (recordingSegIdx === null) practicedCount++;
           currentIdx = i;
           selectedWord = null;
+          hasRecording = false;
+          hasPlayedBack = false;
           render();
           scrollToCurrent();
         }
@@ -483,14 +564,15 @@
       const txt = document.createElement('div');
       txt.className = 'txt';
       if (isCurrent) {
-        // 拆词
+        // 拆词 → 真 <button class="word"> · 键盘可达 · aria-pressed 表选中
         tokenize(seg.text).forEach((tok) => {
           if (tok.type === 'word') {
-            const b = document.createElement('span');
+            const b = document.createElement('button');
             b.className = 'word';
-            if (selectedWord && selectedWord.word === tok.text.toLowerCase()) {
-              b.classList.add('selected');
-            }
+            b.type = 'button';
+            const isSel = selectedWord && selectedWord.word === tok.text.toLowerCase();
+            b.setAttribute('aria-pressed', isSel ? 'true' : 'false');
+            b.setAttribute('aria-label', `单词 ${tok.text}${isSel ? '（已选）' : ''}`);
             b.textContent = tok.text;
             b.onclick = (ev) => {
               ev.stopPropagation();
@@ -530,12 +612,46 @@
       listEl.appendChild(segEl);
     });
     updateSubs();
+    updateCoach();
   }
 
   function updateSubs() {
-    const sub = selectedWord ? selectedWord.display : '整句';
-    explainSub.textContent = sub;
-    speakSub.textContent = sub;
+    // 主标签随模式（句/词）切换；副标签仅在词模式下显示具体词面
+    const isWord = !!selectedWord;
+    document.getElementById('explainLabel').textContent = isWord ? '解释单词' : '解释整句';
+    document.getElementById('speakLabel').textContent   = isWord ? '发音单词' : '发音整句';
+    document.getElementById('explainSub').textContent = isWord ? selectedWord.display : '';
+    document.getElementById('speakSub').textContent   = isWord ? selectedWord.display : '';
+    // aria-label 完整描述
+    const targetA11y = isWord ? `当前作用对象 ${selectedWord.display}` : '整句';
+    document.getElementById('explainBtn').setAttribute('aria-label', `解释 · ${targetA11y}`);
+    document.getElementById('speakBtn').setAttribute('aria-label', `发音 · ${targetA11y}`);
+  }
+
+  // coach bar 状态机
+  function updateCoach() {
+    const total = segments.length;
+    const cb = document.getElementById('coachBar');
+    document.getElementById('coachProgress').textContent =
+      `第 ${currentIdx + 1}/${total} 句${practicedCount ? ' · 已完成 ' + practicedCount : ''}`;
+    cb.classList.remove('recording');
+
+    let copy;
+    if (recording) {
+      cb.classList.add('recording');
+      copy = '录音中 · 念完点停止';
+    } else if (isPlayingTTS) {
+      copy = '听着…';
+    } else if (hasRecording && hasPlayedBack) {
+      copy = '比一比，节奏对齐了吗';
+    } else if (hasRecording) {
+      copy = '收到了 · 回放听听自己';
+    } else if (selectedWord) {
+      copy = `解读 "${selectedWord.display}"`;
+    } else {
+      copy = '先听我读一次';
+    }
+    document.getElementById('coachCopy').textContent = copy;
   }
 
   function scrollToCurrent() {
@@ -544,53 +660,112 @@
     if (target) target.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 
+  // 状态机原语
+  function stopTTS() {
+    // 真实端释放 audio + objectURL；mock 端只重置 flag
+    isPlayingTTS = false;
+    updateCoach();
+  }
+  function stopRecording(discard) {
+    recording = false;
+    recordingSegIdx = null;
+    const btn = document.getElementById('recBtn');
+    btn.classList.remove('recording');
+    btn.setAttribute('aria-pressed', 'false');
+    document.getElementById('recIco').textContent = '🎤';
+    document.getElementById('recLabel').textContent = '录音';
+    document.getElementById('recSub').textContent = (hasRecording && !discard) ? '重录' : '开始录';
+  }
+
   // dock 动作
   function onExplain() {
     const target = selectedWord ? `单词 "${selectedWord.display}"` : '整句';
-    toast(`💡 解释 ${target}（mock）`);
+    const key = `explain:${currentIdx}:${selectedWord?.word || '__'}:${Date.now()}`;
+    lastRequestKey = key;
+    // mock 200ms 异步 · 模拟 stale 响应防御
+    setTimeout(() => {
+      if (lastRequestKey !== key) return;
+      toast(`💡 解释 ${target}（mock）`);
+    }, 200);
   }
   function onSpeak() {
     const target = selectedWord ? `单词 "${selectedWord.display}"` : '整句';
-    toast(`🔊 发音 ${target}（mock · speed=${speed} engine=${engine}）`);
+    const key = `tts:${currentIdx}:${selectedWord?.word || '__'}:${Date.now()}`;
+    lastRequestKey = key;
+    stopTTS();
+    setTimeout(() => {
+      if (lastRequestKey !== key) return;
+      isPlayingTTS = true;
+      updateCoach();
+      toast(`🔊 发音 ${target}（mock · speed=${speed} engine=${engine}）`);
+      // mock 1.5s 播完
+      setTimeout(() => {
+        if (lastRequestKey !== key) return;
+        isPlayingTTS = false;
+        updateCoach();
+      }, 1500);
+    }, 200);
   }
   function onToggleRec() {
-    recording = !recording;
-    const btn = document.getElementById('recBtn');
-    const ico = document.getElementById('recIco');
-    const label = document.getElementById('recLabel');
-    const sub = document.getElementById('recSub');
     if (recording) {
-      btn.classList.add('recording');
-      ico.textContent = '⏹';
-      label.textContent = '停止';
-      sub.textContent = '录音中…';
-      toast('🎤 录音中');
-    } else {
-      btn.classList.remove('recording');
-      ico.textContent = '🎤';
-      label.textContent = '录音';
-      sub.textContent = '重录';
+      stopRecording(false);
       hasRecording = true;
+      hasPlayedBack = false;
       const pb = document.getElementById('playbackBtn');
-      pb.classList.remove('disabled');
+      pb.setAttribute('aria-disabled', 'false');
+      pb.setAttribute('aria-label', '回放录音');
       document.getElementById('playbackSub').textContent = '听自己';
+      updateCoach();
       toast('⏹ 已停止录音');
+    } else {
+      recording = true;
+      recordingSegIdx = currentIdx;
+      const btn = document.getElementById('recBtn');
+      btn.classList.add('recording');
+      btn.setAttribute('aria-pressed', 'true');
+      document.getElementById('recIco').textContent = '⏹';
+      document.getElementById('recLabel').textContent = '停止';
+      document.getElementById('recSub').textContent = '录音中…';
+      updateCoach();
+      toast('🎤 录音中');
     }
   }
   function onPlayback() {
-    if (!hasRecording) { toast('先录一段'); return; }
+    const pb = document.getElementById('playbackBtn');
+    if (pb.getAttribute('aria-disabled') === 'true') {
+      toast('先录一段');
+      return;
+    }
+    hasPlayedBack = true;
+    updateCoach();
     toast('▶ 回放（mock）');
   }
 
-  // sheet
+  // sheet · 焦点管理：打开时把焦点移到 sheet 内首个按钮；关闭还给 ⚙ 按钮
+  let _sheetTrigger = null;
   function openSheet() {
-    document.getElementById('sheetMask').classList.add('open');
-    document.getElementById('sheet').classList.add('open');
+    _sheetTrigger = document.activeElement;
+    const m = document.getElementById('sheetMask');
+    const s = document.getElementById('sheet');
+    m.classList.add('open');
+    s.classList.add('open');
+    // 屏蔽背景 a11y
+    document.querySelectorAll('.topbar, .list, .dock').forEach((el) => el.setAttribute('inert', ''));
+    // 焦点
+    const first = s.querySelector('button');
+    if (first) first.focus();
   }
   function closeSheet() {
     document.getElementById('sheetMask').classList.remove('open');
     document.getElementById('sheet').classList.remove('open');
+    document.querySelectorAll('.topbar, .list, .dock').forEach((el) => el.removeAttribute('inert'));
+    if (_sheetTrigger && typeof _sheetTrigger.focus === 'function') _sheetTrigger.focus();
   }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('sheet').classList.contains('open')) {
+      closeSheet();
+    }
+  });
   document.querySelectorAll('#speedPick button').forEach((b) => {
     b.onclick = () => {
       document.querySelectorAll('#speedPick button').forEach((x) => x.classList.remove('active'));
@@ -609,6 +784,17 @@
   render();
   // 等 render 之后再滚到当前句
   setTimeout(scrollToCurrent, 100);
+
+  // 首次进入：弹一次 FSRS 闭环披露 toast
+  const FSRS_NOTICE_KEY = 'v2:practice.fsrs_notice_seen';
+  try {
+    if (!localStorage.getItem(FSRS_NOTICE_KEY)) {
+      setTimeout(() => {
+        toast('ℹ︎ 手机端暂不记录复习评分，仍可正常练习');
+        localStorage.setItem(FSRS_NOTICE_KEY, '1');
+      }, 600);
+    }
+  } catch { /* ignore */ }
 </script>
 </body>
 </html>
