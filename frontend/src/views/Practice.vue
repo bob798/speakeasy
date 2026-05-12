@@ -470,9 +470,8 @@ onBeforeUnmount(() => {
               <div class="seg-pick">
                 <button
                   v-for="opt in [
-                    { v: 'edge',   label: 'Edge' },
-                    { v: 'doubao', label: '豆包' },
-                    { v: 'azure',  label: 'Azure' },
+                    { v: 'edge',  label: 'Edge' },
+                    { v: 'azure', label: 'Azure' },
                   ]"
                   :key="opt.v"
                   type="button"
