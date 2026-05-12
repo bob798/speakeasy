@@ -305,8 +305,35 @@ function onMobilePlayback() {
   hasPlayedBack.value = true
 }
 
-function onOpenSettings() { sheetOpen.value = true }
-function onCloseSettings() { sheetOpen.value = false }
+// ⚙ sheet 焦点管理（spec §可访问性 #5）
+const sheetTriggerRef = ref(null)
+const sheetRef = ref(null)
+const INERT_SELECTORS = '.topbar, .m-list, .dock, .layout'
+
+function onOpenSettings() {
+  sheetTriggerRef.value = document.activeElement
+  sheetOpen.value = true
+  // 屏蔽背景 a11y 树
+  document.querySelectorAll(INERT_SELECTORS).forEach((el) => el.setAttribute('inert', ''))
+  // 等下一帧 DOM 出现再 focus
+  setTimeout(() => {
+    const first = sheetRef.value?.querySelector('button')
+    if (first) first.focus()
+  }, 60)
+}
+function onCloseSettings() {
+  sheetOpen.value = false
+  document.querySelectorAll(INERT_SELECTORS).forEach((el) => el.removeAttribute('inert'))
+  if (sheetTriggerRef.value && typeof sheetTriggerRef.value.focus === 'function') {
+    sheetTriggerRef.value.focus()
+  }
+}
+
+// Esc 关闭 sheet
+function _onEscape(e) {
+  if (e.key === 'Escape' && sheetOpen.value) onCloseSettings()
+}
+window.addEventListener('keydown', _onEscape)
 
 // 切句时清 TTS
 watch(
@@ -322,6 +349,7 @@ onDeactivated(() => {})
 onBeforeUnmount(() => {
   _releaseTTS()
   recorder.reset()
+  window.removeEventListener('keydown', _onEscape)
 })
 </script>
 
@@ -418,7 +446,7 @@ onBeforeUnmount(() => {
           @click.self="onCloseSettings"
           @keydown.esc="onCloseSettings"
         >
-          <aside class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+          <aside ref="sheetRef" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
             <h4 id="sheet-title">设置</h4>
             <div class="sheet-row">
               <label>语速</label>
