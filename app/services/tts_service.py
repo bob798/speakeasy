@@ -108,6 +108,63 @@ async def _edge_tts(text: str, voice: str = _DEFAULT_VOICE,
     return audio, "audio/mpeg"
 
 
+# ── Google Cloud Text-to-Speech ────────────────────────────
+
+# Edge/Azure voice 名 → Google voice (languageCode, name)
+# Google 的 Neural2 / Wavenet 是 premium tier, 收费但效果优于 Standard
+_GOOGLE_VOICE_MAP = {
+    "en-US-JennyNeural":    ("en-US", "en-US-Neural2-F"),  # 女声
+    "en-US-GuyNeural":      ("en-US", "en-US-Neural2-D"),  # 男声
+    "en-GB-SoniaNeural":    ("en-GB", "en-GB-Neural2-A"),  # 英国女声
+    "zh-CN-XiaoxiaoNeural": ("cmn-CN", "cmn-CN-Wavenet-A"),
+    "zh-CN-YunxiNeural":    ("cmn-CN", "cmn-CN-Wavenet-C"),
+}
+
+
+def _parse_speed_to_rate(speed: str) -> float:
+    """Edge 风格 speed (+20% / -40%) → Google speakingRate (1.2 / 0.6)."""
+    s = (speed or "+0%").strip().rstrip("%")
+    try:
+        pct = float(s)
+    except (TypeError, ValueError):
+        return 1.0
+    return max(0.25, min(4.0, 1.0 + pct / 100))
+
+
+async def _google_tts(text: str, voice: str = "en-US-JennyNeural",
+                      speed: str = "+0%") -> tuple:
+    """Google Cloud TTS REST API · auth via API key."""
+    import base64
+    api_key = settings.GOOGLE_TTS_API_KEY
+    if not api_key:
+        raise RuntimeError("GOOGLE_TTS_API_KEY not configured")
+    lang, voice_name = _GOOGLE_VOICE_MAP.get(voice, ("en-US", "en-US-Neural2-F"))
+    body = {
+        "input": {"text": text},
+        "voice": {"languageCode": lang, "name": voice_name},
+        "audioConfig": {
+            "audioEncoding": "MP3",
+            "speakingRate": _parse_speed_to_rate(speed),
+        },
+    }
+    async with httpx.AsyncClient(trust_env=False) as client:
+        resp = await client.post(
+            "https://texttospeech.googleapis.com/v1/text:synthesize",
+            params={"key": api_key},
+            json=body,
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(
+                f"Google TTS failed: HTTP {resp.status_code} {resp.text[:200]}"
+            )
+        audio_b64 = (resp.json() or {}).get("audioContent")
+        if not audio_b64:
+            raise RuntimeError("Google TTS returned empty audioContent")
+        audio = base64.b64decode(audio_b64)
+    return audio, "audio/mpeg"
+
+
 # ── OpenAI TTS ─────────────────────────────────────────────
 
 async def _openai_tts(text: str, voice: str = "alloy") -> tuple:
@@ -151,6 +208,12 @@ async def multi_tts(text: str, provider: str = None, voice: str = "jenny",
             audio, media_type = await _azure_tts(text, voice_name, speed, phoneme_map)
         except Exception as e:
             logger.warning("Azure TTS 失败，降级 edge-tts: %s", e)
+            audio, media_type = await _edge_tts(text, voice_name, speed)
+    elif provider == "google":
+        try:
+            audio, media_type = await _google_tts(text, voice_name, speed)
+        except Exception as e:
+            logger.warning("Google TTS 失败，降级 edge-tts: %s", e)
             audio, media_type = await _edge_tts(text, voice_name, speed)
     elif provider == "edge":
         audio, media_type = await _edge_tts(text, voice_name, speed)

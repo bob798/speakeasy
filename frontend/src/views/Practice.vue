@@ -471,8 +471,8 @@ onBeforeUnmount(() => {
                 <button
                   v-for="opt in [
                     { v: 'edge',   label: 'Edge' },
-                    { v: 'doubao', label: '豆包' },
                     { v: 'azure',  label: 'Azure' },
+                    { v: 'google', label: 'Google' },
                   ]"
                   :key="opt.v"
                   type="button"
