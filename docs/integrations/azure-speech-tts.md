@@ -71,15 +71,65 @@ Speakeasy 的 `multi_tts` 多引擎 TTS 体系里 `provider="azure"` 是 **国�
 - 国家 = 账单国家（已锁死美国）
 - 区域 = 服务部署位置（按延迟选 East Asia）
 
-### Step 3 · 拿 Key + Region
+### Step 3 · 进资源页
 
-资源创建完进资源页 → 左侧菜单 **「密钥和终结点」**（Keys and Endpoint）
+⚠️ 创建完别从「资源组」点进去 —— 那是个文件夹，左侧菜单**只有「访问控制 (IAM)」**之类，没你要的东西。
 
-- **KEY 1**：复制 → 这是 `AZURE_TTS_KEY`（32 位 hex）
-- **位置/区域**：写的是 `East Asia` → 这是 `AZURE_TTS_REGION=eastasia`（**小写无空格**）
+**正确路径：**
 
-> ⚠️ 注意 `AZURE_TTS_REGION` 用的是 region code (`eastasia`) 不是显示名 (`East Asia`)。code 对照表：
-> - `eastasia` / `southeastasia` / `japaneast` / `koreacentral` / `eastus` / `westus` / `westeurope` ...
+- portal 顶栏搜「**所有资源**」（All resources）
+- 找类型为 **`语音服务` / `Speech` / `Cognitive Services`** 的条目
+- 点资源名（比如 `speakeasy-speech`）进去
+- 顶部面包屑应该是：`主页 > 所有资源 > speakeasy-speech`（**而不是 `… > speakeasy-rg`**）
+
+进对的页面后左侧菜单**至少**有：
+
+```
+📋 概述
+📜 活动日志
+🔐 访问控制 (IAM)
+🏷️ 标记
+🩺 诊断并解决问题
+─── 资源管理 ───
+🔑 密钥和终结点      ← ⭐ 你要的
+🌐 网络
+🆔 标识
+…
+```
+
+如果**只看到「访问控制」+ 几项**，三种可能：
+
+1. **看的是资源组** —— 退一层，点进具体资源
+2. **资源还没部署完** —— 顶部铃铛🔔等「部署成功」
+3. **创建错资源类型** —— 必须是 `kind: SpeechServices` 的语音服务，不是 Speech Translation / multi-service AI services。在「概述」页验证类型 = `Speech` / `Cognitive Services`，定价层 = `F0 Free`
+
+### Step 4 · 拿 Key + Region
+
+进资源后 → 左侧 **「密钥和终结点」**（Keys and Endpoint）→ 这页有 3 个字段：
+
+| 字段 | 用途 | 拷哪个值 |
+|---|---|---|
+| **密钥 1 / 密钥 2** | 鉴权 | 复制 **密钥 1** → `AZURE_TTS_KEY`（32 位 hex） |
+| **位置/区域** | 服务区域 | 显示 `East Asia` → 转 region code `eastasia` |
+| **终结点 (Endpoint)** | Cognitive Services 通用入口 | **⚠️ 不用** |
+
+> ⚠️ 「终结点」一栏显示的 `https://eastasia.api.cognitive.microsoft.com/` 是 Cognitive Services **通用域名**，给 SDK 用的。
+>
+> **我们代码 `_azure_tts` 不读这个 endpoint** —— TTS 走专属子域 `https://<region>.tts.speech.microsoft.com/cognitiveservices/v1`，由代码根据 region 自己拼。所以你**只需要 KEY + REGION CODE 两个值**。
+
+**Region code 对照**（`位置/区域` 显示名 → `.env` 里写的 code）：
+
+| 显示名 | Region code |
+|---|---|
+| East Asia | `eastasia` |
+| Southeast Asia | `southeastasia` |
+| Japan East | `japaneast` |
+| Korea Central | `koreacentral` |
+| East US | `eastus` |
+| West US | `westus` |
+| West Europe | `westeurope` |
+
+**code 必须全小写连写**，不要写 `East Asia`、`east-asia` 或 `EastAsia` —— 是最常见的 401 原因。
 
 ---
 
@@ -269,11 +319,15 @@ DevTools Network 看 `/practice/tts` 返回 200 + audio/mpeg。
 
 ### 401 `Access denied due to invalid subscription key or wrong API region`
 
-最常见。**key 和 region 必须配对**：
-- 你在 `East Asia` 创建的资源，key 只能配 `eastasia`
-- 写成 `EastAsia` 或 `east-asia` 也会 401（region code 必须全小写连写）
+**70% 的踩坑都是这个。** 五种细分原因，按命中率排序：
 
-修法：portal 资源页核对 region；`.env` 里 `AZURE_TTS_REGION=eastasia`（不是 `East Asia`）。
+| 原因 | 表现 | 修法 |
+|---|---|---|
+| Region code 写成显示名 | `.env` 里 `AZURE_TTS_REGION=East Asia` | 改 `eastasia` 全小写连写 |
+| Region 和 key 不配对 | 你创建资源时选了 East Asia，env 写 eastus | portal 资源页「概述」核对真实区域 |
+| key 复制时多了空格 | key 前后混进空格或换行 | `.env` 里 key 值无空格，引号也不要 |
+| 用了「终结点」当 key | 把 `https://...api.cognitive...` 塞进 KEY 字段 | KEY 是 32 位 hex，不是 URL |
+| 资源是 Azure 中国的 | portal 是 `.cn` 子域注册的 | 必须 Azure Global（signup.azure.com） |
 
 ### 403 `Quota Exceeded`
 
