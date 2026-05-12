@@ -105,7 +105,9 @@
     flex: 1;
     overflow-y: auto;
     padding: var(--space-3) var(--space-4);
-    padding-bottom: 160px; /* 给 dock 让位 */
+    /* dock = coach bar(~36) + 2 行按钮(56×2 + 间隙 16 ≈ 128) + 上下 padding/safe-bottom(~32) ≈ 200px
+       多留 20px buffer，且确保最后一句完全不被毛玻璃 dock 遮挡 */
+    padding-bottom: 220px;
     scroll-behavior: smooth;
   }
   .seg {
@@ -304,9 +306,17 @@
     padding: var(--space-4) var(--space-4) calc(var(--space-4) + 12px);
     z-index: 21;
     transform: translateY(100%);
-    transition: transform 220ms var(--ease);
+    visibility: hidden;
+    pointer-events: none;
+    /* 关闭：transform 立即生效，visibility 在 transform 结束后再变 hidden */
+    transition: transform 220ms var(--ease), visibility 0ms 220ms;
   }
-  .sheet.open { transform: translateY(0); }
+  .sheet.open {
+    transform: translateY(0);
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform 220ms var(--ease), visibility 0ms 0ms;
+  }
   .sheet h4 { margin: 0 0 var(--space-3); font-size: 14px; color: var(--text-2); }
   .row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; }
   .row label { font-size: 14px; color: var(--text-1); }
