@@ -191,6 +191,7 @@ async def _openai_tts(text: str, voice: str = "alloy") -> tuple:
 async def multi_tts(text: str, provider: str = None, voice: str = "jenny",
                     speed: str = "+0%", phoneme_map: dict = None) -> tuple:
     """Multi-source TTS with disk caching. Returns (audio_bytes, media_type)."""
+    import time
     if provider is None:
         provider = settings.TTS_DEFAULT_PROVIDER
 
@@ -199,21 +200,26 @@ async def multi_tts(text: str, provider: str = None, voice: str = "jenny",
     cache_path = os.path.join(TTS_CACHE_DIR, f"{cache_key}.mp3")
     if os.path.exists(cache_path):
         with open(cache_path, "rb") as f:
-            return f.read(), "audio/mpeg"
+            audio = f.read()
+        logger.info("multi_tts cache hit provider=%s voice=%s bytes=%d", provider, voice, len(audio))
+        return audio, "audio/mpeg"
 
     voice_name = VOICES.get(voice, voice)
+    t_start = time.time()
+    logger.info("multi_tts start provider=%s voice=%s(%s) speed=%s phoneme=%s text_len=%d",
+                provider, voice, voice_name, speed, bool(phoneme_map), len(text))
 
     if provider == "azure":
         try:
             audio, media_type = await _azure_tts(text, voice_name, speed, phoneme_map)
         except Exception as e:
-            logger.warning("Azure TTS 失败，降级 edge-tts: %s", e)
+            logger.warning("Azure TTS 失败，降级 edge-tts: %s: %s", type(e).__name__, e, exc_info=True)
             audio, media_type = await _edge_tts(text, voice_name, speed)
     elif provider == "google":
         try:
             audio, media_type = await _google_tts(text, voice_name, speed)
         except Exception as e:
-            logger.warning("Google TTS 失败，降级 edge-tts: %s", e)
+            logger.warning("Google TTS 失败，降级 edge-tts: %s: %s", type(e).__name__, e, exc_info=True)
             audio, media_type = await _edge_tts(text, voice_name, speed)
     elif provider == "edge":
         audio, media_type = await _edge_tts(text, voice_name, speed)
@@ -221,6 +227,9 @@ async def multi_tts(text: str, provider: str = None, voice: str = "jenny",
         audio, media_type = await _openai_tts(text, voice)
     else:
         raise ValueError(f"Unknown provider: {provider}")
+
+    elapsed_ms = int((time.time() - t_start) * 1000)
+    logger.info("multi_tts done provider=%s bytes=%d ms=%d", provider, len(audio), elapsed_ms)
 
     with open(cache_path, "wb") as f:
         f.write(audio)
