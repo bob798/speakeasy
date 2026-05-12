@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Practice · Mobile v2 prototype</title>
+<style>
+  :root {
+    --accent: #3d6b4f;
+    --accent-hover: #335e44;
+    --accent-soft: #eaf3ee;
+    --bg: #f7f7f5;
+    --bg-elevated: #ffffff;
+    --bg-overlay: rgba(255, 255, 255, 0.92);
+    --text-1: #1a1d1f;
+    --text-2: #4a5159;
+    --text-3: #8a9199;
+    --text-inverse: #ffffff;
+    --border: #e3e6e8;
+    --border-strong: #c5c9cd;
+    --radius-sm: 6px;
+    --radius: 10px;
+    --radius-lg: 16px;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro SC', 'PingFang SC',
+      'Helvetica Neue', sans-serif;
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+    --duration: 180ms;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: var(--font-sans); color: var(--text-1); }
+  body {
+    background: #d4d7d9;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 8px;
+  }
+  button { border: none; cursor: pointer; font: inherit; color: inherit; background: transparent; }
+  button:focus { outline: none; }
+
+  /* 模拟手机外壳 · 实际端跑时去掉这层 */
+  .device {
+    width: 100%;
+    max-width: 390px;
+    height: 844px;
+    max-height: 95vh;
+    background: var(--bg);
+    border-radius: 36px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.18);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* 顶栏 */
+  .topbar {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--space-4);
+    background: var(--bg-overlay);
+    backdrop-filter: saturate(180%) blur(16px);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+  }
+  .topbar .back { color: var(--text-2); font-size: 14px; padding: 8px 4px; }
+  .topbar .title { font-weight: 600; color: var(--accent); font-size: 15px; }
+  .topbar .right { display: flex; gap: var(--space-1); }
+  .topbar .icon-btn {
+    min-width: 44px;
+    height: 36px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 18px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .topbar .icon-btn .ico { font-size: 16px; }
+  .topbar .icon-btn:active { background: var(--accent); color: var(--text-inverse); transform: scale(0.96); }
+
+  /* 句子列表区 */
+  .list {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-3) var(--space-4);
+    padding-bottom: 160px; /* 给 dock 让位 */
+    scroll-behavior: smooth;
+  }
+  .seg {
+    display: flex;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-3);
+    margin-bottom: var(--space-2);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background var(--duration) var(--ease);
+  }
+  .seg:active { background: var(--bg-elevated); }
+  .seg .idx {
+    font-size: 12px;
+    color: var(--text-3);
+    width: 22px;
+    flex-shrink: 0;
+    padding-top: 3px;
+  }
+  .seg .body { flex: 1; }
+  .seg .body .txt {
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--text-2);
+  }
+  /* FSRS 状态点暂去除 · issue #26 重做评分后再考虑加回 */
+
+  /* 当前句卡 */
+  .seg.current {
+    background: var(--bg-elevated);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06);
+    border-left: 3px solid var(--accent);
+    padding-left: calc(var(--space-3) - 3px);
+  }
+  .seg.current .idx { color: var(--accent); font-weight: 600; }
+  .seg.current .txt {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text-1);
+    line-height: 1.55;
+  }
+
+  /* 当前句里的单词 · 可点 */
+  .word {
+    display: inline-block;
+    padding: 1px 2px;
+    margin: 0 -1px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 120ms var(--ease);
+  }
+  .word:active { background: var(--accent-soft); }
+  .word.selected {
+    background: var(--accent-soft);
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-decoration-color: var(--accent);
+    text-underline-offset: 3px;
+  }
+
+  /* 选中词条 */
+  .selected-bar {
+    margin-top: var(--space-3);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px var(--space-3);
+    background: var(--accent-soft);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--accent);
+  }
+  .selected-bar .clear {
+    width: 24px; height: 24px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    color: var(--accent);
+    font-size: 16px;
+    line-height: 1;
+  }
+  .selected-bar .clear:active { background: var(--bg-elevated); }
+
+  /* dock */
+  .dock {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    background: var(--bg-overlay);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-top: 1px solid var(--border);
+    padding: var(--space-2) var(--space-3);
+    padding-bottom: calc(var(--space-2) + 12px); /* mock safe-bottom */
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    z-index: 5;
+  }
+  .dock-row { display: flex; gap: var(--space-2); }
+  .dock-btn {
+    flex: 1;
+    min-height: 56px;
+    border-radius: var(--radius);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    transition: all 120ms var(--ease);
+  }
+  .dock-btn:active { transform: scale(0.96); background: var(--bg); }
+  .dock-btn .ico { font-size: 20px; line-height: 1; }
+  .dock-btn .label { font-size: 13px; color: var(--text-1); font-weight: 500; }
+  .dock-btn .sub { font-size: 10px; color: var(--text-3); }
+  .dock-btn.primary { background: var(--accent); border-color: var(--accent); }
+  .dock-btn.primary .label, .dock-btn.primary .ico { color: var(--text-inverse); }
+  .dock-btn.primary .sub { color: rgba(255,255,255,0.75); }
+  .dock-btn.record.recording {
+    background: #c6463a; border-color: #c6463a;
+    animation: rec-pulse 1s infinite;
+  }
+  .dock-btn.record.recording .label, .dock-btn.record.recording .ico { color: #fff; }
+  .dock-btn:disabled, .dock-btn.disabled {
+    opacity: 0.45;
+    pointer-events: auto; /* 仍可点出 toast */
+  }
+  @keyframes rec-pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(198,70,58,0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(198,70,58,0); }
+  }
+
+  /* ⚙ sheet */
+  .sheet-mask {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 20;
+    display: none;
+  }
+  .sheet-mask.open { display: block; }
+  .sheet {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    background: var(--bg-elevated);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding: var(--space-4) var(--space-4) calc(var(--space-4) + 12px);
+    z-index: 21;
+    transform: translateY(100%);
+    transition: transform 220ms var(--ease);
+  }
+  .sheet.open { transform: translateY(0); }
+  .sheet h4 { margin: 0 0 var(--space-3); font-size: 14px; color: var(--text-2); }
+  .row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; }
+  .row label { font-size: 14px; color: var(--text-1); }
+  .seg-pick { display: flex; gap: 4px; }
+  .seg-pick button {
+    padding: 6px 10px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text-2);
+    border: 1px solid var(--border);
+  }
+  .seg-pick button.active {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+  }
+  .sheet-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 12px 0;
+  }
+  .sheet-action {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 8px;
+    border-radius: var(--radius);
+    transition: background 120ms var(--ease);
+  }
+  .sheet-action:active { background: var(--bg); }
+  .sheet-action .sa-ico {
+    width: 36px; height: 36px;
+    display: grid; place-items: center;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: var(--radius-sm);
+    font-size: 18px;
+  }
+  .sheet-action .sa-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .sheet-action .sa-title { font-size: 14px; color: var(--text-1); font-weight: 500; }
+  .sheet-action .sa-desc { font-size: 11px; color: var(--text-3); }
+  .sheet-action .sa-chev { color: var(--text-3); font-size: 18px; }
+
+  /* toast */
+  .toast {
+    position: absolute;
+    bottom: 200px; left: 50%;
+    transform: translateX(-50%);
+    background: var(--text-1);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 200ms var(--ease);
+    z-index: 30;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+  <div class="device">
+    <!-- 顶栏 -->
+    <header class="topbar">
+      <button class="back" onclick="alert('返回 Home（原型只演示，不实际跳）')">← 返回</button>
+      <div class="title">发音练习</div>
+      <div class="right">
+        <button class="icon-btn" title="设置" onclick="openSheet()">
+          <span class="ico">⚙</span><span>设置</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 句子列表 -->
+    <div class="list" id="list"></div>
+
+    <!-- 底部 dock -->
+    <div class="dock">
+      <div class="dock-row">
+        <button class="dock-btn primary" onclick="onExplain()">
+          <span class="ico">💡</span>
+          <span class="label">解释</span>
+          <span class="sub" id="explainSub">整句</span>
+        </button>
+        <button class="dock-btn primary" onclick="onSpeak()">
+          <span class="ico">🔊</span>
+          <span class="label">发音</span>
+          <span class="sub" id="speakSub">整句</span>
+        </button>
+      </div>
+      <div class="dock-row">
+        <button class="dock-btn record" id="recBtn" onclick="onToggleRec()">
+          <span class="ico" id="recIco">🎤</span>
+          <span class="label" id="recLabel">录音</span>
+          <span class="sub" id="recSub">开始录</span>
+        </button>
+        <button class="dock-btn disabled" id="playbackBtn" onclick="onPlayback()">
+          <span class="ico">▶</span>
+          <span class="label">回放</span>
+          <span class="sub" id="playbackSub">无录音</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ⚙ sheet -->
+    <div class="sheet-mask" id="sheetMask" onclick="closeSheet()"></div>
+    <div class="sheet" id="sheet">
+      <h4>设置</h4>
+      <div class="row">
+        <label>语速</label>
+        <div class="seg-pick" id="speedPick">
+          <button data-v="-40%">慢</button>
+          <button data-v="-20%">偏慢</button>
+          <button data-v="+0%" class="active">正常</button>
+          <button data-v="+20%">偏快</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>TTS 引擎</label>
+        <div class="seg-pick" id="engPick">
+          <button data-v="edge" class="active">Edge</button>
+          <button data-v="doubao">豆包</button>
+          <button data-v="azure">Azure</button>
+        </div>
+      </div>
+
+      <div class="sheet-divider"></div>
+
+      <button class="sheet-action" onclick="toast('📖 跳 BBC 复习页（mock）'); closeSheet();">
+        <span class="sa-ico">📖</span>
+        <span class="sa-body">
+          <span class="sa-title">BBC 复习</span>
+          <span class="sa-desc">基于 SRS 的文章复习</span>
+        </span>
+        <span class="sa-chev">›</span>
+      </button>
+      <button class="sheet-action" onclick="toast('🔄 重新导入字幕（mock）'); closeSheet();">
+        <span class="sa-ico">🔄</span>
+        <span class="sa-body">
+          <span class="sa-title">重新导入字幕</span>
+          <span class="sa-desc">换一集、换一篇</span>
+        </span>
+        <span class="sa-chev">›</span>
+      </button>
+    </div>
+
+    <!-- toast -->
+    <div class="toast" id="toast"></div>
+  </div>
+
+<script>
+  // 模拟 BBC English at Work 一集的句子
+  const segments = [
+    { text: 'Welcome to BBC English at Work.' },
+    { text: 'Today, Anna learns how to ask politely.' },
+    { text: 'Could you give me the schedule for tomorrow?' },
+    { text: 'Sure, you have a meeting at ten.' },
+    { text: 'And another with the client at two.' },
+    { text: 'Right, would you mind if I arrived a bit late?' },
+    { text: 'Not at all, take your time.' },
+    { text: 'Thanks, you are a lifesaver.' },
+    { text: 'See you tomorrow then.' },
+  ];
+
+  let currentIdx = 2;
+  let selectedWord = null; // { word, idx } 或 null
+  let recording = false;
+  let hasRecording = false;
+  let speed = '+0%';
+  let engine = 'edge';
+
+  const listEl = document.getElementById('list');
+  const explainSub = document.getElementById('explainSub');
+  const speakSub = document.getElementById('speakSub');
+  const toastEl = document.getElementById('toast');
+  let toastTimer = null;
+
+  function toast(text) {
+    toastEl.textContent = text;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1500);
+  }
+
+  function tokenize(text) {
+    // 拆词 + 保留标点位置
+    const parts = [];
+    const re = /([A-Za-z][A-Za-z'-]*)|([^A-Za-z]+)/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      if (m[1]) parts.push({ type: 'word', text: m[1] });
+      else parts.push({ type: 'sep', text: m[2] });
+    }
+    return parts;
+  }
+
+  function render() {
+    listEl.innerHTML = '';
+    segments.forEach((seg, i) => {
+      const isCurrent = i === currentIdx;
+      const segEl = document.createElement('div');
+      segEl.className = 'seg' + (isCurrent ? ' current' : '');
+      segEl.onclick = (e) => {
+        // 当前句内点词时，不要触发选句
+        if (e.target.closest('.word') || e.target.closest('.selected-bar')) return;
+        if (i !== currentIdx) {
+          currentIdx = i;
+          selectedWord = null;
+          render();
+          scrollToCurrent();
+        }
+      };
+
+      const idxEl = document.createElement('div');
+      idxEl.className = 'idx';
+      idxEl.textContent = String(i + 1);
+
+      const body = document.createElement('div');
+      body.className = 'body';
+
+      const txt = document.createElement('div');
+      txt.className = 'txt';
+      if (isCurrent) {
+        // 拆词
+        tokenize(seg.text).forEach((tok) => {
+          if (tok.type === 'word') {
+            const b = document.createElement('span');
+            b.className = 'word';
+            if (selectedWord && selectedWord.word === tok.text.toLowerCase()) {
+              b.classList.add('selected');
+            }
+            b.textContent = tok.text;
+            b.onclick = (ev) => {
+              ev.stopPropagation();
+              const w = tok.text.toLowerCase();
+              if (selectedWord && selectedWord.word === w) selectedWord = null;
+              else selectedWord = { word: w, display: tok.text };
+              render();
+            };
+            txt.appendChild(b);
+          } else {
+            txt.appendChild(document.createTextNode(tok.text));
+          }
+        });
+      } else {
+        txt.textContent = seg.text;
+      }
+      body.appendChild(txt);
+
+      if (isCurrent && selectedWord) {
+        const bar = document.createElement('div');
+        bar.className = 'selected-bar';
+        bar.innerHTML = `<span>⭕ 已选：<b>${selectedWord.display}</b></span>`;
+        const clearBtn = document.createElement('button');
+        clearBtn.className = 'clear';
+        clearBtn.textContent = '×';
+        clearBtn.onclick = (ev) => {
+          ev.stopPropagation();
+          selectedWord = null;
+          render();
+        };
+        bar.appendChild(clearBtn);
+        body.appendChild(bar);
+      }
+
+      segEl.appendChild(idxEl);
+      segEl.appendChild(body);
+      listEl.appendChild(segEl);
+    });
+    updateSubs();
+  }
+
+  function updateSubs() {
+    const sub = selectedWord ? selectedWord.display : '整句';
+    explainSub.textContent = sub;
+    speakSub.textContent = sub;
+  }
+
+  function scrollToCurrent() {
+    const segs = listEl.querySelectorAll('.seg');
+    const target = segs[currentIdx];
+    if (target) target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
+  // dock 动作
+  function onExplain() {
+    const target = selectedWord ? `单词 "${selectedWord.display}"` : '整句';
+    toast(`💡 解释 ${target}（mock）`);
+  }
+  function onSpeak() {
+    const target = selectedWord ? `单词 "${selectedWord.display}"` : '整句';
+    toast(`🔊 发音 ${target}（mock · speed=${speed} engine=${engine}）`);
+  }
+  function onToggleRec() {
+    recording = !recording;
+    const btn = document.getElementById('recBtn');
+    const ico = document.getElementById('recIco');
+    const label = document.getElementById('recLabel');
+    const sub = document.getElementById('recSub');
+    if (recording) {
+      btn.classList.add('recording');
+      ico.textContent = '⏹';
+      label.textContent = '停止';
+      sub.textContent = '录音中…';
+      toast('🎤 录音中');
+    } else {
+      btn.classList.remove('recording');
+      ico.textContent = '🎤';
+      label.textContent = '录音';
+      sub.textContent = '重录';
+      hasRecording = true;
+      const pb = document.getElementById('playbackBtn');
+      pb.classList.remove('disabled');
+      document.getElementById('playbackSub').textContent = '听自己';
+      toast('⏹ 已停止录音');
+    }
+  }
+  function onPlayback() {
+    if (!hasRecording) { toast('先录一段'); return; }
+    toast('▶ 回放（mock）');
+  }
+
+  // sheet
+  function openSheet() {
+    document.getElementById('sheetMask').classList.add('open');
+    document.getElementById('sheet').classList.add('open');
+  }
+  function closeSheet() {
+    document.getElementById('sheetMask').classList.remove('open');
+    document.getElementById('sheet').classList.remove('open');
+  }
+  document.querySelectorAll('#speedPick button').forEach((b) => {
+    b.onclick = () => {
+      document.querySelectorAll('#speedPick button').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+      speed = b.dataset.v;
+    };
+  });
+  document.querySelectorAll('#engPick button').forEach((b) => {
+    b.onclick = () => {
+      document.querySelectorAll('#engPick button').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+      engine = b.dataset.v;
+    };
+  });
+
+  render();
+  // 等 render 之后再滚到当前句
+  setTimeout(scrollToCurrent, 100);
+</script>
+</body>
+</html>
