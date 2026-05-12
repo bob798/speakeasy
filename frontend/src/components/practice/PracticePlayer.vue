@@ -253,6 +253,7 @@ onBeforeUnmount(() => {
           <select v-model="store.provider">
             <option value="edge">Edge</option>
             <option value="azure">Azure</option>
+            <option value="google">Google</option>
           </select>
         </div>
 

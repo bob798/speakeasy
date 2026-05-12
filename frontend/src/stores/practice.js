@@ -43,7 +43,7 @@ export const usePracticeStore = defineStore('practice', () => {
   const markedIndices = ref(new Set())
   const practicedIndices = ref(new Set())
   const ratingResults = ref({ again: 0, hard: 0, good: 0, easy: 0 })
-  const provider = ref('edge') // edge | azure  (后端 multi_tts 仅这两个 + openai 可用)
+  const provider = ref('edge') // edge | azure | google  (后端 multi_tts 支持 + openai)
   const speed = ref('+0%')
 
   const segments = computed(() => currentSource.value?.segments || [])

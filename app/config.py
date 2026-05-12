@@ -17,6 +17,7 @@ class Settings:
     ALLOWED_ORIGINS:  str  = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
     AZURE_TTS_KEY:    str  = os.getenv("AZURE_TTS_KEY", "")
     AZURE_TTS_REGION: str  = os.getenv("AZURE_TTS_REGION", "eastasia")
+    GOOGLE_TTS_API_KEY: str = os.getenv("GOOGLE_TTS_API_KEY", "")
     TTS_DEFAULT_PROVIDER: str = os.getenv("TTS_DEFAULT_PROVIDER", "edge")
 
 
