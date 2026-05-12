@@ -238,6 +238,8 @@ function onMobileClearWord() {
 }
 
 function onMobileExplain() {
+  // 与 onMobileSpeak 对齐：触发即推进 _lastRequestKey，让在飞 TTS 响应被丢弃
+  _lastRequestKey = `explain:${store.currentIdx}:${selectedWord.value?.word || '__'}:${Date.now()}`
   if (selectedWord.value) {
     onExplain({
       type: 'word',
@@ -442,6 +444,7 @@ onBeforeUnmount(() => {
                   v-for="opt in [
                     { v: 'edge',   label: 'Edge' },
                     { v: 'doubao', label: '豆包' },
+                    { v: 'azure',  label: 'Azure' },
                   ]"
                   :key="opt.v"
                   type="button"
@@ -681,6 +684,8 @@ onBeforeUnmount(() => {
   font-family: inherit;
   cursor: pointer;
 }
+.seg-pick button:focus { outline: none; }
+.seg-pick button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .seg-pick button.active {
   background: var(--accent); color: #fff; border-color: var(--accent);
 }
@@ -704,6 +709,8 @@ onBeforeUnmount(() => {
   transition: background 120ms var(--ease);
 }
 .sheet-action:active { background: var(--bg); }
+.sheet-action:focus { outline: none; }
+.sheet-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sheet-action .sa-ico {
   width: 36px; height: 36px;
   display: grid; place-items: center;
