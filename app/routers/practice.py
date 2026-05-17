@@ -42,6 +42,23 @@ class SubtitleRequest(BaseModel):
     cookies: Optional[str] = None   # Netscape 格式 B 站 cookies；抓取失败时前端兜底用
 
 
+class SegmentItem(BaseModel):
+    content: str
+    # from/to 可选，脚本导入的文本没有时间戳
+    start: Optional[float] = None    # 别名：from 是 Python 保留字
+    end: Optional[float] = None
+
+
+class SourceImportRequest(BaseModel):
+    """外部脚本批量导入 subtitle source"""
+    source_id: str                        # 唯一标识，如 voa_8003108
+    source_type: str = "external"         # voa / podcast / external ...
+    title: str
+    segments: List[SegmentItem]
+    source_url: Optional[str] = None      # 原文链接（仅存档）
+    published_at: Optional[str] = None    # ISO 格式发布时间，用于按原始发布顺序排序
+
+
 class CardItem(BaseModel):
     text: str
     context: str = ""
@@ -67,8 +84,9 @@ class ExplainRequest(BaseModel):
 # ── 字幕缓存工具 ─────────────────────────────────────────
 
 def _cache_subtitles(user_id: str, source_id: str, source_type: str,
-                     title: str, segments: list, audio_file: str = None):
-    """统一缓存字幕到 subtitle_sources，可选保存 audio_file 路径"""
+                     title: str, segments: list, audio_file: str = None,
+                     created_at=None):
+    """统一缓存字幕到 subtitle_sources，可选保存 audio_file 路径 / 覆盖 created_at"""
     try:
         # 将 audio_file 嵌入 subtitle_json 的 metadata 中
         cache_data = {"segments": segments}
@@ -81,14 +99,19 @@ def _cache_subtitles(user_id: str, source_id: str, source_type: str,
             if existing:
                 existing.subtitle_json = json.dumps(cache_data, ensure_ascii=False)
                 existing.title = title
+                if created_at:
+                    existing.created_at = created_at
             else:
-                s.add(SubtitleSource(
+                src = SubtitleSource(
                     user_id=user_id,
                     source_id=source_id,
                     source_type=source_type,
                     title=title,
                     subtitle_json=json.dumps(cache_data, ensure_ascii=False),
-                ))
+                )
+                if created_at:
+                    src.created_at = created_at
+                s.add(src)
             s.commit()
     except Exception as e:
         logger.warning("字幕缓存失败: %s", e)
@@ -163,7 +186,7 @@ async def list_subtitle_history(
         sources = (
             s.query(SubtitleSource)
             .filter_by(user_id=user_id)
-            .order_by(SubtitleSource.created_at.desc())
+            .order_by(SubtitleSource.created_at.desc(), SubtitleSource.id.desc())
             .limit(limit)
             .all()
         )
@@ -208,6 +231,40 @@ async def get_cached_subtitles(
         if audio_file:
             result["audio_file"] = audio_file
         return result
+
+
+# ── 外部导入 ─────────────────────────────────────────────
+
+@router.post("/practice/sources/import", status_code=201)
+async def import_source(
+    req: SourceImportRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """脚本/工具批量导入 subtitle source（upsert），Practice 页面「📚 历史」可见。"""
+    segments = [
+        {
+            "content": seg.content,
+            "from": seg.start or i * 10.0,
+            "to": seg.end or (i + 1) * 10.0,
+        }
+        for i, seg in enumerate(req.segments)
+    ]
+    # 解析发布时间（用于按原始发布顺序排序）
+    pub_dt = None
+    if req.published_at:
+        from datetime import datetime, timezone
+        try:
+            pub_dt = datetime.fromisoformat(req.published_at.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+
+    _cache_subtitles(user_id, req.source_id, req.source_type,
+                     req.title, segments, created_at=pub_dt)
+    return {
+        "source_id": req.source_id,
+        "title": req.title,
+        "segments_count": len(segments),
+    }
 
 
 # ── 卡片 CRUD ────────────────────────────────────────────
