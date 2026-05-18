@@ -19,9 +19,15 @@ const props = defineProps({
   currentIdx:     { type: Number, default: 0 },
   totalSegments:  { type: Number, default: 0 },
   practicedCount: { type: Number, default: 0 },
+  ratingMode:     { type: Boolean, default: false },   // #26 录完自动进入
+  ratingBusy:     { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['explain', 'speak', 'toggle-record', 'playback'])
+const emit = defineEmits([
+  'explain', 'speak', 'toggle-record', 'playback',
+  'rate',         // 评分 (#26)
+  'redo-record',  // 重录（退出 ratingMode 后立刻开新录音）
+])
 
 // 把 props 转 refs 喂 useCoachBar
 const state = {
@@ -64,51 +70,107 @@ const playbackDisabled = computed(() => !props.hasRecording)
       <span class="copy">{{ coachCopy }}</span>
     </div>
 
-    <div class="dock-row">
-      <button
-        class="dock-btn primary"
-        :aria-label="explainAria"
-        @click="emit('explain')"
-      >
-        <span class="ico" aria-hidden="true">💡</span>
-        <span class="label">{{ explainLabel }}</span>
-        <span v-if="subWord" class="sub">{{ subWord }}</span>
-      </button>
-      <button
-        class="dock-btn primary"
-        :aria-label="speakAria"
-        @click="emit('speak')"
-      >
-        <span class="ico" aria-hidden="true">🔊</span>
-        <span class="label">{{ speakLabel }}</span>
-        <span v-if="subWord" class="sub">{{ subWord }}</span>
-      </button>
-    </div>
-    <div class="dock-row">
-      <button
-        class="dock-btn record"
-        :class="{ recording }"
-        :aria-pressed="recording"
-        :aria-label="recording ? '停止录音' : '开始录音'"
-        @click="emit('toggle-record')"
-      >
-        <span class="ico" aria-hidden="true">{{ recording ? '⏹' : '🎤' }}</span>
-        <span class="label">{{ recording ? '停止' : '录音' }}</span>
-        <span class="sub">
-          {{ recording ? '录音中…' : (hasRecording ? '重录' : '开始录') }}
-        </span>
-      </button>
-      <button
-        class="dock-btn"
-        :aria-disabled="playbackDisabled"
-        :aria-label="playbackDisabled ? '回放，先录一段' : '回放录音'"
-        @click="emit('playback')"
-      >
-        <span class="ico" aria-hidden="true">▶</span>
-        <span class="label">回放</span>
-        <span class="sub">{{ playbackDisabled ? '无录音' : '听自己' }}</span>
-      </button>
-    </div>
+    <template v-if="!ratingMode">
+      <div class="dock-row">
+        <button
+          class="dock-btn primary"
+          :aria-label="explainAria"
+          @click="emit('explain')"
+        >
+          <span class="ico" aria-hidden="true">💡</span>
+          <span class="label">{{ explainLabel }}</span>
+          <span v-if="subWord" class="sub">{{ subWord }}</span>
+        </button>
+        <button
+          class="dock-btn primary"
+          :aria-label="speakAria"
+          @click="emit('speak')"
+        >
+          <span class="ico" aria-hidden="true">🔊</span>
+          <span class="label">{{ speakLabel }}</span>
+          <span v-if="subWord" class="sub">{{ subWord }}</span>
+        </button>
+      </div>
+      <div class="dock-row">
+        <button
+          class="dock-btn record"
+          :class="{ recording }"
+          :aria-pressed="recording"
+          :aria-label="recording ? '停止录音' : '开始录音'"
+          @click="emit('toggle-record')"
+        >
+          <span class="ico" aria-hidden="true">{{ recording ? '⏹' : '🎤' }}</span>
+          <span class="label">{{ recording ? '停止' : '录音' }}</span>
+          <span class="sub">
+            {{ recording ? '录音中…' : (hasRecording ? '重录' : '开始录') }}
+          </span>
+        </button>
+        <button
+          class="dock-btn"
+          :aria-disabled="playbackDisabled"
+          :aria-label="playbackDisabled ? '回放，先录一段' : '回放录音'"
+          @click="emit('playback')"
+        >
+          <span class="ico" aria-hidden="true">▶</span>
+          <span class="label">回放</span>
+          <span class="sub">{{ playbackDisabled ? '无录音' : '听自己' }}</span>
+        </button>
+      </div>
+    </template>
+
+    <!-- #26 评分模式：录完自动切到这套（方案 C） -->
+    <!-- codex review: ratingBusy 时 redo/playback 也要 disable —— 否则评分请求在飞时点重录
+         会调 recorder.reset() 把新录音杀掉，等评分请求返回后还会跳句到错位置 -->
+    <template v-else>
+      <div class="dock-row">
+        <button
+          class="dock-btn"
+          :disabled="ratingBusy"
+          aria-label="回放刚才的录音"
+          @click="emit('playback')"
+        >
+          <span class="ico" aria-hidden="true">▶</span>
+          <span class="label">回放</span>
+          <span class="sub">听自己</span>
+        </button>
+        <button
+          class="dock-btn"
+          :disabled="ratingBusy"
+          aria-label="退出打分，重新录一遍"
+          @click="emit('redo-record')"
+        >
+          <span class="ico" aria-hidden="true">🎤</span>
+          <span class="label">重录</span>
+          <span class="sub">重新来过</span>
+        </button>
+      </div>
+      <div class="dock-row rating-row">
+        <button
+          class="dock-btn rate rate-again"
+          :disabled="ratingBusy"
+          aria-label="Again · 完全不会"
+          @click="emit('rate', 'again')"
+        >Again</button>
+        <button
+          class="dock-btn rate rate-hard"
+          :disabled="ratingBusy"
+          aria-label="Hard · 卡壳"
+          @click="emit('rate', 'hard')"
+        >Hard</button>
+        <button
+          class="dock-btn rate rate-good"
+          :disabled="ratingBusy"
+          aria-label="Good · 顺"
+          @click="emit('rate', 'good')"
+        >Good</button>
+        <button
+          class="dock-btn rate rate-easy"
+          :disabled="ratingBusy"
+          aria-label="Easy · 太轻松"
+          @click="emit('rate', 'easy')"
+        >Easy</button>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -179,6 +241,28 @@ const playbackDisabled = computed(() => !props.hasRecording)
   0%,100% { box-shadow: 0 0 0 0 rgba(198,70,58,0.4); }
   50%    { box-shadow: 0 0 0 8px rgba(198,70,58,0); }
 }
+
+/* #26 评分四色按钮 — 与桌面 PracticePlayer 对齐 */
+.rating-row .dock-btn.rate {
+  min-height: 48px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #fff;
+  border: none;
+}
+.rating-row .dock-btn.rate:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.rate-again { background: #c6463a; }
+.rate-hard  { background: #e08438; }
+.rate-good  { background: #2d8a4a; }
+.rate-easy  { background: #2c6cd9; }
+.rate-again:active { background: #a83b30; }
+.rate-hard:active  { background: #c66f2c; }
+.rate-good:active  { background: #24723c; }
+.rate-easy:active  { background: #2459b4; }
 
 @media (orientation: landscape) and (max-height: 500px) {
   .dock { padding-bottom: var(--space-2); }

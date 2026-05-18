@@ -29,7 +29,7 @@ defineOptions({ name: 'Practice' })
 
 const router = useRouter()
 const store = usePracticeStore()
-const { createCards, ttsBlob } = usePractice()
+const { createCards, ttsBlob, rateCard } = usePractice()
 const { authFetch } = useAuthFetch()
 const recorder = useRecorder()
 const { isMobile } = useBreakpoint()
@@ -59,13 +59,14 @@ const recordingSegIdx = ref(null)
 const hasPlayedBack = ref(false)
 const isPlayingTTS = ref(false)
 const practicedCount = ref(0)
+// #26 手机端评分（方案 C：录完自动进入）
+const ratingMode = ref(false)
+const ratingBusy = ref(false)
 let _ttsAudio = null
 let _ttsUrl = null
 let _lastRequestKey = null
 
 useScrollLock(sheetOpen)
-
-const FSRS_NOTICE_KEY = 'v2:practice.fsrs_notice_seen'
 
 // 跨断点（resize 跨 768px）时清状态防泄漏
 watch(isMobile, () => {
@@ -74,23 +75,29 @@ watch(isMobile, () => {
   _releaseTTS()
   if (recorder.recording.value) recorder.stop()
   recordingSegIdx.value = null
+  ratingMode.value = false
 })
 
-// 首次进入弹一次 FSRS toast（仅手机端弹）
+// 录音停下且已有录音 → 自动进入评分模式（#26 方案 C）
+// codex review: 仅当录音归属当前句时才进；否则切句中途 onstop 异步落地会给新句错误开启评分
 watch(
-  [isMobile, hasSource],
-  ([m, has]) => {
-    if (!m || !has) return
-    try {
-      if (!localStorage.getItem(FSRS_NOTICE_KEY)) {
-        setTimeout(() => {
-          showToast('ℹ︎ 手机端暂不记录复习评分，仍可正常练习', 'info', 4000)
-          localStorage.setItem(FSRS_NOTICE_KEY, '1')
-        }, 400)
-      }
-    } catch { /* ignore */ }
-  },
-  { immediate: true }
+  () => recorder.recording.value,
+  (isRec, wasRec) => {
+    if (
+      wasRec && !isRec && recorder.url.value && isMobile.value &&
+      recordingSegIdx.value === store.currentIdx
+    ) {
+      ratingMode.value = true
+    }
+  }
+)
+
+// 切句即退出评分模式（避免拿上一句的评分意图给新句）
+watch(
+  () => store.currentIdx,
+  () => {
+    ratingMode.value = false
+  }
 )
 
 function gotoBbcReview() {
@@ -223,8 +230,7 @@ function onMobileSelectSentence(idx) {
     recordingSegIdx.value = null
   }
   _releaseTTS()
-  // 离开旧句视作"完成一句"（v1 用切句作信号；issue #26 评分恢复后改为按 Good/Easy 计）
-  if (store.currentIdx !== idx) practicedCount.value += 1
+  // codex review (#26): practicedCount 不再随切句自增；只有评分成功才计，否则 coach 文案与实际进度不符
   store.setCurrentIdx(idx)
   selectedWord.value = null
   hasPlayedBack.value = false
@@ -281,11 +287,14 @@ async function onMobileSpeak() {
 
 async function onMobileToggleRecord() {
   if (recorder.recording.value) {
+    // codex round 2: 不再立刻清 recordingSegIdx —— 它是「这段录音属于哪一句」的标记，
+    // onstop 异步落地后 watcher 才能用它判断是否给当前句开评分模式。
+    // 留到下次 start() 时再覆盖。
     recorder.stop()
-    recordingSegIdx.value = null
     hasPlayedBack.value = false
   } else {
     recorder.reset()
+    ratingMode.value = false       // 新一轮，退出评分（如有）
     await recorder.start()
     if (recorder.error.value) {
       showToast(recorder.error.value, 'error')
@@ -303,6 +312,61 @@ function onMobilePlayback() {
   const a = new Audio(recorder.url.value)
   a.play()
   hasPlayedBack.value = true
+}
+
+// #26 评分模式（方案 C）— 录完自动进入；选完评分自动跳下一句
+// codex review:
+//  - 把 ratedIdx 在 await 前捕获，避免用户切句中途让 markPracticed/跳句落到错段
+//  - 评分成功后 practicedCount 自增（之前只在切句时 +1，导致 coach 文案与实际不符）
+async function onMobileRate(level) {
+  if (ratingBusy.value) return
+  const ratedIdx = store.currentIdx
+  const card = store.cards.find((c) => c.segIdx === ratedIdx)
+  if (!card?.id) {
+    showToast('卡片未就绪，重新选一下句子再来', 'error', 2000)
+    ratingMode.value = false
+    return
+  }
+  ratingBusy.value = true
+  try {
+    await rateCard(card.id, level)
+    // 评分写到的是 ratedIdx 的卡，markPracticed 也必须对齐 ratedIdx
+    store.markPracticed(ratedIdx, level)
+    practicedCount.value += 1
+    showToast(`✅ 已评 ${({ again: 'Again', hard: 'Hard', good: 'Good', easy: 'Easy' })[level]}`, 'success', 1200)
+    // 用户在请求过程中可能已切句 / 重录，只有当前还停在被评分的那一句才推动 UI
+    if (store.currentIdx === ratedIdx) {
+      ratingMode.value = false
+      recorder.reset()
+      hasPlayedBack.value = false
+      if (ratedIdx < store.segments.length - 1) {
+        setTimeout(() => {
+          // 二次校验：定时器触发时用户仍在 ratedIdx 才跳
+          if (store.currentIdx === ratedIdx) {
+            store.setCurrentIdx(ratedIdx + 1)
+          }
+        }, 400)
+      }
+    }
+  } catch (err) {
+    const msg = getErrorMessage(err, '评分失败')
+    if (msg) showToast(msg, 'error')
+  } finally {
+    ratingBusy.value = false
+  }
+}
+
+async function onMobileRedoRecord() {
+  // 退出评分 + 立即开新录音
+  ratingMode.value = false
+  recorder.reset()
+  hasPlayedBack.value = false
+  await recorder.start()
+  if (recorder.error.value) {
+    showToast(recorder.error.value, 'error')
+    return
+  }
+  recordingSegIdx.value = store.currentIdx
 }
 
 // ⚙ sheet 焦点管理（spec §可访问性 #5）
@@ -430,10 +494,14 @@ onBeforeUnmount(() => {
         :current-idx="store.currentIdx"
         :total-segments="store.segments.length"
         :practiced-count="practicedCount"
+        :rating-mode="ratingMode"
+        :rating-busy="ratingBusy"
         @explain="onMobileExplain"
         @speak="onMobileSpeak"
         @toggle-record="onMobileToggleRecord"
         @playback="onMobilePlayback"
+        @rate="onMobileRate"
+        @redo-record="onMobileRedoRecord"
       />
     </template>
 
@@ -511,9 +579,8 @@ onBeforeUnmount(() => {
             </button>
 
             <div class="sheet-footer-note">
-              ℹ︎ 关于复习评分 · 手机端暂不评分，本次练习不会进入 FSRS 复习计划；
-              如需评分请到桌面端，或关注
-              <a href="https://github.com/bob798/speakeasy/issues/26" target="_blank" rel="noopener">issue #26</a>。
+              ℹ︎ 关于复习评分 · 录完一句后会自动出现 Again / Hard / Good / Easy 评分，
+              FSRS 会按你的反馈安排下次复习。点「重录」可重新来过。
             </div>
           </aside>
         </div>
