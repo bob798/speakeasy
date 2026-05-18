@@ -85,11 +85,18 @@ class BaseModelClient:
     def generate_summary(self, history: list[dict]) -> str:
         raise NotImplementedError
 
-    async def complete(self, messages_or_prompt, max_tokens: int = 1000, scene: str = "default") -> str:
+    async def complete(
+        self,
+        messages_or_prompt,
+        max_tokens: int = 1000,
+        scene: str = "default",
+        timeout: float | None = None,
+    ) -> str:
         """
         单次 LLM 调用，返回纯文本。
         - 传入 str：单条 prompt，包装成 user message
         - 传入 list：完整 messages 列表（含 system）
+        - timeout: 可选，按调用覆盖 SDK 全局 timeout；None 时回落到 client 全局 30s
         """
         import asyncio
         if isinstance(messages_or_prompt, list):
@@ -97,9 +104,18 @@ class BaseModelClient:
         else:
             messages = [{"role": "user", "content": messages_or_prompt}]
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, lambda: self._complete_sync_messages(messages, max_tokens, scene))
+        return await loop.run_in_executor(
+            None,
+            lambda: self._complete_sync_messages(messages, max_tokens, scene, timeout),
+        )
 
-    def _complete_sync_messages(self, messages: list, max_tokens: int, scene: str = "default") -> str:
+    def _complete_sync_messages(
+        self,
+        messages: list,
+        max_tokens: int,
+        scene: str = "default",
+        timeout: float | None = None,
+    ) -> str:
         raise NotImplementedError
 
     def _format_history(self, history: list[dict]) -> str:
@@ -191,13 +207,21 @@ class AnthropicClient(BaseModelClient):
                          total_ms=int(elapsed * 1000), status="error", error_message=str(e))
             raise Exception(f"今日一句生成失败：{e}")
 
-    def _complete_sync_messages(self, messages: list, max_tokens: int, scene: str = "default") -> str:
+    def _complete_sync_messages(
+        self,
+        messages: list,
+        max_tokens: int,
+        scene: str = "default",
+        timeout: float | None = None,
+    ) -> str:
         t0 = time.time()
         system = next((m["content"] for m in messages if m.get("role") == "system"), None)
         user_messages = [m for m in messages if m.get("role") != "system"]
         kwargs = {"model": _active_model(), "max_tokens": max_tokens, "messages": user_messages}
         if system:
             kwargs["system"] = system
+        if timeout is not None:
+            kwargs["timeout"] = timeout
         try:
             response = self.client.messages.create(**kwargs)
             result = response.content[0].text
@@ -307,14 +331,23 @@ class OpenAICompatibleClient(BaseModelClient):
                          total_ms=int(elapsed * 1000), status="error", error_message=str(e))
             raise Exception(f"今日一句生成失败（{self.provider}）：{e}")
 
-    def _complete_sync_messages(self, messages: list, max_tokens: int, scene: str = "default") -> str:
+    def _complete_sync_messages(
+        self,
+        messages: list,
+        max_tokens: int,
+        scene: str = "default",
+        timeout: float | None = None,
+    ) -> str:
         t0 = time.time()
+        kwargs = {
+            "model": _active_model(),
+            "max_tokens": max_tokens,
+            "messages": messages,
+        }
+        if timeout is not None:
+            kwargs["timeout"] = timeout
         try:
-            response = self.client.chat.completions.create(
-                model=_active_model(),
-                max_tokens=max_tokens,
-                messages=messages,
-            )
+            response = self.client.chat.completions.create(**kwargs)
             result = response.choices[0].message.content
             elapsed = time.time() - t0
             log_llm_call(scene, self.provider, _active_model(), messages, result,
