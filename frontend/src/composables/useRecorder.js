@@ -59,17 +59,20 @@ export function useRecorder() {
     _rec = new MediaRecorder(_stream, { mimeType: mime })
     _chunks = []
 
+    // codex round 3: 捕获本 session 的 stream 引用到闭包里。
+    // stale onstop 只能关「自己当年的」stream，不能动 module-level _stream，
+    // 否则 reset() 后立刻 start() 时，旧 onstop 会异步把新 session 的 stream 关掉。
+    const mySessionStream = _stream
+
     _rec.ondataavailable = (e) => {
       if (mySeq !== _startSeq) return       // stale 来自旧 session 的事件
       if (e.data.size) _chunks.push(e.data)
     }
     _rec.onstop = () => {
-      // codex round 2: 即便是 stale session 的 onstop，也必须把 recording 翻回 false，
-      // 否则 reset() 推进 _startSeq 后，stale 分支提前 return，recording 永远卡 true，
-      // 后续 start() 因 `if (recording.value) return` 全部失效
       if (mySeq !== _startSeq) {
-        _stopTracks()
-        recording.value = false
+        // stale：只关自己的 stream，不动共享 _stream / recording / blob / url —— 那些归当前 active session
+        // recording 在 reset() 里已同步翻 false，无需再动
+        mySessionStream?.getTracks().forEach((t) => t.stop())
         return
       }
       if (_chunks.length) {

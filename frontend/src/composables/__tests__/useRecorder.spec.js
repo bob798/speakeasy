@@ -236,6 +236,44 @@ describe('useRecorder', () => {
     expect(navigator.mediaDevices.getUserMedia.mock.calls.length).toBe(startCallsBefore + 1)
   })
 
+  it('stale onstop 不能关掉新 session 的 stream/状态 (codex round 3 regression)', async () => {
+    // 场景：reset() 触发旧 MediaRecorder.stop()（onstop 排进 microtask）→ 立刻 start() 起新 session
+    // → 旧 onstop 终于异步触发；如果它操作 module-level _stream / recording，
+    // 会把新 session 关掉
+    // 修后：onstop 闭包捕获各自 session 的 stream，stale 分支只清自己的 stream，不动共享状态
+    const session1Stop = vi.fn()
+    const session2Stop = vi.fn()
+    const session1Rec = makeMediaRecorder()
+    const session2Rec = makeMediaRecorder()
+    let recCallCount = 0
+    globalThis.MediaRecorder = vi.fn(() => (++recCallCount === 1 ? session1Rec : session2Rec))
+    globalThis.MediaRecorder.isTypeSupported = vi.fn(() => true)
+    navigator.mediaDevices.getUserMedia
+      .mockResolvedValueOnce({ getTracks: () => [{ stop: session1Stop }] })
+      .mockResolvedValueOnce({ getTracks: () => [{ stop: session2Stop }] })
+
+    const r = useRecorder()
+    await r.start()                  // session 1 起来
+    expect(r.recording.value).toBe(true)
+
+    r.reset()                        // 旧 stop() 排 microtask
+    expect(r.recording.value).toBe(false)
+
+    await r.start()                  // session 2 起来（在旧 onstop 异步触发前）
+    expect(r.recording.value).toBe(true)
+    expect(session1Stop).toHaveBeenCalled()    // session 1 stream 应已关
+    expect(session2Stop).not.toHaveBeenCalled() // session 2 stream 不能被旧 onstop 误关
+
+    // 让所有 microtask 跑完，stale onstop 触发
+    await Promise.resolve()
+    await Promise.resolve()
+    await nextTick()
+
+    // session 2 应保持 active；session 2 stream 仍然没被关
+    expect(r.recording.value).toBe(true)
+    expect(session2Stop).not.toHaveBeenCalled()
+  })
+
   it('start() 在 getUserMedia await 期间被 reset() 作废 → 新 stream 立刻 stop', async () => {
     // 用 deferred 暴露 getUserMedia 的 await，模拟竞争
     let resolveStream
