@@ -64,9 +64,12 @@ export function useRecorder() {
       if (e.data.size) _chunks.push(e.data)
     }
     _rec.onstop = () => {
-      // 来自旧 session 的 onstop（reset/重启后）：只清 stream，不写 blob/url
+      // codex round 2: 即便是 stale session 的 onstop，也必须把 recording 翻回 false，
+      // 否则 reset() 推进 _startSeq 后，stale 分支提前 return，recording 永远卡 true，
+      // 后续 start() 因 `if (recording.value) return` 全部失效
       if (mySeq !== _startSeq) {
         _stopTracks()
+        recording.value = false
         return
       }
       if (_chunks.length) {
@@ -95,6 +98,9 @@ export function useRecorder() {
     // 推进 session 序号 → 在飞 / 排队的 onstop 看到不匹配会自动作废
     _startSeq++
     stop()
+    // codex round 2: 显式把 recording 拍 false，否则 stop() 触发的异步 onstop 走 stale 分支前，
+    // start() 看到 recording 还是 true 会被早早 return 掉
+    recording.value = false
     if (url.value) {
       URL.revokeObjectURL(url.value)
       url.value = null

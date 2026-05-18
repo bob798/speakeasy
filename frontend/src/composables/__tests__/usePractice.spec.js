@@ -45,8 +45,9 @@ describe('usePractice · 发音练习 API', () => {
     expect(out).toEqual({ next_review: '2026-05-19T00:00:00' })
   })
 
-  it('createCards: POST /practice/cards 透传 payload', async () => {
-    authFetchJsonMock.mockResolvedValue({ created: 2, skipped: 0 })
+  it('createCards: POST /practice/cards 透传 payload + 返回响应 JSON', async () => {
+    const respPayload = { created: 2, skipped: 0 }
+    authFetchJsonMock.mockResolvedValue(respPayload)
     const { createCards } = usePractice()
 
     const payload = {
@@ -55,9 +56,11 @@ describe('usePractice · 发音练习 API', () => {
         { text: 'World', context: '{}' },
       ],
     }
-    await createCards(payload)
+    const out = await createCards(payload)
 
     expect(authFetchJsonMock).toHaveBeenCalledWith('/practice/cards', payload)
+    // codex round 2: 也断言返回值，防 wrapper 哪天悄悄丢掉 response body
+    expect(out).toEqual(respPayload)
   })
 
   it('ttsBlob: POST /practice/tts 透传 text/provider/speed + 返回 blob', async () => {

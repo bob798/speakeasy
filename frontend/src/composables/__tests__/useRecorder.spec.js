@@ -216,6 +216,24 @@ describe('useRecorder', () => {
 
     expect(r.blob.value).toBeNull()
     expect(r.url.value).toBeNull()
+    // codex round 2 regression：reset 后 recording 不能卡 true，否则下次 start() 早 return
+    expect(r.recording.value).toBe(false)
+  })
+
+  it('reset() 后能立刻 start() 新 session (codex round 2 regression)', async () => {
+    // 场景：用户录到一半反悔点重录 → reset() + start()
+    // 修前：reset 仅推 _startSeq，stale onstop 走早 return 跳过 recording=false → start() 早 return
+    const r = useRecorder()
+    await r.start()
+    expect(r.recording.value).toBe(true)
+
+    r.reset()                                  // 不等 onstop 异步
+    expect(r.recording.value).toBe(false)      // 必须同步可见
+
+    const startCallsBefore = navigator.mediaDevices.getUserMedia.mock.calls.length
+    await r.start()                            // 这次必须能真正进
+    expect(r.recording.value).toBe(true)
+    expect(navigator.mediaDevices.getUserMedia.mock.calls.length).toBe(startCallsBefore + 1)
   })
 
   it('start() 在 getUserMedia await 期间被 reset() 作废 → 新 stream 立刻 stop', async () => {
