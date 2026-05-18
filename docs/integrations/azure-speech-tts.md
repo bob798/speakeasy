@@ -399,3 +399,77 @@ curl -v --max-time 5 https://eastasia.tts.speech.microsoft.com 2>&1 | head -20
 | **配置复杂度** | 需 key + region | 仅 key |
 | **国内注册难度** | 中（要 visa） | 中（要 visa + 科学上网） |
 | **Speakeasy 推荐** | **生产首选** | 海外部署备选 |
+
+---
+
+## IPA 纠音功能使用方法（V0.13 · #34）
+
+ExplanationModal 解读弹窗里**单词 IPA** 和**每个连读 chunk 的 IPA** 旁都有 🎧 按钮。点击后端按你给的国际音标合成发音，不靠拼写规则猜读音。
+
+### 用户视角
+
+| 看到什么 | 含义 |
+|---|---|
+| IPA 旁有 🎧 | 这条 IPA 有标准读音示范，可点 |
+| 🎧 → ⏳ | 正在请求合成（< 1s 一般） |
+| 🎧 按钮高亮 / 边框变深 | 正在播放 |
+| 🎧 → ⚠️ | 合成失败，5s 后复原 |
+| 完全没 🎧 | 该单词 / chunk 没生成 IPA |
+
+并发安全：同时只允许一个 🎧 在响。点新 🎧 → 立刻 abort 旧 fetch + 释放旧 Audio。弹窗关闭 / 切换 target / 卸载组件 → 同样自动清理。
+
+### 后端契约
+
+```
+POST /practice/tts
+Content-Type: application/json
+
+{
+  "text": "schedule",
+  "provider": "azure",
+  "voice": "jenny",
+  "speed": "+0%",
+  "phoneme_map": { "schedule": "ˈskɛdʒuːl" }
+}
+```
+
+`phoneme_map` 支持**单词**和**多词短语**两种 key：
+
+```json
+{
+  "phoneme_map": {
+    "give me": "ɡɪmi",
+    "would you": "wʊdʒu",
+    "schedule": "ˈskɛdʒuːl"
+  }
+}
+```
+
+单词走 `\b...\b` 词边界匹配，短语（含空格）走整串匹配。
+
+### 智能升级（关键设计）
+
+`multi_tts` 收到 `phoneme_map` 时按下表决策：
+
+| provider 入参 | AZURE_TTS_KEY | 行为 | response header |
+|---|---|---|---|
+| `azure` | 已配 | 正常走 Azure | `X-TTS-Provider-Used: azure` |
+| `azure` | 未配 | 抛异常 → 降级 edge + 忽略 phoneme | `X-TTS-Provider-Used: edge` + `X-TTS-Fallback: edge` + `X-TTS-Phoneme-Ignored: 1` |
+| `edge` / `google` / `openai` | 已配 | **偷偷升级到 azure**（保留 phoneme） | `X-TTS-Provider-Used: azure` |
+| `edge` / 等 | 未配 | 走原 provider + 忽略 phoneme | `X-TTS-Provider-Used: <orig>` + `X-TTS-Phoneme-Ignored: 1` |
+
+前端不用关心后端选哪个 engine，传 `phoneme_map` 就够了；想验证实际走了哪条路径，看 response header。
+
+### 字典级 IPA 从哪来
+
+- **单词**：`/practice/explain/phonetic` 本地用 `eng_to_ipa` 库秒出（美式）
+- **连读 chunk**：`/practice/explain/stream` LLM 流式解读的 `liaison.chunk.ipa` 字段
+
+两条数据都已经在 V0.7+ 落地，#34 只是把它们接上 🎧 触发的 TTS 请求。
+
+### 调优 / 排障
+
+- `docker logs speakeasy 2>&1 | grep multi_tts` 看 `upgrade ... → azure` 日志确认升级生效
+- 命中过的 phoneme TTS 落地缓存（`static/tts_cache/<md5>.mp3`），重复点几乎瞬开
+- Azure 抛异常自动降级 edge（不报 500），响应里会有 `X-TTS-Fallback: edge` 提示
+
