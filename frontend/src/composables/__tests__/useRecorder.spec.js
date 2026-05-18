@@ -16,7 +16,8 @@ import { useRecorder } from '../useRecorder'
 import { nextTick } from 'vue'
 
 function makeMediaRecorder() {
-  const events = {}
+  // codex review (#32 🔴): 真实 MediaRecorder.stop 后 ondataavailable / onstop 异步触发；
+  // 同步触发的 mock 会掩盖 reset() / 重启与晚到 onstop 之间的状态竞争 bug。
   const instance = {
     state: 'inactive',
     ondataavailable: null,
@@ -26,17 +27,21 @@ function makeMediaRecorder() {
     }),
     stop: vi.fn(function () {
       this.state = 'inactive'
-      // 模拟一次 chunk + onstop 触发
-      if (this.ondataavailable) this.ondataavailable({ data: new Blob(['xx'], { type: 'audio/webm' }) })
-      if (this.onstop) this.onstop()
+      const self = this
+      // 异步派发模拟真实浏览器行为
+      queueMicrotask(() => {
+        if (self.ondataavailable) {
+          self.ondataavailable({ data: new Blob(['xx'], { type: 'audio/webm' }) })
+        }
+        if (self.onstop) self.onstop()
+      })
     }),
   }
-  // 用 events 暴露给测试 inspect
-  Object.defineProperty(instance, '__events', { value: events })
   return instance
 }
 
 let mediaRecorderInstance = null
+let trackStopSpy = null   // 暴露给测试断言 stream.getTracks()[i].stop() 是否被调用
 
 beforeEach(() => {
   // jsdom 默认无 mediaDevices；每个 case 先放上
@@ -45,8 +50,10 @@ beforeEach(() => {
   globalThis.MediaRecorder = vi.fn(() => mediaRecorderInstance)
   globalThis.MediaRecorder.isTypeSupported = vi.fn(() => true)
 
+  // 单 track 单次 stop spy，便于断言「stream 关闭释放麦克风」
+  trackStopSpy = vi.fn()
   const fakeStream = {
-    getTracks: () => [{ stop: vi.fn() }],
+    getTracks: () => [{ stop: trackStopSpy }],
   }
   globalThis.navigator.mediaDevices = {
     getUserMedia: vi.fn().mockResolvedValue(fakeStream),
@@ -169,5 +176,64 @@ describe('useRecorder', () => {
       expect.anything(),
       { mimeType: 'audio/ogg' },
     )
+  })
+
+  // ── codex review (#32) 补强 ───────────────────────────────────
+
+  it('isSupported(): 有 mediaDevices 但 MediaRecorder 缺失 → false (老 iOS Safari)', () => {
+    delete globalThis.MediaRecorder
+    const r = useRecorder()
+    expect(r.isSupported()).toBe(false)
+  })
+
+  it('stop(): 释放 stream 关闭 mic（track.stop() 被调用）', async () => {
+    const r = useRecorder()
+    await r.start()
+    expect(trackStopSpy).not.toHaveBeenCalled()
+    r.stop()
+    await nextTick()
+    await Promise.resolve()  // 让 microtask 跑完
+    expect(trackStopSpy).toHaveBeenCalled()
+  })
+
+  it('reset() 在 stop pending 时不被晚到的 onstop 污染 (race: codex review 🔴)', async () => {
+    // 真 bug 场景：
+    //   r.stop() → MediaRecorder 异步触发 onstop
+    //   onstop fire 之前用户调 reset()
+    //   原实现：onstop 还会写 blob.value/url.value → reset 清空白做工
+    //   修后：reset 推进 _startSeq，stale onstop 检测到不匹配后只清 stream
+    const r = useRecorder()
+    await r.start()
+    expect(r.recording.value).toBe(true)
+
+    r.stop()       // 派发 onstop 到 microtask queue
+    r.reset()      // 立刻 reset，应使 pending onstop 失效
+
+    // 让所有 microtask 执行完
+    await Promise.resolve()
+    await Promise.resolve()
+    await nextTick()
+
+    expect(r.blob.value).toBeNull()
+    expect(r.url.value).toBeNull()
+  })
+
+  it('start() 在 getUserMedia await 期间被 reset() 作废 → 新 stream 立刻 stop', async () => {
+    // 用 deferred 暴露 getUserMedia 的 await，模拟竞争
+    let resolveStream
+    const trackStop = vi.fn()
+    navigator.mediaDevices.getUserMedia.mockReturnValue(
+      new Promise((resolve) => { resolveStream = (s) => resolve(s) }),
+    )
+
+    const r = useRecorder()
+    const startPromise = r.start()
+    r.reset()                              // 在 await 期间作废
+    resolveStream({ getTracks: () => [{ stop: trackStop }] })  // 现在让 stream 落地
+    await startPromise
+
+    expect(r.recording.value).toBe(false)
+    expect(trackStop).toHaveBeenCalled()   // 拿到 stream 但因 stale 立即关闭
+    expect(globalThis.MediaRecorder).not.toHaveBeenCalled()  // 不应创建 recorder
   })
 })

@@ -18,10 +18,15 @@ export function useRecorder() {
   let _rec = null
   let _stream = null
   let _chunks = []
+  // codex review (#32): start session 序号，让 reset()/再次 start() 后晚到的 onstop 不再污染 blob/url
+  let _startSeq = 0
 
   function isSupported() {
+    // codex review (#32): 同时校验 MediaRecorder 存在；某些手机浏览器（如旧版 iOS Safari）
+    // 有 mediaDevices 但缺 MediaRecorder，构造时直接 ReferenceError
     return (
       !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) &&
+      typeof MediaRecorder !== 'undefined' &&
       (location.protocol === 'https:' ||
         location.hostname === 'localhost' ||
         location.hostname === '127.0.0.1')
@@ -32,6 +37,8 @@ export function useRecorder() {
     if (recording.value) return
     error.value = ''
     _release()
+    _startSeq++
+    const mySeq = _startSeq
 
     try {
       _stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -41,14 +48,27 @@ export function useRecorder() {
       return
     }
 
+    // 若 await 期间 reset()/再次 start() 把 _startSeq 推进了，本次 start 作废
+    if (mySeq !== _startSeq) {
+      _stream?.getTracks().forEach((t) => t.stop())
+      _stream = null
+      return
+    }
+
     const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg'
     _rec = new MediaRecorder(_stream, { mimeType: mime })
     _chunks = []
 
     _rec.ondataavailable = (e) => {
+      if (mySeq !== _startSeq) return       // stale 来自旧 session 的事件
       if (e.data.size) _chunks.push(e.data)
     }
     _rec.onstop = () => {
+      // 来自旧 session 的 onstop（reset/重启后）：只清 stream，不写 blob/url
+      if (mySeq !== _startSeq) {
+        _stopTracks()
+        return
+      }
       if (_chunks.length) {
         blob.value = new Blob(_chunks, { type: mime })
         if (url.value) URL.revokeObjectURL(url.value)
@@ -72,6 +92,8 @@ export function useRecorder() {
   }
 
   function reset() {
+    // 推进 session 序号 → 在飞 / 排队的 onstop 看到不匹配会自动作废
+    _startSeq++
     stop()
     if (url.value) {
       URL.revokeObjectURL(url.value)

@@ -117,41 +117,90 @@ describe('usePractice · 发音练习 API', () => {
     await expect(ttsBlob({ text: 'Hi' })).rejects.toThrow('TTS 失败')
   })
 
-  it('listDue: GET /practice/due?limit=20 默认 + 自定义 limit', async () => {
+  it('listDue: GET /practice/due?limit=20 默认 + 自定义 limit + 返回 JSON', async () => {
+    const payload = { cards: [{ id: 1 }, { id: 2 }] }
     authFetchMock.mockResolvedValue({
       ok: true,
-      json: async () => ({ cards: [] }),
+      json: async () => payload,
     })
     const { listDue } = usePractice()
 
-    await listDue()
+    const out = await listDue()
     expect(authFetchMock).toHaveBeenLastCalledWith('/practice/due?limit=20')
+    expect(out).toEqual(payload)
 
     await listDue(5)
     expect(authFetchMock).toHaveBeenLastCalledWith('/practice/due?limit=5')
   })
 
-  it('listSources: GET /practice/subtitles?limit=10 → throw on !ok', async () => {
+  it('listSources: GET /practice/subtitles?limit=10 → 返回 JSON / throw on !ok', async () => {
+    const payload = { items: [{ id: 'src1' }] }
     authFetchMock.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ items: [] }),
+      json: async () => payload,
     })
     const { listSources } = usePractice()
-    await listSources()
+    const out = await listSources()
     expect(authFetchMock).toHaveBeenCalledWith('/practice/subtitles?limit=10')
+    expect(out).toEqual(payload)
 
     authFetchMock.mockResolvedValueOnce({ ok: false })
     await expect(listSources()).rejects.toThrow('加载历史失败')
   })
 
-  it('getEawEpisode: slug 经过 URI 编码', async () => {
-    authFetchMock.mockResolvedValue({ ok: true, json: async () => ({}) })
+  it('getEawEpisode: slug 经过 URI 编码 + 返回 JSON', async () => {
+    const payload = { slug: 'episode with spaces', segments: [] }
+    authFetchMock.mockResolvedValue({ ok: true, json: async () => payload })
     const { getEawEpisode } = usePractice()
 
-    await getEawEpisode('episode with spaces')
+    const out = await getEawEpisode('episode with spaces')
 
     expect(authFetchMock).toHaveBeenCalledWith(
       '/bbc-eaw/episodes/episode%20with%20spaces',
     )
+    expect(out).toEqual(payload)
+  })
+
+  // ── codex review (#32) 补三个之前完全没测的方法 ───────────────
+
+  it('importSubtitles: POST /practice/subtitles 透传 url + cookies + 返回 JSON', async () => {
+    const payload = { title: 'demo', segments: [{ content: 'hi' }] }
+    authFetchJsonMock.mockResolvedValue(payload)
+    const { importSubtitles } = usePractice()
+
+    const out = await importSubtitles({
+      url: 'https://b23.tv/abc',
+      cookies: 'SESSDATA=xxx',
+    })
+
+    expect(authFetchJsonMock).toHaveBeenCalledWith(
+      '/practice/subtitles',
+      { url: 'https://b23.tv/abc', cookies: 'SESSDATA=xxx' },
+    )
+    expect(out).toEqual(payload)
+  })
+
+  it('getSource: GET /practice/subtitles/{id} → 返回 JSON / throw on !ok', async () => {
+    const payload = { id: 42, segments: [] }
+    authFetchMock.mockResolvedValueOnce({ ok: true, json: async () => payload })
+    const { getSource } = usePractice()
+    const out = await getSource(42)
+    expect(authFetchMock).toHaveBeenCalledWith('/practice/subtitles/42')
+    expect(out).toEqual(payload)
+
+    authFetchMock.mockResolvedValueOnce({ ok: false })
+    await expect(getSource(42)).rejects.toThrow('加载失败')
+  })
+
+  it('listEawEpisodes: GET /bbc-eaw/episodes?limit=100 默认 + 返回 JSON / throw on !ok', async () => {
+    const payload = { episodes: [{ slug: 'ep1' }, { slug: 'ep2' }] }
+    authFetchMock.mockResolvedValueOnce({ ok: true, json: async () => payload })
+    const { listEawEpisodes } = usePractice()
+    const out = await listEawEpisodes()
+    expect(authFetchMock).toHaveBeenCalledWith('/bbc-eaw/episodes?limit=100')
+    expect(out).toEqual(payload)
+
+    authFetchMock.mockResolvedValueOnce({ ok: false })
+    await expect(listEawEpisodes()).rejects.toThrow('加载 BBC EAW 失败')
   })
 })
