@@ -1,5 +1,6 @@
 """翻译服务 — 按行拆分 + 缓存命中 + 批量 JSON 请求 + 生词本 CRUD"""
 
+import asyncio
 import hashlib
 import json
 import re
@@ -23,6 +24,12 @@ logger = get_logger("translate_service")
 VALID_DIRECTIONS = {"zh2en", "en2zh"}
 MAX_INPUT_LEN = 1000
 _EXTRA_PUNCT = "，。；：！？、（）「」《》【】〈〉·…—～"
+
+# 长输入切片并发，规避单次 SDK 30s 超时（见 docs/superpowers/specs/2026-05-12-translate-timeout-fix.md）
+TRANSLATE_BATCH_CHUNK_SIZE = 8
+TRANSLATE_BATCH_TIMEOUT_S = 60.0
+# 并发上限：避免短行高密度输入（MAX_INPUT_LEN=1000 字符）+ 多用户叠加把 LLM provider 限流打爆
+TRANSLATE_BATCH_MAX_CONCURRENCY = 3
 
 
 # ── Helpers ──────────────────────────────────────────────────
@@ -110,8 +117,8 @@ def _parse_batch_response(raw: str, expected_n: int) -> List[str]:
     return [str(x) for x in arr]
 
 
-async def _translate_batch(lines: List[str], direction: str) -> List[str]:
-    """把多行一次性丢给 LLM，强制 JSON 结构化输出。"""
+async def _translate_one_chunk(lines: List[str], direction: str) -> List[str]:
+    """单片翻译：把 lines（已限制在 CHUNK_SIZE 内）一次性丢给 LLM。"""
     system_prompt = (
         TRANSLATE_BATCH_ZH2EN_PROMPT
         if direction == "zh2en"
@@ -123,8 +130,34 @@ async def _translate_batch(lines: List[str], direction: str) -> List[str]:
         {"role": "user", "content": user_payload},
     ]
     client = get_client()
-    raw = await client.complete(messages, max_tokens=4000, scene="translate")
+    raw = await client.complete(
+        messages,
+        max_tokens=4000,
+        scene="translate",
+        timeout=TRANSLATE_BATCH_TIMEOUT_S,
+    )
     return _parse_batch_response(raw, len(lines))
+
+
+async def _translate_batch(lines: List[str], direction: str) -> List[str]:
+    """按 CHUNK_SIZE 切片并发翻译，规避单次 SDK 超时；用 Semaphore 限并发避免 LLM 限流。"""
+    if not lines:
+        return []
+    chunks = [
+        lines[i : i + TRANSLATE_BATCH_CHUNK_SIZE]
+        for i in range(0, len(lines), TRANSLATE_BATCH_CHUNK_SIZE)
+    ]
+    sem = asyncio.Semaphore(TRANSLATE_BATCH_MAX_CONCURRENCY)
+
+    async def _bounded(chunk: List[str]) -> List[str]:
+        async with sem:
+            return await _translate_one_chunk(chunk, direction)
+
+    results = await asyncio.gather(*(_bounded(c) for c in chunks))
+    flat: List[str] = []
+    for r in results:
+        flat.extend(r)
+    return flat
 
 
 # ── Public API ──────────────────────────────────────────────

@@ -218,6 +218,141 @@ async def test_cache_writes_row():
             assert rows[0].hit_count == 1
 
 
+# ── 切片并发（规避 SDK 30s 超时）─────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_small_batch_not_sliced():
+    """≤ CHUNK_SIZE 行：单片走完，只调 1 次 LLM（守住现有 await_count == 1 断言）"""
+    from app.services.translate_service import TRANSLATE_BATCH_CHUNK_SIZE
+
+    with patch("app.services.translate_service.get_client") as mock_get:
+        mock_client = AsyncMock()
+        mock_client.complete = AsyncMock(
+            return_value=_mock_translations(*[f"t{i}" for i in range(TRANSLATE_BATCH_CHUNK_SIZE)])
+        )
+        mock_get.return_value = mock_client
+
+        src = "\n".join(f"中{i}" for i in range(TRANSLATE_BATCH_CHUNK_SIZE))
+        await translate_text(src, "zh2en")
+
+        assert mock_client.complete.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_over_chunk_size_slices_concurrently():
+    """> CHUNK_SIZE 行：切成 ceil(N/CHUNK) 片并发，每片 ≤ CHUNK，顺序拼回正确"""
+    from app.services.translate_service import TRANSLATE_BATCH_CHUNK_SIZE
+
+    n = 17  # 17 / 8 → 3 片：8 + 8 + 1
+    expected_chunks = 3
+
+    with patch("app.services.translate_service.get_client") as mock_get:
+        mock_client = AsyncMock()
+
+        async def fake_complete(messages, **kwargs):
+            user_msg = [m for m in messages if m["role"] == "user"][0]
+            payload = json.loads(user_msg["content"])
+            return _mock_translations(*[f"E_{x}" for x in payload["lines"]])
+
+        mock_client.complete = AsyncMock(side_effect=fake_complete)
+        mock_get.return_value = mock_client
+
+        src = "\n".join(f"L{i}" for i in range(n))
+        result = await translate_text(src, "zh2en")
+
+        assert mock_client.complete.await_count == expected_chunks
+
+        for call in mock_client.complete.call_args_list:
+            messages = call.args[0]
+            user_msg = [m for m in messages if m["role"] == "user"][0]
+            payload = json.loads(user_msg["content"])
+            assert len(payload["lines"]) <= TRANSLATE_BATCH_CHUNK_SIZE
+
+        lines = result.split("\n")
+        assert lines == [f"E_L{i}" for i in range(n)]
+
+
+@pytest.mark.asyncio
+async def test_chunk_error_bubbles_up():
+    """切片中任一片返回行数不对 → ValueError 冒泡，与原 503 兜底链路一致"""
+    with patch("app.services.translate_service.get_client") as mock_get:
+        mock_client = AsyncMock()
+
+        async def fake_complete(messages, **kwargs):
+            user_msg = [m for m in messages if m["role"] == "user"][0]
+            payload = json.loads(user_msg["content"])
+            if "L0" in payload["lines"]:
+                return _mock_translations(*[f"OK_{x}" for x in payload["lines"]])
+            return _mock_translations("only_one")
+
+        mock_client.complete = AsyncMock(side_effect=fake_complete)
+        mock_get.return_value = mock_client
+
+        src = "\n".join(f"L{i}" for i in range(17))
+        with pytest.raises(ValueError, match="行数不匹配"):
+            await translate_text(src, "zh2en")
+
+
+@pytest.mark.asyncio
+async def test_translate_passes_per_call_timeout():
+    """translate scene 必须透传 per-call timeout，避免回落到 SDK 全局 30s"""
+    from app.services.translate_service import TRANSLATE_BATCH_TIMEOUT_S
+
+    with patch("app.services.translate_service.get_client") as mock_get:
+        mock_client = AsyncMock()
+        mock_client.complete = AsyncMock(
+            return_value=_mock_translations("Hi")
+        )
+        mock_get.return_value = mock_client
+
+        await translate_text("你好", "zh2en")
+
+        assert mock_client.complete.call_args.kwargs.get("timeout") == TRANSLATE_BATCH_TIMEOUT_S
+
+
+@pytest.mark.asyncio
+async def test_concurrency_capped_by_semaphore():
+    """切片很多时同一时刻在飞调用数受 MAX_CONCURRENCY 限制，避免打爆 LLM provider"""
+    import asyncio as _asyncio
+    from app.services.translate_service import (
+        TRANSLATE_BATCH_CHUNK_SIZE,
+        TRANSLATE_BATCH_MAX_CONCURRENCY,
+    )
+
+    n = TRANSLATE_BATCH_CHUNK_SIZE * (TRANSLATE_BATCH_MAX_CONCURRENCY + 2)  # 比并发上限多 2 片
+
+    in_flight = 0
+    peak = 0
+    lock = _asyncio.Lock()
+
+    async def fake_complete(messages, **kwargs):
+        nonlocal in_flight, peak
+        async with lock:
+            in_flight += 1
+            peak = max(peak, in_flight)
+        try:
+            await _asyncio.sleep(0)  # 让出 event loop 一次，制造潜在并发
+            user_msg = [m for m in messages if m["role"] == "user"][0]
+            payload = json.loads(user_msg["content"])
+            return _mock_translations(*[f"E_{x}" for x in payload["lines"]])
+        finally:
+            async with lock:
+                in_flight -= 1
+
+    with patch("app.services.translate_service.get_client") as mock_get:
+        mock_client = AsyncMock()
+        mock_client.complete = AsyncMock(side_effect=fake_complete)
+        mock_get.return_value = mock_client
+
+        src = "\n".join(f"L{i}" for i in range(n))
+        await translate_text(src, "zh2en")
+
+    assert peak <= TRANSLATE_BATCH_MAX_CONCURRENCY, (
+        f"并发峰值 {peak} 超过上限 {TRANSLATE_BATCH_MAX_CONCURRENCY}"
+    )
+
+
 @pytest.mark.asyncio
 async def test_cache_hit_increments_count():
     """命中缓存时 hit_count 自增"""
