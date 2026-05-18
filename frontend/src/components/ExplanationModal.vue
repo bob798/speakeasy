@@ -553,6 +553,11 @@ function _ipaShowError(ctrl) {
 
 async function playIPA(key, text, ipa) {
   if (!text || !ipa) return
+  // 同一 key 再点 = 取消（codex review：原 :disabled 锁住 loading，请求卡死无法手动中止）
+  if (activeIpaKey.value === key && (ipaState.value === 'loading' || ipaState.value === 'playing')) {
+    stopIPA()
+    return
+  }
   // 切到新 key 前先停掉旧的
   stopIPA()
 
@@ -627,10 +632,10 @@ onBeforeUnmount(() => {
                   playing: activeIpaKey === 'word' && ipaState === 'playing',
                   error: activeIpaKey === 'word' && ipaState === 'error',
                 }"
-                :disabled="!target?.content || (activeIpaKey === 'word' && ipaState === 'loading')"
+                :disabled="!target?.content"
                 :aria-label="`按 IPA 标准音读 ${target?.content || ''}`"
                 :aria-busy="activeIpaKey === 'word' && ipaState === 'loading' ? 'true' : 'false'"
-                :title="activeIpaKey === 'word' && ipaState === 'error' ? 'TTS 失败' : '按 IPA 标准音读'"
+                :title="activeIpaKey === 'word' && ipaState === 'error' ? 'TTS 失败 · 点击重试' : (activeIpaKey === 'word' && (ipaState === 'loading' || ipaState === 'playing') ? '点击取消' : '按 IPA 标准音读')"
                 @click="playIPA('word', target?.content, data.phonetic)"
               >
                 <span v-if="activeIpaKey === 'word' && ipaState === 'loading'">⏳</span>
@@ -788,10 +793,10 @@ onBeforeUnmount(() => {
                         playing: activeIpaKey === `liaison-${i}` && ipaState === 'playing',
                         error: activeIpaKey === `liaison-${i}` && ipaState === 'error',
                       }"
-                      :disabled="!(l.chunk || l) || (activeIpaKey === `liaison-${i}` && ipaState === 'loading')"
+                      :disabled="!(l.chunk || l)"
                       :aria-label="`按 IPA 标准音读 ${l.chunk || l}`"
                       :aria-busy="activeIpaKey === `liaison-${i}` && ipaState === 'loading' ? 'true' : 'false'"
-                      :title="activeIpaKey === `liaison-${i}` && ipaState === 'error' ? 'TTS 失败' : '按 IPA 标准音读'"
+                      :title="activeIpaKey === `liaison-${i}` && ipaState === 'error' ? 'TTS 失败 · 点击重试' : (activeIpaKey === `liaison-${i}` && (ipaState === 'loading' || ipaState === 'playing') ? '点击取消' : '按 IPA 标准音读')"
                       @click="playIPA(`liaison-${i}`, l.chunk || l, l.ipa)"
                     >
                       <span v-if="activeIpaKey === `liaison-${i}` && ipaState === 'loading'">⏳</span>

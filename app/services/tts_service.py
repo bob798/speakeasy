@@ -42,16 +42,35 @@ def _build_ssml(text: str, voice: str, rate: str,
     phoneme_map 示例:
       单词:   {"crisis": "ˈkraɪsɪs", "worries": "ˈwʌriz"}
       短语:   {"give me": "ɡɪmi", "would you": "wʊdʒu"}
+
+    实现要点（codex review 修正）:
+    - 多词短语用 lookaround 边界，避免 "give me" 在 "forgive me" 里命中
+    - 用单次 alternation regex 一次性替换，避免 phoneme_map 内 key 重叠时迭代
+      substitute 把 <phoneme> 标签当成普通文本再次匹配（如同时存在 "give me" 和 "me"）
+    - alternation 按 key 长度倒序，保证更长的短语优先匹配
     """
     content = escape(text)
     if phoneme_map:
-        for phrase, ipa in phoneme_map.items():
+        # 按长度倒序，长短语优先 ("would you" 在 "you" 之前)
+        items = sorted(phoneme_map.items(), key=lambda kv: -len(kv[0]))
+        parts = []
+        for phrase, _ipa in items:
+            esc = re.escape(phrase)
             if " " in phrase:
-                pattern = re.compile(re.escape(phrase), re.IGNORECASE)
+                # 多词短语：用非词字符边界（lookaround），避免 "give me" 被 "forgive me" 命中
+                parts.append(r'(?<!\w)' + esc + r'(?!\w)')
             else:
-                pattern = re.compile(r'\b' + re.escape(phrase) + r'\b', re.IGNORECASE)
-            replacement = f'<phoneme alphabet="ipa" ph={quoteattr(ipa)}>{escape(phrase)}</phoneme>'
-            content = pattern.sub(replacement, content)
+                parts.append(r'\b' + esc + r'\b')
+        combined = re.compile('(?:' + '|'.join(parts) + ')', re.IGNORECASE)
+        # 大小写不敏感匹配下还原回 phoneme_map 里的 canonical 拼写
+        lookup_lc = {p.lower(): (p, ipa) for p, ipa in phoneme_map.items()}
+
+        def _replace(m: re.Match) -> str:
+            matched = m.group(0)
+            phrase, ipa = lookup_lc[matched.lower()]
+            return f'<phoneme alphabet="ipa" ph={quoteattr(ipa)}>{escape(phrase)}</phoneme>'
+
+        content = combined.sub(_replace, content)
 
     return (
         '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" '
@@ -229,13 +248,17 @@ async def multi_tts(text: str, provider: str = None, voice: str = "jenny",
             meta["phoneme_ignored"] = True
             effective_phoneme_map = None
 
-    pm_key = json.dumps(effective_phoneme_map, sort_keys=True) if effective_phoneme_map else ""
-    cache_key = hashlib.md5(
-        f"{effective_provider}:{voice}:{speed}:{pm_key}:{text}".encode()
-    ).hexdigest()
-    cache_path = os.path.join(TTS_CACHE_DIR, f"{cache_key}.mp3")
-    if os.path.exists(cache_path):
-        with open(cache_path, "rb") as f:
+    def _make_cache_key(prov: str, pm: Optional[dict]) -> str:
+        pm_serialized = json.dumps(pm, sort_keys=True) if pm else ""
+        return hashlib.md5(
+            f"{prov}:{voice}:{speed}:{pm_serialized}:{text}".encode()
+        ).hexdigest()
+
+    # Intent cache key（按用户意图存储，包含 effective_provider 和 phoneme_map）
+    intent_key = _make_cache_key(effective_provider, effective_phoneme_map)
+    intent_path = os.path.join(TTS_CACHE_DIR, f"{intent_key}.mp3")
+    if os.path.exists(intent_path):
+        with open(intent_path, "rb") as f:
             audio = f.read()
         logger.info(
             "multi_tts cache hit provider=%s voice=%s bytes=%d",
@@ -283,7 +306,12 @@ async def multi_tts(text: str, provider: str = None, voice: str = "jenny",
         meta["provider_used"], len(audio), elapsed_ms,
     )
 
-    with open(cache_path, "wb") as f:
+    # 关键：用最终生效的 provider + phoneme 状态算 cache key 写回，避免 fallback 污染 intent slot
+    # （codex review 指出：原先 intent_key 写 edge 音频，下次 azure 意图命中拿到错音频 + 错 meta）
+    final_pm = effective_phoneme_map if (effective_phoneme_map and not meta["phoneme_ignored"]) else None
+    final_key = _make_cache_key(meta["provider_used"], final_pm)
+    final_path = os.path.join(TTS_CACHE_DIR, f"{final_key}.mp3")
+    with open(final_path, "wb") as f:
         f.write(audio)
     return audio, media_type, meta
 

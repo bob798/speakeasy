@@ -373,6 +373,86 @@ async def test_multi_tts_azure_fallback_to_edge_sets_meta_fallback():
 
 
 @pytest.mark.asyncio
+async def test_multi_tts_fallback_does_not_poison_intent_cache(tmp_path, monkeypatch):
+    """codex review (PR #39 🔴): Azure 失败降级 edge 后，edge 音频不应写到 azure intent 缓存键。
+
+    场景：
+    1. 首请 azure + phoneme_map，AZURE_TTS_KEY 已配，azure 抛错 → 降级 edge → 应写到 edge 缓存键
+    2. 二请同样 azure + phoneme_map，应 cache miss（不会拿到上次的 edge 音频），重新尝试 azure
+    """
+    import app.services.tts_service as svc
+    monkeypatch.setattr(svc, "TTS_CACHE_DIR", str(tmp_path))
+
+    edge_audio = b"fake-edge-audio"
+    azure_audio = b"fake-azure-audio"
+    azure_call_count = 0
+
+    async def fake_azure(text, voice, rate, pm):
+        nonlocal azure_call_count
+        azure_call_count += 1
+        if azure_call_count == 1:
+            raise RuntimeError("Azure down on first call")
+        return azure_audio, "audio/mpeg"
+
+    async def fake_edge(text, voice, rate):
+        return edge_audio, "audio/mpeg"
+
+    with patch("app.services.tts_service._azure_tts", side_effect=fake_azure), \
+         patch("app.services.tts_service._edge_tts", side_effect=fake_edge), \
+         patch("app.services.tts_service.settings") as mock_settings:
+        mock_settings.TTS_DEFAULT_PROVIDER = "edge"
+        mock_settings.AZURE_TTS_KEY = "fake-key"
+        mock_settings.AZURE_TTS_REGION = "eastasia"
+
+        # 1st call: azure 失败 → edge fallback
+        audio1, _, meta1 = await multi_tts(
+            "schedule", provider="azure", voice="jenny",
+            phoneme_map={"schedule": "ˈskɛdʒuːl"},
+        )
+        assert audio1 == edge_audio
+        assert meta1["fallback"] == "edge"
+        assert meta1["phoneme_ignored"] is True
+
+        # 2nd call: 不应被上次 edge 缓存命中，应该再调 azure
+        audio2, _, meta2 = await multi_tts(
+            "schedule", provider="azure", voice="jenny",
+            phoneme_map={"schedule": "ˈskɛdʒuːl"},
+        )
+
+    assert azure_call_count == 2, (
+        "Azure 应被再次尝试；如果 cache poisoning 没修，第二次会命中上次缓存而不调 azure"
+    )
+    assert audio2 == azure_audio
+    assert meta2["fallback"] is None
+    assert meta2["phoneme_ignored"] is False
+    assert meta2["provider_used"] == "azure"
+
+
+def test_build_ssml_phrase_with_word_boundary():
+    """codex review (PR #39 🟡): "give me" 不应在 "forgive me" 里命中"""
+    ssml = _build_ssml(
+        "Don't forgive me, just give me a hand.", "en-US-JennyNeural", "+0%",
+        phoneme_map={"give me": "ɡɪmi"},
+    )
+    # 只匹配一处独立的 "give me"
+    assert ssml.count('<phoneme alphabet="ipa" ph="ɡɪmi">give me</phoneme>') == 1
+    # "forgive me" 应原样保留
+    assert "forgive me" in ssml
+
+
+def test_build_ssml_overlapping_phoneme_keys_no_nested_tags():
+    """codex review (PR #39 🟡): phoneme_map 含重叠 key 不应导致嵌套 <phoneme> 标签"""
+    ssml = _build_ssml(
+        "give me time", "en-US-JennyNeural", "+0%",
+        phoneme_map={"give me": "ɡɪmi", "me": "mi"},
+    )
+    # "give me" 整串优先匹配 → 独立 "me" 已被消耗，不再插第二层 phoneme
+    assert '<phoneme alphabet="ipa" ph="ɡɪmi">give me</phoneme>' in ssml
+    # 只有 1 个 <phoneme（长 key 单次匹配），不会被嵌套
+    assert ssml.count("<phoneme") == 1
+
+
+@pytest.mark.asyncio
 async def test_practice_tts_route_passes_phoneme_and_sets_headers():
     """端到端：路由接 phoneme_map，把 meta 翻成 response header"""
     from fastapi.testclient import TestClient
