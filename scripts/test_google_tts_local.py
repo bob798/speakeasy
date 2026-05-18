@@ -125,7 +125,7 @@ async def multi_tts_test():
         return False
 
     try:
-        audio, media_type = await multi_tts(
+        audio, media_type, _meta = await multi_tts(
             "Multi-tts dispatch test.",
             provider="google",
             voice="jenny",
