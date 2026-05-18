@@ -119,10 +119,13 @@ const playbackDisabled = computed(() => !props.hasRecording)
     </template>
 
     <!-- #26 评分模式：录完自动切到这套（方案 C） -->
+    <!-- codex review: ratingBusy 时 redo/playback 也要 disable —— 否则评分请求在飞时点重录
+         会调 recorder.reset() 把新录音杀掉，等评分请求返回后还会跳句到错位置 -->
     <template v-else>
       <div class="dock-row">
         <button
           class="dock-btn"
+          :disabled="ratingBusy"
           aria-label="回放刚才的录音"
           @click="emit('playback')"
         >
@@ -132,6 +135,7 @@ const playbackDisabled = computed(() => !props.hasRecording)
         </button>
         <button
           class="dock-btn"
+          :disabled="ratingBusy"
           aria-label="退出打分，重新录一遍"
           @click="emit('redo-record')"
         >

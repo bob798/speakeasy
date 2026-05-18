@@ -79,10 +79,14 @@ watch(isMobile, () => {
 })
 
 // 录音停下且已有录音 → 自动进入评分模式（#26 方案 C）
+// codex review: 仅当录音归属当前句时才进；否则切句中途 onstop 异步落地会给新句错误开启评分
 watch(
   () => recorder.recording.value,
   (isRec, wasRec) => {
-    if (wasRec && !isRec && recorder.url.value && isMobile.value) {
+    if (
+      wasRec && !isRec && recorder.url.value && isMobile.value &&
+      recordingSegIdx.value === store.currentIdx
+    ) {
       ratingMode.value = true
     }
   }
@@ -226,8 +230,7 @@ function onMobileSelectSentence(idx) {
     recordingSegIdx.value = null
   }
   _releaseTTS()
-  // 离开旧句视作"完成一句"（v1 用切句作信号；issue #26 评分恢复后改为按 Good/Easy 计）
-  if (store.currentIdx !== idx) practicedCount.value += 1
+  // codex review (#26): practicedCount 不再随切句自增；只有评分成功才计，否则 coach 文案与实际进度不符
   store.setCurrentIdx(idx)
   selectedWord.value = null
   hasPlayedBack.value = false
@@ -310,9 +313,13 @@ function onMobilePlayback() {
 }
 
 // #26 评分模式（方案 C）— 录完自动进入；选完评分自动跳下一句
+// codex review:
+//  - 把 ratedIdx 在 await 前捕获，避免用户切句中途让 markPracticed/跳句落到错段
+//  - 评分成功后 practicedCount 自增（之前只在切句时 +1，导致 coach 文案与实际不符）
 async function onMobileRate(level) {
   if (ratingBusy.value) return
-  const card = store.cards.find((c) => c.segIdx === store.currentIdx)
+  const ratedIdx = store.currentIdx
+  const card = store.cards.find((c) => c.segIdx === ratedIdx)
   if (!card?.id) {
     showToast('卡片未就绪，重新选一下句子再来', 'error', 2000)
     ratingMode.value = false
@@ -321,13 +328,23 @@ async function onMobileRate(level) {
   ratingBusy.value = true
   try {
     await rateCard(card.id, level)
-    store.markPracticed(store.currentIdx, level)
+    // 评分写到的是 ratedIdx 的卡，markPracticed 也必须对齐 ratedIdx
+    store.markPracticed(ratedIdx, level)
+    practicedCount.value += 1
     showToast(`✅ 已评 ${({ again: 'Again', hard: 'Hard', good: 'Good', easy: 'Easy' })[level]}`, 'success', 1200)
-    ratingMode.value = false
-    recorder.reset()
-    hasPlayedBack.value = false
-    if (store.currentIdx < store.segments.length - 1) {
-      setTimeout(() => store.setCurrentIdx(store.currentIdx + 1), 400)
+    // 用户在请求过程中可能已切句 / 重录，只有当前还停在被评分的那一句才推动 UI
+    if (store.currentIdx === ratedIdx) {
+      ratingMode.value = false
+      recorder.reset()
+      hasPlayedBack.value = false
+      if (ratedIdx < store.segments.length - 1) {
+        setTimeout(() => {
+          // 二次校验：定时器触发时用户仍在 ratedIdx 才跳
+          if (store.currentIdx === ratedIdx) {
+            store.setCurrentIdx(ratedIdx + 1)
+          }
+        }, 400)
+      }
     }
   } catch (err) {
     const msg = getErrorMessage(err, '评分失败')

@@ -84,4 +84,16 @@ describe('MobileActionDock · 评分模式 (#26)', () => {
       expect(btn.attributes('disabled')).toBeDefined()
     }
   })
+
+  it('ratingBusy=true → 回放/重录也 disabled (codex review)', () => {
+    // 防止评分请求在飞期间用户点重录把新录音 reset 掉 / 跳句错位
+    const w = mountDock({ ratingMode: true, ratingBusy: true, hasRecording: true })
+    const labels = w.findAll('.dock-btn')
+    const redo = labels.find((b) => (b.attributes('aria-label') || '').includes('重新录'))
+    const playback = labels.find((b) => (b.attributes('aria-label') || '').includes('回放'))
+    expect(redo).toBeTruthy()
+    expect(playback).toBeTruthy()
+    expect(redo.attributes('disabled')).toBeDefined()
+    expect(playback.attributes('disabled')).toBeDefined()
+  })
 })
