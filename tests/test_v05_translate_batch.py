@@ -312,6 +312,48 @@ async def test_translate_passes_per_call_timeout():
 
 
 @pytest.mark.asyncio
+async def test_concurrency_capped_by_semaphore():
+    """切片很多时同一时刻在飞调用数受 MAX_CONCURRENCY 限制，避免打爆 LLM provider"""
+    import asyncio as _asyncio
+    from app.services.translate_service import (
+        TRANSLATE_BATCH_CHUNK_SIZE,
+        TRANSLATE_BATCH_MAX_CONCURRENCY,
+    )
+
+    n = TRANSLATE_BATCH_CHUNK_SIZE * (TRANSLATE_BATCH_MAX_CONCURRENCY + 2)  # 比并发上限多 2 片
+
+    in_flight = 0
+    peak = 0
+    lock = _asyncio.Lock()
+
+    async def fake_complete(messages, **kwargs):
+        nonlocal in_flight, peak
+        async with lock:
+            in_flight += 1
+            peak = max(peak, in_flight)
+        try:
+            await _asyncio.sleep(0)  # 让出 event loop 一次，制造潜在并发
+            user_msg = [m for m in messages if m["role"] == "user"][0]
+            payload = json.loads(user_msg["content"])
+            return _mock_translations(*[f"E_{x}" for x in payload["lines"]])
+        finally:
+            async with lock:
+                in_flight -= 1
+
+    with patch("app.services.translate_service.get_client") as mock_get:
+        mock_client = AsyncMock()
+        mock_client.complete = AsyncMock(side_effect=fake_complete)
+        mock_get.return_value = mock_client
+
+        src = "\n".join(f"L{i}" for i in range(n))
+        await translate_text(src, "zh2en")
+
+    assert peak <= TRANSLATE_BATCH_MAX_CONCURRENCY, (
+        f"并发峰值 {peak} 超过上限 {TRANSLATE_BATCH_MAX_CONCURRENCY}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_cache_hit_increments_count():
     """命中缓存时 hit_count 自增"""
     with patch("app.services.translate_service.get_client") as mock_get:
