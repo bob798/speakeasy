@@ -29,7 +29,7 @@ defineOptions({ name: 'Practice' })
 
 const router = useRouter()
 const store = usePracticeStore()
-const { createCards, ttsBlob } = usePractice()
+const { createCards, ttsBlob, rateCard } = usePractice()
 const { authFetch } = useAuthFetch()
 const recorder = useRecorder()
 const { isMobile } = useBreakpoint()
@@ -59,13 +59,14 @@ const recordingSegIdx = ref(null)
 const hasPlayedBack = ref(false)
 const isPlayingTTS = ref(false)
 const practicedCount = ref(0)
+// #26 手机端评分（方案 C：录完自动进入）
+const ratingMode = ref(false)
+const ratingBusy = ref(false)
 let _ttsAudio = null
 let _ttsUrl = null
 let _lastRequestKey = null
 
 useScrollLock(sheetOpen)
-
-const FSRS_NOTICE_KEY = 'v2:practice.fsrs_notice_seen'
 
 // 跨断点（resize 跨 768px）时清状态防泄漏
 watch(isMobile, () => {
@@ -74,23 +75,25 @@ watch(isMobile, () => {
   _releaseTTS()
   if (recorder.recording.value) recorder.stop()
   recordingSegIdx.value = null
+  ratingMode.value = false
 })
 
-// 首次进入弹一次 FSRS toast（仅手机端弹）
+// 录音停下且已有录音 → 自动进入评分模式（#26 方案 C）
 watch(
-  [isMobile, hasSource],
-  ([m, has]) => {
-    if (!m || !has) return
-    try {
-      if (!localStorage.getItem(FSRS_NOTICE_KEY)) {
-        setTimeout(() => {
-          showToast('ℹ︎ 手机端暂不记录复习评分，仍可正常练习', 'info', 4000)
-          localStorage.setItem(FSRS_NOTICE_KEY, '1')
-        }, 400)
-      }
-    } catch { /* ignore */ }
-  },
-  { immediate: true }
+  () => recorder.recording.value,
+  (isRec, wasRec) => {
+    if (wasRec && !isRec && recorder.url.value && isMobile.value) {
+      ratingMode.value = true
+    }
+  }
+)
+
+// 切句即退出评分模式（避免拿上一句的评分意图给新句）
+watch(
+  () => store.currentIdx,
+  () => {
+    ratingMode.value = false
+  }
 )
 
 function gotoBbcReview() {
@@ -286,6 +289,7 @@ async function onMobileToggleRecord() {
     hasPlayedBack.value = false
   } else {
     recorder.reset()
+    ratingMode.value = false       // 新一轮，退出评分（如有）
     await recorder.start()
     if (recorder.error.value) {
       showToast(recorder.error.value, 'error')
@@ -303,6 +307,47 @@ function onMobilePlayback() {
   const a = new Audio(recorder.url.value)
   a.play()
   hasPlayedBack.value = true
+}
+
+// #26 评分模式（方案 C）— 录完自动进入；选完评分自动跳下一句
+async function onMobileRate(level) {
+  if (ratingBusy.value) return
+  const card = store.cards.find((c) => c.segIdx === store.currentIdx)
+  if (!card?.id) {
+    showToast('卡片未就绪，重新选一下句子再来', 'error', 2000)
+    ratingMode.value = false
+    return
+  }
+  ratingBusy.value = true
+  try {
+    await rateCard(card.id, level)
+    store.markPracticed(store.currentIdx, level)
+    showToast(`✅ 已评 ${({ again: 'Again', hard: 'Hard', good: 'Good', easy: 'Easy' })[level]}`, 'success', 1200)
+    ratingMode.value = false
+    recorder.reset()
+    hasPlayedBack.value = false
+    if (store.currentIdx < store.segments.length - 1) {
+      setTimeout(() => store.setCurrentIdx(store.currentIdx + 1), 400)
+    }
+  } catch (err) {
+    const msg = getErrorMessage(err, '评分失败')
+    if (msg) showToast(msg, 'error')
+  } finally {
+    ratingBusy.value = false
+  }
+}
+
+async function onMobileRedoRecord() {
+  // 退出评分 + 立即开新录音
+  ratingMode.value = false
+  recorder.reset()
+  hasPlayedBack.value = false
+  await recorder.start()
+  if (recorder.error.value) {
+    showToast(recorder.error.value, 'error')
+    return
+  }
+  recordingSegIdx.value = store.currentIdx
 }
 
 // ⚙ sheet 焦点管理（spec §可访问性 #5）
@@ -430,10 +475,14 @@ onBeforeUnmount(() => {
         :current-idx="store.currentIdx"
         :total-segments="store.segments.length"
         :practiced-count="practicedCount"
+        :rating-mode="ratingMode"
+        :rating-busy="ratingBusy"
         @explain="onMobileExplain"
         @speak="onMobileSpeak"
         @toggle-record="onMobileToggleRecord"
         @playback="onMobilePlayback"
+        @rate="onMobileRate"
+        @redo-record="onMobileRedoRecord"
       />
     </template>
 
