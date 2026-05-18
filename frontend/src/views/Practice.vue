@@ -287,8 +287,10 @@ async function onMobileSpeak() {
 
 async function onMobileToggleRecord() {
   if (recorder.recording.value) {
+    // codex round 2: 不再立刻清 recordingSegIdx —— 它是「这段录音属于哪一句」的标记，
+    // onstop 异步落地后 watcher 才能用它判断是否给当前句开评分模式。
+    // 留到下次 start() 时再覆盖。
     recorder.stop()
-    recordingSegIdx.value = null
     hasPlayedBack.value = false
   } else {
     recorder.reset()
