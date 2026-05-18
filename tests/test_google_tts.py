@@ -114,7 +114,7 @@ async def test_multi_tts_routes_google():
     with patch("app.services.tts_service._google_tts", new=AsyncMock(return_value=(fake_audio, "audio/mpeg"))) as mock_g, \
          patch("app.services.tts_service.os.path.exists", return_value=False), \
          patch("builtins.open", create=True):
-        audio, media_type = await multi_tts(
+        audio, media_type, _meta = await multi_tts(
             text="unique-google-test-text-abc123",
             provider="google",
             voice="jenny",
@@ -132,7 +132,7 @@ async def test_multi_tts_google_falls_back_to_edge():
          patch("app.services.tts_service._edge_tts", new=AsyncMock(return_value=(fake_edge_audio, "audio/mpeg"))) as mock_e, \
          patch("app.services.tts_service.os.path.exists", return_value=False), \
          patch("builtins.open", create=True):
-        audio, media_type = await multi_tts(
+        audio, media_type, _meta = await multi_tts(
             text="unique-google-fallback-text-xyz789",
             provider="google",
             voice="jenny",

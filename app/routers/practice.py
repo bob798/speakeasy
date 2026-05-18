@@ -3,7 +3,7 @@
 import json
 import hashlib
 import os
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import Response, StreamingResponse
@@ -403,6 +403,7 @@ class PracticeTTSRequest(BaseModel):
     voice: str = "jenny"
     speed: str = "+0%"
     segment_path: Optional[str] = None
+    phoneme_map: Optional[Dict[str, str]] = None   # IPA 纠音映射，传入则后端走 Azure
 
 
 @router.post("/practice/tts")
@@ -437,16 +438,27 @@ async def practice_tts(req: PracticeTTSRequest):
 
     try:
         provider = req.provider if req.provider else None  # None = 使用默认
-        audio, media_type = await multi_tts(req.text, provider, req.voice, req.speed)
-        tts_logger.info(
-            "[tts %s] ok provider=%s bytes=%d ms=%d",
-            rid, req.provider or "(default)", len(audio),
-            int((time.time()-t0)*1000),
+        audio, media_type, meta = await multi_tts(
+            req.text, provider, req.voice, req.speed, req.phoneme_map,
         )
+        tts_logger.info(
+            "[tts %s] ok provider=%s(eff=%s) bytes=%d phoneme_ignored=%s fallback=%s ms=%d",
+            rid, req.provider or "(default)", meta.get("provider_used"),
+            len(audio), meta.get("phoneme_ignored"), meta.get("fallback"),
+            int((time.time() - t0) * 1000),
+        )
+        headers = {
+            "Cache-Control": "public, max-age=3600",
+            "X-TTS-Provider-Used": str(meta.get("provider_used") or ""),
+        }
+        if meta.get("phoneme_ignored"):
+            headers["X-TTS-Phoneme-Ignored"] = "1"
+        if meta.get("fallback"):
+            headers["X-TTS-Fallback"] = str(meta["fallback"])
         return Response(
             content=audio,
             media_type=media_type,
-            headers={"Cache-Control": "public, max-age=3600"},
+            headers=headers,
         )
     except ValueError as e:
         tts_logger.warning("[tts %s] 400 ValueError: %s", rid, e)

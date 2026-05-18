@@ -456,6 +456,7 @@ watch(
     } else if (!isOpen) {
       abortStream()
       cancelSequence()
+      stopIPA()
     }
   }
 )
@@ -504,6 +505,7 @@ watch(activeTab, async (tab) => {
 })
 
 function close() {
+  stopIPA()
   open.value = false
 }
 
@@ -512,10 +514,100 @@ function refId() {
   return `${props.target.type}:${props.target.content.slice(0, 50)}`
 }
 
+// ── IPA 纠音 🎧 状态机（#34）──────────────────────────────────
+// 单作用对象：同一时刻只允许一个 🎧 播放，新点击 abort 旧 fetch + 释放旧 Audio
+const activeIpaKey = ref(null)         // null | 'word' | `liaison-${i}`
+const ipaState = ref('idle')           // 'idle' | 'loading' | 'playing' | 'error'
+let _ipaAbort = null
+let _ipaAudio = null
+let _ipaErrTimer = null
+
+function stopIPA() {
+  if (_ipaAbort) {
+    try { _ipaAbort.abort() } catch { /* ignore */ }
+    _ipaAbort = null
+  }
+  if (_ipaAudio) {
+    try { _ipaAudio.pause() } catch { /* ignore */ }
+    try { URL.revokeObjectURL(_ipaAudio.src) } catch { /* ignore */ }
+    _ipaAudio = null
+  }
+  if (_ipaErrTimer) {
+    clearTimeout(_ipaErrTimer)
+    _ipaErrTimer = null
+  }
+  activeIpaKey.value = null
+  ipaState.value = 'idle'
+}
+
+function _ipaShowError(ctrl) {
+  if (_ipaAbort !== ctrl) return
+  ipaState.value = 'error'
+  if (_ipaErrTimer) clearTimeout(_ipaErrTimer)
+  _ipaErrTimer = setTimeout(() => {
+    if (ipaState.value === 'error' && _ipaAbort === ctrl) {
+      stopIPA()
+    }
+  }, 5000)
+}
+
+async function playIPA(key, text, ipa) {
+  if (!text || !ipa) return
+  // 同一 key 再点 = 取消（codex review：原 :disabled 锁住 loading，请求卡死无法手动中止）
+  if (activeIpaKey.value === key && (ipaState.value === 'loading' || ipaState.value === 'playing')) {
+    stopIPA()
+    return
+  }
+  // 切到新 key 前先停掉旧的
+  stopIPA()
+
+  const ctrl = new AbortController()
+  _ipaAbort = ctrl
+  activeIpaKey.value = key
+  ipaState.value = 'loading'
+
+  try {
+    const resp = await authFetch(`${API.PRACTICE}/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        provider: 'azure',         // 走 Azure，后端 phoneme_map → SSML <phoneme>
+        voice: 'jenny',
+        speed: '+0%',
+        phoneme_map: { [text]: ipa },
+      }),
+      signal: ctrl.signal,
+    })
+    if (ctrl.signal.aborted || _ipaAbort !== ctrl) return
+    if (!resp.ok) {
+      _ipaShowError(ctrl)
+      return
+    }
+    const blob = await resp.blob()
+    if (ctrl.signal.aborted || _ipaAbort !== ctrl) return
+
+    const audio = new Audio(URL.createObjectURL(blob))
+    _ipaAudio = audio
+    ipaState.value = 'playing'
+    audio.onended = () => {
+      if (_ipaAudio === audio) stopIPA()
+    }
+    audio.onerror = () => {
+      if (_ipaAudio === audio) _ipaShowError(ctrl)
+    }
+    await audio.play()
+  } catch (e) {
+    if (e?.name === 'AbortError') return
+    _ipaShowError(ctrl)
+  }
+}
+
 onBeforeUnmount(() => {
   cancelSequence()
   ttsClear()
   abortStream()
+  stopIPA()
   if (_rafId) {
     cancelAnimationFrame(_rafId)
     _rafId = null
@@ -531,7 +623,26 @@ onBeforeUnmount(() => {
           <div class="target">
             <span class="kind">{{ target?.type === 'word' ? '单词' : '句子' }}</span>
             <span class="content">{{ target?.content }}</span>
-            <span v-if="data.phonetic" class="ipa">{{ data.phonetic }}</span>
+            <span v-if="data.phonetic" class="ipa">
+              {{ data.phonetic }}
+              <button
+                class="ipa-tts-btn"
+                :class="{
+                  loading: activeIpaKey === 'word' && ipaState === 'loading',
+                  playing: activeIpaKey === 'word' && ipaState === 'playing',
+                  error: activeIpaKey === 'word' && ipaState === 'error',
+                }"
+                :disabled="!target?.content"
+                :aria-label="`按 IPA 标准音读 ${target?.content || ''}`"
+                :aria-busy="activeIpaKey === 'word' && ipaState === 'loading' ? 'true' : 'false'"
+                :title="activeIpaKey === 'word' && ipaState === 'error' ? 'TTS 失败 · 点击重试' : (activeIpaKey === 'word' && (ipaState === 'loading' || ipaState === 'playing') ? '点击取消' : '按 IPA 标准音读')"
+                @click="playIPA('word', target?.content, data.phonetic)"
+              >
+                <span v-if="activeIpaKey === 'word' && ipaState === 'loading'">⏳</span>
+                <span v-else-if="activeIpaKey === 'word' && ipaState === 'error'">⚠️</span>
+                <span v-else>🎧</span>
+              </button>
+            </span>
           </div>
           <button
             class="refresh-btn"
@@ -673,7 +784,26 @@ onBeforeUnmount(() => {
               <ul class="liaison">
                 <li v-for="(l, i) in data.liaison" :key="i">
                   <span class="chunk">{{ l.chunk || l }}</span>
-                  <span v-if="l.ipa" class="ipa-inline">{{ l.ipa }}</span>
+                  <span v-if="l.ipa" class="ipa-inline">
+                    {{ l.ipa }}
+                    <button
+                      class="ipa-tts-btn"
+                      :class="{
+                        loading: activeIpaKey === `liaison-${i}` && ipaState === 'loading',
+                        playing: activeIpaKey === `liaison-${i}` && ipaState === 'playing',
+                        error: activeIpaKey === `liaison-${i}` && ipaState === 'error',
+                      }"
+                      :disabled="!(l.chunk || l)"
+                      :aria-label="`按 IPA 标准音读 ${l.chunk || l}`"
+                      :aria-busy="activeIpaKey === `liaison-${i}` && ipaState === 'loading' ? 'true' : 'false'"
+                      :title="activeIpaKey === `liaison-${i}` && ipaState === 'error' ? 'TTS 失败 · 点击重试' : (activeIpaKey === `liaison-${i}` && (ipaState === 'loading' || ipaState === 'playing') ? '点击取消' : '按 IPA 标准音读')"
+                      @click="playIPA(`liaison-${i}`, l.chunk || l, l.ipa)"
+                    >
+                      <span v-if="activeIpaKey === `liaison-${i}` && ipaState === 'loading'">⏳</span>
+                      <span v-else-if="activeIpaKey === `liaison-${i}` && ipaState === 'error'">⚠️</span>
+                      <span v-else>🎧</span>
+                    </button>
+                  </span>
                   <span v-if="l.tip" class="tip">{{ l.tip }}</span>
                 </li>
               </ul>
@@ -779,6 +909,46 @@ onBeforeUnmount(() => {
   font-family: Georgia, 'SF Pro Text', serif;
   font-size: 13px;
   margin-top: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ipa-tts-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.ipa-tts-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--bg);
+}
+.ipa-tts-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.ipa-tts-btn.loading {
+  opacity: 0.6;
+}
+.ipa-tts-btn.playing {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+.ipa-tts-btn.error {
+  background: transparent;
+  border-color: var(--danger, #d33);
+  color: var(--danger, #d33);
 }
 .refresh-btn {
   width: 36px;
@@ -1078,6 +1248,9 @@ onBeforeUnmount(() => {
   color: var(--accent);
   font-family: Georgia, 'SF Pro Text', serif;
   font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .tip {
   color: var(--text-2);

@@ -192,7 +192,7 @@ async def test_multi_tts_azure_provider_calls_azure_tts():
          patch("app.services.tts_service.settings") as mock_settings:
         mock_settings.TTS_DEFAULT_PROVIDER = "edge"
 
-        audio, media_type = await multi_tts("Hello", provider="azure", voice="jenny")
+        audio, media_type, _meta = await multi_tts("Hello", provider="azure", voice="jenny")
 
     mock_azure.assert_called_once()
     assert audio == fake_audio
@@ -209,7 +209,7 @@ async def test_multi_tts_azure_failure_falls_back_to_edge():
          patch("app.services.tts_service.settings") as mock_settings:
         mock_settings.TTS_DEFAULT_PROVIDER = "edge"
 
-        audio, media_type = await multi_tts("Hello", provider="azure", voice="jenny")
+        audio, media_type, _meta = await multi_tts("Hello", provider="azure", voice="jenny")
 
     mock_edge.assert_called_once()
     assert audio == fake_audio
@@ -225,7 +225,7 @@ async def test_multi_tts_edge_provider_calls_edge_tts_directly():
          patch("app.services.tts_service.settings") as mock_settings:
         mock_settings.TTS_DEFAULT_PROVIDER = "edge"
 
-        audio, media_type = await multi_tts("Hello", provider="edge", voice="jenny")
+        audio, media_type, _meta = await multi_tts("Hello", provider="edge", voice="jenny")
 
     mock_edge.assert_called_once()
     assert audio == fake_audio
@@ -247,7 +247,7 @@ async def test_multi_tts_uses_settings_default_when_no_provider_given():
          patch("app.services.tts_service.settings") as mock_settings:
         mock_settings.TTS_DEFAULT_PROVIDER = "edge"
 
-        audio, _ = await multi_tts("Hello", provider=None, voice="jenny")
+        audio, _, _meta = await multi_tts("Hello", provider=None, voice="jenny")
 
     assert audio == fake_audio
 
@@ -270,9 +270,213 @@ async def test_multi_tts_second_call_uses_disk_cache(tmp_path, monkeypatch):
          patch("app.services.tts_service.settings") as mock_settings:
         mock_settings.TTS_DEFAULT_PROVIDER = "edge"
 
-        audio1, _ = await multi_tts("Cache test", provider="edge", voice="jenny")
-        audio2, _ = await multi_tts("Cache test", provider="edge", voice="jenny")
+        audio1, _, _m1 = await multi_tts("Cache test", provider="edge", voice="jenny")
+        audio2, _, _m2 = await multi_tts("Cache test", provider="edge", voice="jenny")
 
     assert call_count == 1  # backend called only once
     assert audio1 == fake_audio
     assert audio2 == fake_audio
+
+
+# ── IPA 纠音扩展（多词短语 + 智能升级 + meta header）─────────
+
+
+def test_build_ssml_multi_word_phrase_phoneme():
+    """多词短语 key 应跨空格匹配并插入 <phoneme>"""
+    ssml = _build_ssml(
+        "give me a hand", "en-US-JennyNeural", "+0%",
+        phoneme_map={"give me": "ɡɪmi"},
+    )
+    assert '<phoneme alphabet="ipa" ph="ɡɪmi">give me</phoneme>' in ssml
+
+
+def test_build_ssml_mixed_word_and_phrase_phoneme():
+    """单词 + 多词短语混合 phoneme_map"""
+    ssml = _build_ssml(
+        "would you give me a hand", "en-US-JennyNeural", "+0%",
+        phoneme_map={"would you": "wʊdʒu", "hand": "hænd"},
+    )
+    assert '<phoneme alphabet="ipa" ph="wʊdʒu">would you</phoneme>' in ssml
+    assert '<phoneme alphabet="ipa" ph="hænd">hand</phoneme>' in ssml
+
+
+@pytest.mark.asyncio
+async def test_multi_tts_smart_upgrade_edge_to_azure_when_phoneme_and_key_present():
+    """provider=edge + phoneme_map + AZURE_TTS_KEY 已配 → 实际走 azure，meta 标 provider_used=azure"""
+    fake_audio = b"fake-azure-audio"
+    with patch("app.services.tts_service._azure_tts", new_callable=AsyncMock,
+               return_value=(fake_audio, "audio/mpeg")) as mock_azure, \
+         patch("app.services.tts_service._edge_tts", new_callable=AsyncMock,
+               side_effect=AssertionError("should not call edge when upgrading")), \
+         patch("app.services.tts_service.settings") as mock_settings:
+        mock_settings.TTS_DEFAULT_PROVIDER = "edge"
+        mock_settings.AZURE_TTS_KEY = "fake-key"
+        mock_settings.AZURE_TTS_REGION = "eastasia"
+
+        audio, media_type, meta = await multi_tts(
+            "schedule", provider="edge", voice="jenny",
+            phoneme_map={"schedule": "ˈskɛdʒuːl"},
+        )
+
+    mock_azure.assert_called_once()
+    assert audio == fake_audio
+    assert meta["provider_used"] == "azure"
+    assert meta["phoneme_ignored"] is False
+
+
+@pytest.mark.asyncio
+async def test_multi_tts_phoneme_ignored_when_azure_key_missing():
+    """phoneme_map 给了但 AZURE_TTS_KEY 没配 → 走原 provider + phoneme_ignored=True"""
+    fake_audio = b"fake-edge-audio"
+    with patch("app.services.tts_service._edge_tts", new_callable=AsyncMock,
+               return_value=(fake_audio, "audio/mpeg")) as mock_edge, \
+         patch("app.services.tts_service._azure_tts", new_callable=AsyncMock,
+               side_effect=AssertionError("azure must not be called without key")), \
+         patch("app.services.tts_service.settings") as mock_settings:
+        mock_settings.TTS_DEFAULT_PROVIDER = "edge"
+        mock_settings.AZURE_TTS_KEY = ""
+
+        audio, media_type, meta = await multi_tts(
+            "schedule", provider="edge", voice="jenny",
+            phoneme_map={"schedule": "ˈskɛdʒuːl"},
+        )
+
+    mock_edge.assert_called_once()
+    assert audio == fake_audio
+    assert meta["provider_used"] == "edge"
+    assert meta["phoneme_ignored"] is True
+
+
+@pytest.mark.asyncio
+async def test_multi_tts_azure_fallback_to_edge_sets_meta_fallback():
+    """Azure 抛异常降级 edge → meta.fallback='edge' + provider_used='edge'"""
+    fake_audio = b"fake-edge-audio"
+    with patch("app.services.tts_service._azure_tts", new_callable=AsyncMock,
+               side_effect=RuntimeError("Azure down")), \
+         patch("app.services.tts_service._edge_tts", new_callable=AsyncMock,
+               return_value=(fake_audio, "audio/mpeg")) as mock_edge, \
+         patch("app.services.tts_service.settings") as mock_settings:
+        mock_settings.TTS_DEFAULT_PROVIDER = "edge"
+        mock_settings.AZURE_TTS_KEY = "fake-key"
+        mock_settings.AZURE_TTS_REGION = "eastasia"
+
+        audio, media_type, meta = await multi_tts(
+            "schedule", provider="azure", voice="jenny",
+            phoneme_map={"schedule": "ˈskɛdʒuːl"},
+        )
+
+    mock_edge.assert_called_once()
+    assert audio == fake_audio
+    assert meta["fallback"] == "edge"
+    assert meta["provider_used"] == "edge"
+    assert meta["phoneme_ignored"] is True  # phoneme_map 无法在 edge 上生效
+
+
+@pytest.mark.asyncio
+async def test_multi_tts_fallback_does_not_poison_intent_cache(tmp_path, monkeypatch):
+    """codex review (PR #39 🔴): Azure 失败降级 edge 后，edge 音频不应写到 azure intent 缓存键。
+
+    场景：
+    1. 首请 azure + phoneme_map，AZURE_TTS_KEY 已配，azure 抛错 → 降级 edge → 应写到 edge 缓存键
+    2. 二请同样 azure + phoneme_map，应 cache miss（不会拿到上次的 edge 音频），重新尝试 azure
+    """
+    import app.services.tts_service as svc
+    monkeypatch.setattr(svc, "TTS_CACHE_DIR", str(tmp_path))
+
+    edge_audio = b"fake-edge-audio"
+    azure_audio = b"fake-azure-audio"
+    azure_call_count = 0
+
+    async def fake_azure(text, voice, rate, pm):
+        nonlocal azure_call_count
+        azure_call_count += 1
+        if azure_call_count == 1:
+            raise RuntimeError("Azure down on first call")
+        return azure_audio, "audio/mpeg"
+
+    async def fake_edge(text, voice, rate):
+        return edge_audio, "audio/mpeg"
+
+    with patch("app.services.tts_service._azure_tts", side_effect=fake_azure), \
+         patch("app.services.tts_service._edge_tts", side_effect=fake_edge), \
+         patch("app.services.tts_service.settings") as mock_settings:
+        mock_settings.TTS_DEFAULT_PROVIDER = "edge"
+        mock_settings.AZURE_TTS_KEY = "fake-key"
+        mock_settings.AZURE_TTS_REGION = "eastasia"
+
+        # 1st call: azure 失败 → edge fallback
+        audio1, _, meta1 = await multi_tts(
+            "schedule", provider="azure", voice="jenny",
+            phoneme_map={"schedule": "ˈskɛdʒuːl"},
+        )
+        assert audio1 == edge_audio
+        assert meta1["fallback"] == "edge"
+        assert meta1["phoneme_ignored"] is True
+
+        # 2nd call: 不应被上次 edge 缓存命中，应该再调 azure
+        audio2, _, meta2 = await multi_tts(
+            "schedule", provider="azure", voice="jenny",
+            phoneme_map={"schedule": "ˈskɛdʒuːl"},
+        )
+
+    assert azure_call_count == 2, (
+        "Azure 应被再次尝试；如果 cache poisoning 没修，第二次会命中上次缓存而不调 azure"
+    )
+    assert audio2 == azure_audio
+    assert meta2["fallback"] is None
+    assert meta2["phoneme_ignored"] is False
+    assert meta2["provider_used"] == "azure"
+
+
+def test_build_ssml_phrase_with_word_boundary():
+    """codex review (PR #39 🟡): "give me" 不应在 "forgive me" 里命中"""
+    ssml = _build_ssml(
+        "Don't forgive me, just give me a hand.", "en-US-JennyNeural", "+0%",
+        phoneme_map={"give me": "ɡɪmi"},
+    )
+    # 只匹配一处独立的 "give me"
+    assert ssml.count('<phoneme alphabet="ipa" ph="ɡɪmi">give me</phoneme>') == 1
+    # "forgive me" 应原样保留
+    assert "forgive me" in ssml
+
+
+def test_build_ssml_overlapping_phoneme_keys_no_nested_tags():
+    """codex review (PR #39 🟡): phoneme_map 含重叠 key 不应导致嵌套 <phoneme> 标签"""
+    ssml = _build_ssml(
+        "give me time", "en-US-JennyNeural", "+0%",
+        phoneme_map={"give me": "ɡɪmi", "me": "mi"},
+    )
+    # "give me" 整串优先匹配 → 独立 "me" 已被消耗，不再插第二层 phoneme
+    assert '<phoneme alphabet="ipa" ph="ɡɪmi">give me</phoneme>' in ssml
+    # 只有 1 个 <phoneme（长 key 单次匹配），不会被嵌套
+    assert ssml.count("<phoneme") == 1
+
+
+@pytest.mark.asyncio
+async def test_practice_tts_route_passes_phoneme_and_sets_headers():
+    """端到端：路由接 phoneme_map，把 meta 翻成 response header"""
+    from fastapi.testclient import TestClient
+    from main import app
+
+    fake_audio = b"fake-azure-audio"
+    with patch("app.services.tts_service._azure_tts", new_callable=AsyncMock,
+               return_value=(fake_audio, "audio/mpeg")), \
+         patch("app.services.tts_service.settings") as mock_settings:
+        mock_settings.TTS_DEFAULT_PROVIDER = "edge"
+        mock_settings.AZURE_TTS_KEY = "fake-key"
+        mock_settings.AZURE_TTS_REGION = "eastasia"
+
+        client = TestClient(app)
+        resp = client.post("/practice/tts", json={
+            "text": "schedule",
+            "provider": "edge",
+            "voice": "jenny",
+            "speed": "+0%",
+            "phoneme_map": {"schedule": "ˈskɛdʒuːl"},
+        })
+
+    assert resp.status_code == 200
+    assert resp.content == fake_audio
+    assert resp.headers.get("X-TTS-Provider-Used") == "azure"
+    assert resp.headers.get("X-TTS-Phoneme-Ignored") is None
+    assert resp.headers.get("X-TTS-Fallback") is None
