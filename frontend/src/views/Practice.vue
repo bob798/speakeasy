@@ -579,9 +579,8 @@ onBeforeUnmount(() => {
             </button>
 
             <div class="sheet-footer-note">
-              ℹ︎ 关于复习评分 · 手机端暂不评分，本次练习不会进入 FSRS 复习计划；
-              如需评分请到桌面端，或关注
-              <a href="https://github.com/bob798/speakeasy/issues/26" target="_blank" rel="noopener">issue #26</a>。
+              ℹ︎ 关于复习评分 · 录完一句后会自动出现 Again / Hard / Good / Easy 评分，
+              FSRS 会按你的反馈安排下次复习。点「重录」可重新来过。
             </div>
           </aside>
         </div>
