@@ -84,17 +84,22 @@ ExplanationModal 打开，触发以下三种之一：
         │
         ▼
 ┌─────────────────────────────────────────────────────────┐
-│ 流式完成时 / 缓存命中时（同步路径中）                   │
+│ 流式完成时 / 缓存命中时（同步路径中 · best-effort）     │
 │  vocab_service.update_explanation(                      │
 │     user_id, source_text, source_ref,                   │
-│     explanation_json=full_json                          │
+│     explanation_json=full_json,                         │
+│     force=req.refresh,  ← refresh=True 强制覆盖         │
 │  )                                                      │
 │  · 找不到记录 → logger.warning + skip                   │
 │  · 软删状态也写入（不丢历史）                           │
+│  · refresh=False 时仅在 explanation_json 为 NULL 时填   │
 └─────────────────────────────────────────────────────────┘
         │
         ▼
-前端继续接收流；入库与前端生命周期解耦
+入库占位与前端生命周期解耦；回填则与流式完成耦合（best-effort）：
+  · 客户端在流过程中断开 / 切走 → generator 未走到末尾
+    → 回填不执行，pending 留存，由 §4.3 用户重拉路径接管
+  · 不引入 background task / Celery（符合项目规模）
 ```
 
 #### 关键设计点
@@ -109,6 +114,9 @@ ExplanationModal 打开，触发以下三种之一：
 | 三个端点统一 | `/articles/explain`、`/articles/explain/phonetic`、`/articles/explain/stream` 都触发入库 | 用户场景下，只点 IPA 也是"我对这词感兴趣"的信号 |
 | ExplanationCache | 不动；命中缓存也照常入库 | 缓存命中不意味着对当前用户来说"已经学过"，仍需要个人化记录 |
 | 并发同一请求 | 唯一键挡住，第二次 `ON CONFLICT DO NOTHING` | save_item 现有行为 |
+| 流末尾回填可靠性 | **best-effort**：客户端在流式过程中断开/切走时 generator 不会跑到末尾，回填**不执行** | pending 留存，由 §4.3 用户重拉路径兜底；不引入 background task 复杂度 |
+| refresh 语义 | `refresh=True` 调 explain 时回填走 **force-overwrite**（覆盖已有 explanation_json）；默认仅在 NULL 时填充 | 用户主动重生时新解读必须能盖掉旧值，否则 refresh 没意义 |
+| `save_item` 命中不更新字段 | 现有保护性行为；意味着 phonetic 与后续 explain 若 `item_type` 不一致会**永久错存**为先写的那个 | 前端必须**一次性推断好 `item_type`**，phonetic 与 explain 共用同一个值，不能各推各的 |
 
 ### 3. 标签机制
 
@@ -204,7 +212,8 @@ ExplanationModal 打开，触发以下三种之一：
 | 回填记录不存在 | `logger.warning` + skip | 用户可能在解读完成前删除 |
 | 回填遇到 deleted 记录 | 仍然写入 | 软删不丢历史 |
 | 并发同请求 | 唯一键挡住 | save_item 已支持 |
-| 解读流式中断 | pending 条目留存 | 异步回看场景的核心承载 |
+| 解读流式中断（客户端断网/切走） | pending 条目留存；流末尾回填**不执行**（by design） | 不强求后台续生；由 §4.3 用户重拉路径接管 |
+| 用户带 refresh=true 重新点解读 | 回填走 `update_explanation(..., force=True)` 覆盖已有 explanation_json | 用户主动重生时新解读必须能盖掉旧值 |
 | 用户点开 pending → 拉新解读再次失败 | UI 显示"生成中，请稍后重试"按钮 | 与 ExplanationModal 错误处理对齐 |
 
 **结构化日志锚点**：
@@ -221,24 +230,27 @@ ExplanationModal 打开，触发以下三种之一：
 
 | 文件 | 改动 |
 |---|---|
-| `app/routers/practice.py` → `app/routers/articles.py` | 路由前缀 `/practice` → `/articles`；逻辑不动；三个 explain 端点头部加 `vocab_service.save_item()` 占位写入 |
-| `app/main.py` | router include 改 `articles_router`；额外注册 `/practice/*` alias 指向同一 handler |
-| `app/services/vocab_service.py` | 新增 `update_explanation(user_id, source_text, source_ref, explanation_json)`；`save_item` 现有签名已支持 `explanation_json=None`，无需改 |
-| `app/services/explain_service.py` | 流式生成完成 / 缓存命中处，回调 `vocab_service.update_explanation`（依赖注入 callback 或路由层在 await 完成后调用） |
+| `app/routers/practice.py` → `app/routers/articles.py` | **文件改名 + 剥前缀**：所有装饰器中的 `/practice/...` 改为 `/...`（不再在装饰器里挂前缀）。涉及 13 个端点（grep `^@router\.` 自查）：subtitles ×3 / sources/import / cards ×4 / due / explain / explain/phonetic / explain/stream / tts。三个 explain 端点入口处新增 `_auto_save_vocab(...)` 占位写入 + 解读返回前/流末尾 `update_explanation(..., force=req.refresh)` 回填 |
+| `main.py`（**项目根目录**，不是 `app/main.py`）| ① router include 改名 `articles_router`；② 注册两次：`prefix="/articles"` 主、`prefix="/practice", include_in_schema=False` 兼容 alias（避免 OpenAPI 重复）；③ `API_PREFIXES`（line 38）新增 `"articles/"` 防 SPA fallback 错误接管 GET |
+| `app/services/vocab_service.py` | 新增 `update_explanation(user_id, source_text, source_ref, explanation_json, force=False)`；`force=True` 时覆盖；`force=False` 仅 NULL 时填；`save_item` 现有签名支持 `explanation_json=None` 无需改 |
+| `app/routers/practice.py` 内新工具函数（迁入 articles.py）| `_auto_save_vocab(...)`（吞 DB 异常）+ `_resolve_item_type(text, explicit, kind)`（前端显式优先，缺省按 kind 推断；word + 多 token → phrase）|
+| `app/routers/auth.py` | **复用现有** `get_current_user_id_optional`（L73），phonetic 端点用它注入可选 user_id；**不新建**重复函数 |
 | `app/routers/vocab.py` | `GET /vocab` 增加可选 query `source_type` |
 
 #### 前端
 
+> 网络层统一用 composable：`import { useAuthFetch, getErrorMessage } from '@/composables/useAuthFetch'` → `const { authFetch, authFetchJson } = useAuthFetch()`；API 常量用 `import { API } from '@/config'`。**不要**用 `@/utils/api` / `@/api/endpoints` 这些不存在的路径。
+
 | 文件 | 改动 |
 |---|---|
-| `frontend/src/router/index.ts` | `/practice` → `/articles` 主路由；`/practice` redirect 到 `/articles`；新增 `/vocabulary` 路由 |
+| `frontend/src/router/index.js` | `/practice` → `/articles` 主路由；`/practice` redirect 到 `/articles`；新增 `/vocabulary` 路由 |
+| `frontend/src/config.js` | `API` 常量新增 `ARTICLES: '/articles'`；保留 `PRACTICE: '/practice'`（后端 alias 兜底） |
 | `frontend/src/views/Practice.vue` → `Articles.vue` | 标题"发音练习" → "文章学习"，加副标题"BBC English at Work"；其它不动 |
-| 导航菜单组件 | 文案"发音练习" → "文章学习"；新增"生词本"入口 |
+| 导航菜单组件（Home.vue 或对应）| 文案"发音练习" → "文章学习"；新增"生词本"入口卡片 |
 | `frontend/src/views/Vocabulary.vue` | 新建：tag chip 横排 + 列表 + 卡片原地展开 + pending 重拉逻辑 |
 | `frontend/src/views/Translate.vue` | 移除原 vocabulary 折叠面板 |
-| `frontend/src/api/vocab.ts` | `listVocab()` 增加 `sourceType?: string` 参数 |
-| `ExplanationModal.vue` | **不改**（入库下沉到后端，弹窗对此无感） |
-| 生词本卡片展开渲染组件 | 优先复用 `ExplanationModal` 内部的 explanation 渲染部分；如难拆，新建共享子组件 |
+| `frontend/src/components/ExplanationModal.vue` | ① 删除手动 `saveToVocab` 函数（L265–313）与"加入生词本"按钮 / `starState` / `starError`；② 在 `fetchWord` / `fetchSentence` 开头**一次性推断 `item_type`** 并复用给 phonetic 与 explain 两个请求；③ 三个 explain 调用 body 携带 `source_type` / `source_ref` / `item_type` |
+| 生词本卡片展开渲染 | 在 `Vocabulary.vue` 内直接实现（不抽公共组件，避免过早抽象）|
 
 #### 文档
 
@@ -292,9 +304,13 @@ GitHub Issue：[#42 chore(vocab): source_type 与表名重构为 article-* 通�
 ## 验收标准
 
 1. 在 `/articles` 页面点击 BBC 文章中的任意词、短语、句子（包括只点 IPA），切到 `/vocabulary` 都能看到对应条目
-2. 网络中断 / 关闭弹窗 / 切走页面，条目仍存在；`explanation_json` 状态正确（pending 或 ready）
-3. `/vocabulary` 标签切换正确过滤 BBC / 翻译收藏 / 全部
-4. pending 条目点开能自动拉新解读并回填
-5. 旧路由 `/practice/*` 在过渡期仍可访问，行为与 `/articles/*` 一致
-6. `pytest tests/ -v` 全绿
-7. CLAUDE.md / README.md / 架构图同步更新
+2. 网络中断 / 关闭弹窗 / 切走页面：
+   - 条目仍存在（入口写入已落地）
+   - 若流式未完成 → 条目处于 pending（`explanation_json IS NULL`），生词本显示「⚠ 解读生成中」；点开自动重拉
+   - 若流式完成 → 条目 ready，展开可见完整解读
+3. 同一条目，phonetic 与 explain 调用结果的 `item_type` 完全一致（避免 word/phrase 永久错存）
+4. 用户在 ExplanationModal 点"重新生成"（refresh=true）→ 生词本对应条目 `explanation_json` 被新结果覆盖
+5. `/vocabulary` 标签 chip 切换正确过滤 BBC / 翻译收藏 / 全部
+6. 旧路由 `/practice/*` 在过渡期仍可访问，行为与 `/articles/*` 一致；OpenAPI 文档**不出现**重复路由
+7. `pytest tests/ -v` 全绿；`cd frontend && npm run test` 全绿
+8. CLAUDE.md / README.md / 架构图 / `docs/architecture/flows/article-explain-vocab-flow.md` 同步更新
