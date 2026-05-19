@@ -28,7 +28,7 @@
 
 ### Task 1: vocab_service.update_explanation — 专用回填函数
 
-> 不复用 `save_item`，因为 `save_item` 命中已存在记录时不更新任何字段（L77–83）。本函数语义：**只在 explanation_json 为 NULL 时填入**（已被写过的不覆盖），软删条目也填，找不到记录静默 skip。
+> 不复用 `save_item`，因为 `save_item` 命中已存在记录时不更新任何字段（L77–83）。本函数语义：**默认仅在 explanation_json 为 NULL 时填入**；`force=True` 时强制覆盖（用于 refresh 路径）；软删条目也填，找不到记录静默 skip。
 
 **Files:**
 - Modify: `app/services/vocab_service.py:115`（在 `list_items` 之前插入）
@@ -96,6 +96,19 @@ def test_no_overwrite_when_json_already_set():
         assert v.explanation_json == '{"meaning": "原值"}'
 
 
+def test_force_overwrite_existing_json():
+    """refresh=True 路径：必须能覆盖。"""
+    _seed(explanation_json='{"meaning": "原值"}')
+    updated = update_explanation(
+        user_id=USER, source_text="office banter", source_ref="ep-12",
+        explanation_json='{"meaning": "新值"}', force=True,
+    )
+    assert updated is True
+    with OrmSession(engine) as s:
+        v = s.query(Vocabulary).filter_by(user_id=USER, source_text="office banter").first()
+        assert v.explanation_json == '{"meaning": "新值"}'
+
+
 def test_backfill_works_on_deleted_record():
     _seed(explanation_json=None, status="deleted")
     updated = update_explanation(
@@ -128,9 +141,12 @@ def update_explanation(
     source_text: str,
     source_ref: Optional[str],
     explanation_json: str,
+    force: bool = False,
 ) -> bool:
     """回填 explanation_json。
-    仅在当前 explanation_json 为 NULL 时写入（避免覆盖用户手动设置的解释）。
+
+    默认仅在当前 explanation_json 为 NULL 时写入（保护已有解释不被首写覆盖）。
+    force=True 时强制覆盖（用于 refresh=True 路径，用户主动重生）。
     软删条目也回填（保留历史，下次复活带完整数据）。
     找不到记录返回 False，不抛异常。
     """
@@ -146,13 +162,13 @@ def update_explanation(
                 user_id, source_text, source_ref,
             )
             return False
-        if v.explanation_json:
+        if v.explanation_json and not force:
             return False
         v.explanation_json = explanation_json
         s.commit()
         logger.info(
-            "vocab_explanation_backfill user_id=%s id=%s len=%d",
-            user_id, v.id, len(explanation_json),
+            "vocab_explanation_backfill user_id=%s id=%s len=%d force=%s",
+            user_id, v.id, len(explanation_json), force,
         )
         return True
 ```
@@ -160,7 +176,7 @@ def update_explanation(
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_v08_vocab_update_explanation.py -v`
-Expected: 4 passed
+Expected: 5 passed
 
 - [ ] **Step 5: Commit**
 
@@ -282,7 +298,7 @@ git commit -m "feat(vocab): list_items supports source_type filter"
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session as OrmSession
-from app.main import app
+from main import app  # 项目入口在仓库根目录 main.py，不是 app/main.py
 from app.models.db import engine, Vocabulary, init_db
 from app.services.vocab_service import save_item
 from app.routers.auth import get_current_user_id
@@ -381,35 +397,58 @@ git commit -m "feat(vocab): GET /vocab supports source_type query param"
 ```python
 # tests/test_v08_explain_request_schema.py
 from fastapi.testclient import TestClient
-from app.main import app
+from main import app  # 项目入口在仓库根目录 main.py，不是 app/main.py
 from app.routers.auth import get_current_user_id
 
 USER = "test_user_v08_articles_task4"
-app.dependency_overrides[get_current_user_id] = lambda: USER
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def _override_user():
+    """fixture-scoped dependency override，避免跨测试串用户。"""
+    app.dependency_overrides[get_current_user_id] = lambda: USER
+    yield
+    app.dependency_overrides.pop(get_current_user_id, None)
+
+
 def test_explain_request_accepts_source_fields():
-    """新增字段可选；带与不带都不应返回 422。"""
-    body_with_source = {
-        "text": "Hello", "kind": "word", "context": "",
-        "source_type": "bbc_eaw", "source_ref": "ep-1", "item_type": "word",
-    }
-    # 这里不关心 LLM 返回内容，只验证 schema 不报 422
-    resp = client.post("/practice/explain", json=body_with_source)
-    assert resp.status_code != 422, resp.text
+    """直接实例化 model：扩展前缺字段会 AttributeError，扩展后 OK。"""
+    from app.routers.practice import ExplainRequest
+    req = ExplainRequest(
+        text="Hello", kind="word", context="",
+        source_type="bbc_eaw", source_ref="ep-1", item_type="word",
+    )
+    assert req.source_type == "bbc_eaw"
+    assert req.source_ref == "ep-1"
+    assert req.item_type == "word"
 
 
 def test_stream_request_accepts_source_fields():
-    body = {"text": "Hello world.", "source_type": "bbc_eaw", "source_ref": "ep-1", "item_type": "sentence"}
-    resp = client.post("/practice/explain/stream", json=body)
-    assert resp.status_code != 422, resp.text
+    from app.routers.practice import StreamExplainRequest
+    req = StreamExplainRequest(
+        text="Hello world.", source_type="bbc_eaw",
+        source_ref="ep-1", item_type="sentence", context="paragraph context",
+    )
+    assert req.source_type == "bbc_eaw"
+    assert req.context == "paragraph context"
+
+
+def test_explain_request_omits_new_fields_defaults_none():
+    """旧客户端不传新字段也应该正常解析。"""
+    from app.routers.practice import ExplainRequest
+    req = ExplainRequest(text="Hi", kind="word")
+    assert req.source_type is None
+    assert req.source_ref is None
+    assert req.item_type is None
 ```
+
+> 注：不能用 `assert resp.status_code != 422` 验证 schema 接受字段——Pydantic 默认 `extra="ignore"`，未知字段不会 422 而是被静默丢弃。必须直接实例化 model 断言字段存在。
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_v08_explain_request_schema.py -v`
-Expected: 422 unprocessable，因为新字段不在 schema
+Expected: `pydantic.ValidationError`（缺 source_type/source_ref/item_type/context 等字段时）或 `AttributeError`（model 上无此属性）
 
 - [ ] **Step 3: Update schemas**
 
@@ -443,7 +482,7 @@ class StreamExplainRequest(BaseModel):
 - [ ] **Step 4: Run tests**
 
 Run: `pytest tests/test_v08_explain_request_schema.py -v`
-Expected: 2 passed
+Expected: 3 passed
 
 - [ ] **Step 5: Commit**
 
@@ -640,13 +679,20 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session as OrmSession
-from app.main import app
+from main import app  # 项目入口在仓库根目录 main.py，不是 app/main.py
 from app.models.db import engine, Vocabulary, init_db
 from app.routers.auth import get_current_user_id
 
 USER = "test_user_v08_articles_task6"
-app.dependency_overrides[get_current_user_id] = lambda: USER
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _override_user():
+    """fixture-scoped dependency override，避免跨测试串用户。"""
+    app.dependency_overrides[get_current_user_id] = lambda: USER
+    yield
+    app.dependency_overrides.pop(get_current_user_id, None)
 
 
 @pytest.fixture(autouse=True)
@@ -697,6 +743,25 @@ def test_explain_without_source_no_vocab(stub_explain):
     with OrmSession(engine) as s:
         cnt = s.query(Vocabulary).filter_by(user_id=USER).count()
         assert cnt == 0
+
+
+def test_explain_refresh_overwrites_existing_json(stub_explain):
+    """refresh=True 路径：已有 explanation_json 应被新值覆盖。"""
+    from app.services.vocab_service import save_item
+    save_item(
+        user_id=USER, source_text="重写测试", item_type="word",
+        source_type="bbc_eaw", source_ref="ep-1",
+        explanation_json='{"meaning": "旧值"}',
+    )
+    body = {
+        "text": "重写测试", "kind": "word", "refresh": True,
+        "source_type": "bbc_eaw", "source_ref": "ep-1", "item_type": "word",
+    }
+    resp = client.post("/practice/explain", json=body)
+    assert resp.status_code == 200
+    with OrmSession(engine) as s:
+        v = s.query(Vocabulary).filter_by(user_id=USER, source_text="重写测试").first()
+        assert json.loads(v.explanation_json)["meaning"] == "stub-重写测试"
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -736,7 +801,7 @@ async def practice_explain(
         logger.error("解读失败: %s", e, exc_info=True)
         raise HTTPException(503, "解读服务暂时不可用，请稍后重试")
 
-    # 解读完成回填
+    # 解读完成回填（refresh=True 时 force-overwrite，否则仅 NULL 写入）
     if req.source_type and result.get("explanation"):
         try:
             _vocab_service.update_explanation(
@@ -744,6 +809,7 @@ async def practice_explain(
                 source_text=req.text,
                 source_ref=req.source_ref,
                 explanation_json=json.dumps(result["explanation"], ensure_ascii=False),
+                force=req.refresh,
             )
         except Exception as e:
             logger.warning("vocab_backfill_failed user_id=%s err=%s", user_id, e)
@@ -756,7 +822,7 @@ async def practice_explain(
 - [ ] **Step 4: Run tests**
 
 Run: `pytest tests/test_v08_explain_autosave.py -v`
-Expected: 2 passed
+Expected: 3 passed
 
 - [ ] **Step 5: Commit**
 
@@ -770,45 +836,29 @@ git commit -m "feat(explain): /practice/explain auto-saves vocab + backfills exp
 ### Task 7: `/practice/explain/phonetic` 注入 user_id + 自动入库
 
 > 现状该端点为公开接口，没有 user_id。改为可选 user_id 依赖：登录态触发入库（仅占位、不回填，因为 phonetic 不产生完整 explanation_json）；匿名仍可访问。
+>
+> ⚠️ **复用现有依赖**：`app/routers/auth.py:73` 已有 `get_current_user_id_optional`，直接 import 使用，**不要**新建 `get_current_user_id_optional` 之类的重复函数。
 
 **Files:**
 - Modify: `app/routers/practice.py:350-359`
-- Modify: `app/routers/auth.py`（如果没有 `get_optional_user_id`，新增）
 - Test: `tests/test_v08_phonetic_autosave.py`（新建）
 
-- [ ] **Step 1: Check if optional user dependency exists**
+- [ ] **Step 1: Confirm existing optional auth dependency**
 
-Run: `grep -n "get_optional_user_id\|optional.*user" app/routers/auth.py`
+Run: `grep -n "get_current_user_id_optional" app/routers/auth.py`
 
-如果没有 `get_optional_user_id`，需要新增。先查清后再下一步。
+预期：在 line 73 附近找到 `async def get_current_user_id_optional(...)`。继续下一步。
 
-- [ ] **Step 2: Add optional user dependency (if missing)**
-
-如果上一步 grep 无结果，则在 `app/routers/auth.py` 末尾追加：
-
-```python
-async def get_optional_user_id(authorization: Optional[str] = Header(None)) -> Optional[str]:
-    """登录可选；无 token 或 token 无效返 None，不抛 401。"""
-    if not authorization:
-        return None
-    try:
-        return await get_current_user_id(authorization)
-    except HTTPException:
-        return None
-```
-
-如已有同等功能（哪怕命名不同，比如 `get_user_id_optional`），跳过新增并在后续步骤使用现有名字。
-
-- [ ] **Step 3: Write the failing test**
+- [ ] **Step 2: Write the failing test**
 
 ```python
 # tests/test_v08_phonetic_autosave.py
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session as OrmSession
-from app.main import app
+from main import app  # 项目入口在仓库根目录 main.py，不是 app/main.py
 from app.models.db import engine, Vocabulary, init_db
-from app.routers.auth import get_optional_user_id  # 或现有 optional 依赖
+from app.routers.auth import get_current_user_id_optional  # 或现有 optional 依赖
 
 USER = "test_user_v08_articles_task7"
 client = TestClient(app)
@@ -827,22 +877,23 @@ def _cleanup():
 
 
 def test_phonetic_logged_in_with_source_creates_pending():
-    app.dependency_overrides[get_optional_user_id] = lambda: USER
+    app.dependency_overrides[get_current_user_id_optional] = lambda: USER
     try:
         body = {"text": "office", "source_type": "bbc_eaw", "source_ref": "ep-12", "item_type": "word"}
         resp = client.post("/practice/explain/phonetic", json=body)
         assert resp.status_code == 200
         with OrmSession(engine) as s:
             v = s.query(Vocabulary).filter_by(user_id=USER, source_text="office").first()
-            assert v is not None
+            assert v is not None, "phonetic 端点应已写入 vocabulary 占位"
             assert v.explanation_json is None  # phonetic 不回填
             assert v.source_type == "bbc_eaw"
+            assert v.item_type == "word"
     finally:
-        app.dependency_overrides.pop(get_optional_user_id, None)
+        app.dependency_overrides.pop(get_current_user_id_optional, None)
 
 
 def test_phonetic_anonymous_still_returns_ipa_no_vocab():
-    app.dependency_overrides[get_optional_user_id] = lambda: None
+    app.dependency_overrides[get_current_user_id_optional] = lambda: None
     try:
         body = {"text": "office", "source_type": "bbc_eaw", "source_ref": "ep-12", "item_type": "word"}
         resp = client.post("/practice/explain/phonetic", json=body)
@@ -851,15 +902,15 @@ def test_phonetic_anonymous_still_returns_ipa_no_vocab():
             cnt = s.query(Vocabulary).filter_by(source_text="office").count()
             assert cnt == 0
     finally:
-        app.dependency_overrides.pop(get_optional_user_id, None)
+        app.dependency_overrides.pop(get_current_user_id_optional, None)
 ```
 
-- [ ] **Step 4: Run test to verify it fails**
+- [ ] **Step 3: Run test to verify it fails**
 
 Run: `pytest tests/test_v08_phonetic_autosave.py -v`
-Expected: 422（schema 不接受 source_type/source_ref/item_type）或匿名行为不正确
+Expected: 第一个 test 失败（vocabulary 中无记录），因为 phonetic 端点尚未注入 user_id 也未触发入库
 
-- [ ] **Step 5: Modify phonetic endpoint**
+- [ ] **Step 4: Modify phonetic endpoint**
 
 替换 `app/routers/practice.py:350-359` 为：
 
@@ -868,19 +919,21 @@ class QuickPhoneticRequest(BaseModel):
     text: str
     source_type: Optional[str] = None
     source_ref: Optional[str] = None
-    item_type: Optional[str] = None
+    item_type: Optional[str] = None         # 前端推断后传入，避免与后续 explain 不一致
 
 
 @router.post("/practice/explain/phonetic")
 async def practice_explain_phonetic(
     req: QuickPhoneticRequest,
-    user_id: Optional[str] = Depends(get_optional_user_id),
+    user_id: Optional[str] = Depends(get_current_user_id_optional),
 ):
     """单词 IPA 本地秒出；未知词 phonetic=null，前端退回等 LLM 结果。"""
     if not req.text or not req.text.strip():
         raise HTTPException(400, "text is required")
     # 登录态 + 带 source 时占位入库；phonetic 不产生完整解读，不回填
     if user_id and req.source_type:
+        # 注意：必须用前端传来的 item_type；前端在 ExplanationModal 入口处一次推断。
+        # 若前端没传，按 word kind 推断（多 token 视作 phrase），与后续 explain 行为一致。
         item_type = _resolve_item_type(req.text, req.item_type, "word")
         _auto_save_vocab(
             user_id=user_id, text=req.text, context=None,
@@ -890,17 +943,17 @@ async def practice_explain_phonetic(
     return {"phonetic": quick_phonetic(req.text)}
 ```
 
-确保 `get_optional_user_id` 已 import：在 import 块加 `from app.routers.auth import get_current_user_id, get_optional_user_id`（或现有 optional 依赖名）。
+确保 `get_current_user_id_optional` 已 import：在 import 块加 `from app.routers.auth import get_current_user_id, get_current_user_id_optional`。
 
-- [ ] **Step 6: Run tests**
+- [ ] **Step 5: Run tests**
 
 Run: `pytest tests/test_v08_phonetic_autosave.py -v`
 Expected: 2 passed
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add app/routers/auth.py app/routers/practice.py tests/test_v08_phonetic_autosave.py
+git add app/routers/practice.py tests/test_v08_phonetic_autosave.py
 git commit -m "feat(explain): phonetic endpoint auto-saves vocab when logged-in"
 ```
 
@@ -922,13 +975,20 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session as OrmSession
-from app.main import app
+from main import app  # 项目入口在仓库根目录 main.py，不是 app/main.py
 from app.models.db import engine, Vocabulary, init_db
 from app.routers.auth import get_current_user_id
 
 USER = "test_user_v08_articles_task8"
-app.dependency_overrides[get_current_user_id] = lambda: USER
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _override_user():
+    """fixture-scoped dependency override，避免跨测试串用户。"""
+    app.dependency_overrides[get_current_user_id] = lambda: USER
+    yield
+    app.dependency_overrides.pop(get_current_user_id, None)
 
 
 @pytest.fixture(autouse=True)
@@ -1061,7 +1121,10 @@ async def practice_explain_stream(
             yield json.dumps({"_error": "解读服务暂时不可用"}, ensure_ascii=False) + "\n"
             return
 
-        # 流末尾回填（_done 事件已 yield 过；这里只更新 DB）
+        # 流末尾回填（best-effort）：
+        # · 如果客户端中途断开，Starlette 抛 ClientDisconnect → generator 不会到这里
+        #   → pending 留存，由前端 /vocabulary 重拉路径兜底（这是 by design）
+        # · refresh=True 时 force-overwrite 已有 explanation_json
         if req.source_type and collected:
             try:
                 _vocab_service.update_explanation(
@@ -1069,6 +1132,7 @@ async def practice_explain_stream(
                     source_text=req.text,
                     source_ref=req.source_ref,
                     explanation_json=json.dumps(collected, ensure_ascii=False),
+                    force=req.refresh,
                 )
             except Exception as e:
                 logger.warning("vocab_stream_backfill_failed user_id=%s err=%s", user_id, e)
@@ -1107,13 +1171,20 @@ git commit -m "feat(explain): /practice/explain/stream auto-saves + backfills on
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session as OrmSession
-from app.main import app
+from main import app  # 项目入口在仓库根目录 main.py，不是 app/main.py
 from app.models.db import engine, Vocabulary, init_db
 from app.routers.auth import get_current_user_id
 
 USER = "test_user_v08_articles_task9"
-app.dependency_overrides[get_current_user_id] = lambda: USER
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _override_user():
+    """fixture-scoped dependency override，避免跨测试串用户。"""
+    app.dependency_overrides[get_current_user_id] = lambda: USER
+    yield
+    app.dependency_overrides.pop(get_current_user_id, None)
 
 
 @pytest.fixture(autouse=True)
@@ -1154,64 +1225,155 @@ def test_articles_phonetic_works():
 def test_practice_phonetic_alias_works():
     resp = client.post("/practice/explain/phonetic", json={"text": "office"})
     assert resp.status_code == 200
+
+
+def test_articles_due_works():
+    """非 explain 端点也得跟着改名（不只是 explain 这 3 个）。"""
+    resp = client.get("/articles/due")
+    # 200 或 401 都算路由挂上；404 = 没挂上
+    assert resp.status_code != 404
+
+
+def test_articles_subtitles_works():
+    """sample 抽查另一组端点。"""
+    resp = client.post("/articles/subtitles", json={"video_url": ""})
+    assert resp.status_code != 404
+
+
+def test_openapi_no_duplicate_practice_paths():
+    """alias 注册需 include_in_schema=False，防止 OpenAPI 出现两套同名接口。"""
+    schema = client.get("/openapi.json").json()
+    paths = list(schema.get("paths", {}).keys())
+    practice_paths = [p for p in paths if p.startswith("/practice")]
+    assert practice_paths == [], f"OpenAPI 不应暴露 /practice/* 别名: {practice_paths}"
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_v08_route_alias.py -v`
-Expected: `/articles/explain` 都 404（路由未挂）
+Expected: `/articles/*` 全部 404（路由未挂）
 
-- [ ] **Step 3: Rename file**
+- [ ] **Step 3: Rename router file**
 
 ```bash
 git mv app/routers/practice.py app/routers/articles.py
 ```
 
-- [ ] **Step 4: Strip `/practice` prefix from in-file decorators**
+- [ ] **Step 4: Strip `/practice` prefix from ALL in-file decorators**
 
-打开 `app/routers/articles.py`，把所有内部装饰器路径中的 `/practice` 前缀剥离。具体改动（使用编辑器查找/替换）：
+`practice.py` 有 13 个端点（用前面 Task 改完的版本为准），不只 explain 三个。先 grep 列出全部：
+
+```bash
+grep -nE '^@router\.' app/routers/articles.py
+```
+
+预期看到类似：
+
+```
+@router.post("/practice/subtitles")
+@router.get("/practice/subtitles")
+@router.get("/practice/subtitles/{source_id}")
+@router.post("/practice/sources/import", status_code=201)
+@router.post("/practice/cards", status_code=201)
+@router.get("/practice/cards")
+@router.post("/practice/cards/{card_id}/review")
+@router.delete("/practice/cards/{card_id}")
+@router.get("/practice/due")
+@router.post("/practice/explain")
+@router.post("/practice/explain/phonetic")
+@router.post("/practice/explain/stream")
+@router.post("/practice/tts")
+```
+
+**全部**把装饰器内的 `/practice` 前缀剥掉（保留后续路径段）。例：
 
 | 旧 | 新 |
 |---|---|
+| `@router.post("/practice/subtitles")` | `@router.post("/subtitles")` |
+| `@router.get("/practice/subtitles/{source_id}")` | `@router.get("/subtitles/{source_id}")` |
+| `@router.post("/practice/sources/import", status_code=201)` | `@router.post("/sources/import", status_code=201)` |
+| `@router.post("/practice/cards", status_code=201)` | `@router.post("/cards", status_code=201)` |
+| `@router.get("/practice/cards")` | `@router.get("/cards")` |
+| `@router.post("/practice/cards/{card_id}/review")` | `@router.post("/cards/{card_id}/review")` |
+| `@router.delete("/practice/cards/{card_id}")` | `@router.delete("/cards/{card_id}")` |
+| `@router.get("/practice/due")` | `@router.get("/due")` |
 | `@router.post("/practice/explain")` | `@router.post("/explain")` |
 | `@router.post("/practice/explain/phonetic")` | `@router.post("/explain/phonetic")` |
 | `@router.post("/practice/explain/stream")` | `@router.post("/explain/stream")` |
-| `@router.get("/practice/due-cards")`（如有） | `@router.get("/due-cards")` |
-| `@router.post("/practice/tts")`（如有） | `@router.post("/tts")` |
+| `@router.post("/practice/tts")` | `@router.post("/tts")` |
 
-> 全文搜索 `@router.(get\|post\|put\|delete)\("/practice` 应当 0 结果。
+> 验证：`grep -nE '^@router\..*"/practice' app/routers/articles.py` 应为 0 结果。
 
-- [ ] **Step 5: Update main.py registration**
+- [ ] **Step 5: Update main.py registration（项目根目录的 main.py，不是 app/main.py）**
 
-修改 `app/main.py` 中的 router import 与注册（具体位置请 grep 定位 `practice_router` 或 `practice`）：
+修改根目录 `main.py`：
+
+```python
+# 旧（约 line 14）
+from app.routers.practice import router as practice_router
+# 新
+from app.routers.articles import router as articles_router
+
+# 旧（约 line 91）
+app.include_router(practice_router)
+# 新
+app.include_router(articles_router, prefix="/articles")
+app.include_router(articles_router, prefix="/practice", include_in_schema=False)
+# ↑ alias，include_in_schema=False 防止 OpenAPI 重复条目；1–2 个版本后移除
+```
+
+并把 `API_PREFIXES`（main.py:38）补 `"articles/"`：
 
 ```python
 # 旧
-from app.routers.practice import router as practice_router
-app.include_router(practice_router)
-
-# 新
-from app.routers.articles import router as articles_router
-app.include_router(articles_router, prefix="/articles")
-app.include_router(articles_router, prefix="/practice")  # alias，1–2 个版本后移除
+API_PREFIXES = (
+    "api/",
+    ...
+    "practice/",
+    ...
+)
+# 新（保留 "practice/"，新增 "articles/"）
+API_PREFIXES = (
+    "api/",
+    ...
+    "practice/",
+    "articles/",
+    ...
+)
 ```
 
-- [ ] **Step 6: Update existing test imports referencing app.routers.practice**
+- [ ] **Step 6: Update existing imports referencing app.routers.practice**
 
-Run: `grep -rn "from app.routers.practice\|app.routers.practice" tests/ app/`
+Run: `grep -rn "from app.routers.practice\|app\.routers\.practice" tests/ app/ frontend/ 2>/dev/null`
 
-把 `app.routers.practice` 全部替换为 `app.routers.articles`（包括前面 Task 5–8 刚创建的测试中的 `import app.routers.practice as pr`）。
+把 `app.routers.practice` 全部替换为 `app.routers.articles`（包括前面 Task 5–8 刚创建的测试中的 `import app.routers.practice as pr`）。注意：
+
+- 这一步要**逐个文件 Edit**，不要全局 sed（避免改到字符串/注释里的偶然匹配）
+- 也要 grep `app/routers/practice` 看是否有 fixture/conftest 引用文件路径
 
 - [ ] **Step 7: Run all V0.8 tests**
 
-Run: `pytest tests/test_v08_*.py tests/test_v08_route_alias.py -v`
-Expected: 全部 passed
+Run: `pytest tests/test_v08_*.py -v`
+Expected: 全部 passed（包括 OpenAPI 不重复的断言）
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 8: Manual sanity check**
+
+启动 uvicorn 跑两条 curl：
+
+```bash
+curl -s http://localhost:8000/articles/explain/phonetic -H 'Content-Type: application/json' -d '{"text":"office"}'
+curl -s http://localhost:8000/practice/explain/phonetic -H 'Content-Type: application/json' -d '{"text":"office"}'
+```
+
+两个应该返回相同内容。
+
+访问 `http://localhost:8000/openapi.json | jq '.paths | keys[] | select(startswith("/practice"))'` 应为空。
+
+- [ ] **Step 9: Commit**
 
 ```bash
 git add -A
-git commit -m "feat(articles): rename practice→articles router, keep /practice alias"
+git commit -m "feat(articles): rename practice→articles router (all 13 endpoints), keep /practice alias hidden from OpenAPI"
 ```
 
 ---
@@ -1284,13 +1446,21 @@ cd ..
 },
 ```
 
-- [ ] **Step 4: Find and update API.PRACTICE references**
+- [ ] **Step 4: Add API.ARTICLES constant in frontend/src/config.js**
 
-Run: `grep -rn "API.PRACTICE\|'/practice'" frontend/src/ | grep -v node_modules`
+`API` 常量定义在 `frontend/src/config.js`（L6 起的 `export const API = {...}`）。打开后追加一条：
 
-定位到 `frontend/src/api/` 或 `frontend/src/utils/` 中定义 `API.PRACTICE` 的文件，新增 `API.ARTICLES = '/articles'`；保留 `API.PRACTICE` 不变（后端仍接受 /practice/* alias，前端可逐步迁移）。
+```javascript
+export const API = {
+  BASE: '',
+  ...
+  PRACTICE: '/practice',
+  ARTICLES: '/articles',  // V0.8：文章学习模块新名；后端 /practice/* alias 仍在
+  ...
+}
+```
 
-下个 task 起新调用一律用 `API.ARTICLES`；旧 `API.PRACTICE` 调用维持原样（无需在本 task 全量替换）。
+保留 `PRACTICE`（后端 alias 兜底，老调用不需要立刻全改）；下面所有 task 的新代码一律用 `API.ARTICLES`。
 
 - [ ] **Step 5: Run frontend test suite**
 
@@ -1358,14 +1528,32 @@ git commit -m "feat(frontend): rebrand practice→文章学习 across views & na
 **Files:**
 - Modify: `frontend/src/components/ExplanationModal.vue`
 
-- [ ] **Step 1: Update fetchWord (single-shot explain) body**
+- [ ] **Step 1: 在 ExplanationModal.vue 入口处一次性推断 `item_type`**
+
+⚠️ Critical 修复点（C5）：phonetic 与 explain 调用**必须共用同一个 item_type**，否则同一短语先 phonetic（写成 word）后 explain（应该写成 phrase）会让 vocabulary 永久错存为 word（save_item 命中已存在不更新字段）。
+
+在 `frontend/src/components/ExplanationModal.vue` 的 `<script setup>` 顶部、`fetchWord` / `fetchSentence` 共用范围内，加：
+
+```javascript
+import { computed } from 'vue'
+
+// item_type 全组件一致：word 单 token = word；word 多 token = phrase；句子级 = sentence
+const inferredItemType = computed(() => {
+  if (!props.target?.content) return 'word'
+  if (props.target.type === 'word') {
+    const tokens = props.target.content.trim().split(/\s+/)
+    return tokens.length === 1 ? 'word' : 'phrase'
+  }
+  return 'sentence'
+})
+```
+
+- [ ] **Step 2: Update fetchWord (single-shot explain) body**
 
 定位 `frontend/src/components/ExplanationModal.vue:329`（`authFetchJson(\`${API.PRACTICE}/explain\`, ...)`），替换调用为：
 
 ```javascript
 const { source_type, source_ref } = deriveVocabSource()
-const tokens = props.target.content.trim().split(/\s+/)
-const item_type = tokens.length === 1 ? 'word' : 'phrase'
 const resp = await authFetchJson(`${API.ARTICLES}/explain`, {
   text: props.target.content,
   kind: 'word',
@@ -1373,13 +1561,11 @@ const resp = await authFetchJson(`${API.ARTICLES}/explain`, {
   refresh,
   source_type: source_type || null,
   source_ref: source_ref || null,
-  item_type,
+  item_type: inferredItemType.value,  // ← 与 phonetic 共用
 })
 ```
 
-(同时 phonetic 请求也补一下 source 字段:)
-
-定位 `frontend/src/components/ExplanationModal.vue:318`，替换为：
+phonetic 请求（约 L318）：
 
 ```javascript
 const { source_type, source_ref } = deriveVocabSource()
@@ -1387,30 +1573,31 @@ const p = await authFetchJson(`${API.ARTICLES}/explain/phonetic`, {
   text: props.target.content,
   source_type: source_type || null,
   source_ref: source_ref || null,
-  item_type: 'word',
+  item_type: inferredItemType.value,  // ← 与 explain 共用（不再固定 'word'）
 })
 ```
 
-- [ ] **Step 2: Update fetchSentence (stream) body**
+- [ ] **Step 3: Update fetchSentence (stream) body**
 
 定位 L378 附近的 sseStream 调用，替换为：
 
 ```javascript
+const { source_type, source_ref } = deriveVocabSource()
 await sseStream(
   `${API.ARTICLES}/explain/stream`,
   {
     text: props.target.content,
     refresh,
-    source_type: deriveVocabSource().source_type || null,
-    source_ref: deriveVocabSource().source_ref || null,
-    item_type: 'sentence',
+    source_type: source_type || null,
+    source_ref: source_ref || null,
+    item_type: inferredItemType.value,  // sentence
     context: props.target.sentence || '',
   },
   /* ... 其余配置不变 ... */
 )
 ```
 
-- [ ] **Step 3: Remove manual saveToVocab function & UI**
+- [ ] **Step 4: Remove manual saveToVocab function & UI**
 
 删除 `frontend/src/components/ExplanationModal.vue:265-313` 整个 `saveToVocab` 函数。
 
@@ -1418,23 +1605,29 @@ await sseStream(
 
 删除相关响应式状态：`starState`、`starError`。
 
-- [ ] **Step 4: Run frontend tests**
+- [ ] **Step 5: Update existing ExplanationModal.spec.js**
 
-Run:
+ExplanationModal.spec.js 现有断言可能验证"加入生词本按钮可见"或"saveToVocab 点击调 /vocab"。这次必改：
+
+- 删除任何关于"加入生词本按钮"的断言
+- 新增断言：mount 组件 + 触发 explain → mock 的 `authFetchJson` 收到的 body 含 `source_type` / `source_ref` / `item_type`，且 phonetic 与 explain 调用的 `item_type` 相同
+
+- [ ] **Step 6: Run frontend tests**
+
 ```bash
 cd frontend && npm run test -- ExplanationModal
 ```
-Expected: 与新组件契约一致。已有的 ExplanationModal.spec.js 如断言"加入生词本按钮可见"会失败 —— **本 task 必须更新该测试**：把"按钮存在 / 点击调 /vocab"的断言改为"调用 /articles/explain* 时请求 body 包含 source_type"。
+Expected: 全绿（更新后的断言）
 
-- [ ] **Step 5: Manual smoke test**
+- [ ] **Step 7: Manual smoke test**
 
-启动 dev server，登录后打开 `/articles`，点一个 BBC 单词与一个 BBC 句子。打开浏览器 DevTools Network，确认 `/articles/explain/phonetic`、`/articles/explain`、`/articles/explain/stream` 请求 body 中携带 `source_type: 'bbc_eaw'`、`source_ref: <slug>`、`item_type`。
+启动 dev server，登录后打开 `/articles`，点一个 BBC 单词与一个 BBC 句子。打开浏览器 DevTools Network，确认 `/articles/explain/phonetic`、`/articles/explain`、`/articles/explain/stream` 请求 body 中携带 `source_type: 'bbc_eaw'`、`source_ref: <slug>`、`item_type`，且 phonetic 与 explain 的 `item_type` 一致。
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add -A
-git commit -m "feat(frontend): explain requests carry source fields; remove manual saveToVocab"
+git commit -m "feat(frontend): explain requests carry source fields; phonetic & explain share inferred item_type; remove manual saveToVocab"
 ```
 
 ---
@@ -1454,7 +1647,7 @@ git commit -m "feat(frontend): explain requests carry source fields; remove manu
   <div class="vocab-page">
     <header class="vocab-header">
       <h1>我的生词本</h1>
-      <span class="vocab-count">共 {{ count }} 条</span>
+      <span class="vocab-count">已加载 {{ items.length }} 条</span>
     </header>
 
     <nav class="tag-chips">
@@ -1496,8 +1689,10 @@ git commit -m "feat(frontend): explain requests carry source fields; remove manu
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { authFetchJson } from '@/utils/api'
-import { API } from '@/api/endpoints'  // 与现有 API const 路径对齐；若不同请按本仓库实际调整
+import { useAuthFetch, getErrorMessage } from '@/composables/useAuthFetch'
+import { API } from '@/config'
+
+const { authFetchJson } = useAuthFetch()
 
 const tabs = [
   { value: '', label: '全部' },
@@ -1507,7 +1702,6 @@ const tabs = [
 
 const currentTag = ref('')
 const items = ref([])
-const count = ref(0)
 const loading = ref(false)
 const expandedId = ref(null)
 const offset = ref(0)
@@ -1544,11 +1738,15 @@ async function fetchList(reset = false) {
   })
   if (currentTag.value) params.set('source_type', currentTag.value)
   try {
-    const data = await authFetchJson(`${API.VOCAB}?${params}`, null, { method: 'GET' })
+    // useAuthFetch 的 authFetchJson 是 (url, body?, options?) → body 为 null/undefined 走 GET。
+    // 注意：当前 /vocab 接口 `count` 只是当前页数量，不是全量总数；UI 上故以 items.length 展示「已加载 N 条」。
+    // 若未来要显示全量总数，应在后端 `list_items` 加 count 查询，并在 API 返回 `total` 字段。
+    const data = await authFetchJson(`${API.VOCAB}?${params}`)
     items.value = reset ? data.items : [...items.value, ...data.items]
-    count.value = data.count
     hasMore.value = data.items.length === PAGE_SIZE
     offset.value += data.items.length
+  } catch (err) {
+    console.error('vocab list failed:', getErrorMessage(err, '加载失败'))
   } finally {
     loading.value = false
   }
@@ -1592,7 +1790,7 @@ onMounted(() => fetchList(true))
 </style>
 ```
 
-> ⚠️ `API.VOCAB` / `API.ARTICLES` / endpoint 文件路径以仓库实际为准；查找方式 `grep -rn "VOCAB\s*[:=]" frontend/src/`。
+> 上面代码使用的 import 都已确认存在：`@/composables/useAuthFetch`（含 `useAuthFetch`、`getErrorMessage`、`authFetchJson(url, body?, options?)`）和 `@/config`（含 `API.VOCAB` / `API.ARTICLES`，后者由 Task 10 新增）。**不要**用 `@/utils/api` / `@/api/endpoints` 这些路径，它们不存在。
 
 - [ ] **Step 2: Navigation entry**
 
@@ -1757,7 +1955,11 @@ async function fetchPending(item) {
 }
 ```
 
-`sseStream` 与 `authFetchJson` 的 import 与 ExplanationModal 一致 —— 查找现有 import 路径并复用。
+`authFetchJson` 已通过 Task 13 顶部的 `useAuthFetch()` 得到。`sseStream` 在仓库的 composable 中：`import { sseStream } from '@/composables/useSSE'`（参考 `frontend/src/composables/useSSE.js`）。一并在 Vocabulary.vue 顶部 import：
+
+```javascript
+import { sseStream } from '@/composables/useSSE'
+```
 
 - [ ] **Step 2: Update template for error state**
 
@@ -1891,8 +2093,16 @@ git commit -m "refactor(translate): remove embedded vocabulary panel (moved to /
    - 唯一键 `(user_id, source_text, source_ref)` 命中 → 复活已删除条目，否则保持现状
    - 写入失败仅 `logger.warning`，不影响后续解读返回
 2. 调用 explain_service 拿解读结果（缓存命中或流式）
-3. 解读完成 → 调 `vocab_service.update_explanation()` 回填 `explanation_json`
-   - 仅在原值为 NULL 时填入（保护用户手动设置）
+3. 解读完成 → 调 `vocab_service.update_explanation(..., force=req.refresh)` 回填 `explanation_json`
+   - `force=False`（默认）：仅在原值为 NULL 时填入
+   - `force=True`（用户带 refresh）：强制覆盖
+
+## 可靠性边界（best-effort）
+
+- **入口占位写入**：与前端生命周期解耦，地铁断网/切走依然有 pending 记录
+- **流末尾回填**：耦合在 generator 末尾，**best-effort**。客户端在流式过程中断开 → Starlette 抛 `ClientDisconnect` → generator 未跑到末尾 → 回填不执行
+- **断流恢复路径**：pending 留存 → 用户从 `/vocabulary` 点开条目 → 前端再次调 `/articles/explain` → 这次客户端正常消费完整响应 → 后端回填
+- 不引入 background task / Celery：与本项目规模匹配，少做不少错
 
 ## 数据语义
 
@@ -1939,8 +2149,8 @@ Expected: 全绿。失败同上。
 启动：
 
 ```bash
-# 终端 1
-source venv/bin/activate && uvicorn app.main:app --reload
+# 终端 1（项目入口在根目录 main.py，不是 app/main.py）
+source venv/bin/activate && uvicorn main:app --reload
 
 # 终端 2
 cd frontend && npm run dev
@@ -1958,6 +2168,10 @@ cd frontend && npm run dev
 - [ ] 切换 chip 「翻译收藏」 → 仅显示 translate
 - [ ] 切换 chip 「全部」 → 全显示
 - [ ] 在 `/articles` 点一个仅触发 phonetic 的词（关闭弹窗，不等 LLM）→ 切到 `/vocabulary` → 该条目为 pending（⚠ 解读生成中）→ 点开 → 点"生成解读" → 自动拉新内容并展开
+- [ ] 同一短语先 phonetic 后 explain（在文章页连贯操作）→ 切到 `/vocabulary` 看条目的 `item_type`，应为 `phrase`（**不是** `word`，验证 C5 修复）
+- [ ] 在 ExplanationModal 点击「重新生成」（触发 `refresh=true`）→ 等流式跑完 → 切到 `/vocabulary` 看条目展开的 explanation 是新内容（验证 C2 force-overwrite）
+- [ ] 流式生成进行到一半时关掉浏览器标签 → 切回 `/vocabulary` → 该条目仍存在且为 pending（验证 C1 best-effort + pending 留存）→ 点开重拉，重新生成
+- [ ] OpenAPI 文档 `http://localhost:8000/docs` 中**没有** `/practice/*` 接口（被 `include_in_schema=False` 隐藏）
 - [ ] `/translate` 页面不再显示生词本面板，但翻译后仍可收藏到生词本，收藏后 `/vocabulary` 能看到
 - [ ] 主导航/菜单看到"生词本"入口卡片
 - [ ] 旧的 ExplanationModal "★ 加入生词本"按钮不再出现
@@ -2021,5 +2235,27 @@ EOF
 **已知风险与跟进项：**
 
 1. `tests/test_v07_*.py` 或更早测试可能引用 `app.routers.practice` —— Task 9 Step 6 grep 替换处理
-2. `frontend/src/components/__tests__/ExplanationModal.spec.js` 现有断言可能验证"加入生词本按钮存在" —— Task 12 Step 4 显式更新
+2. `frontend/src/components/__tests__/ExplanationModal.spec.js` 现有断言可能验证"加入生词本按钮存在" —— Task 12 Step 5 显式更新
 3. `API.PRACTICE` 在前端可能在多处定义，Task 10 仅引入 `API.ARTICLES`，不一刀切替换旧引用，让 backend alias 兜底
+4. **流末尾回填是 best-effort**：客户端在流式过程中断开 → generator 不会跑到末尾 → 回填不执行。这是 by design（spec §2 已明确），由 Task 15 的 pending 重拉路径兜底；不引入 background task 复杂度
+
+---
+
+## Revision History
+
+**2026-05-19 (round 1, post-codex-review)** — 应用 codex 评审到 spec + plan：
+
+- **C1**：澄清流末尾回填是 best-effort（spec §2 关键设计点 + Task 8 注释 + flow 文档「可靠性边界」段 + Task 18 验收 checklist 新增断流场景）。基于产品决策（不引入 background task）保持架构 V1
+- **C2**：`update_explanation` 加 `force=False` 参数（Task 1）；`/articles/explain` 同步路径回填带 `force=req.refresh`（Task 6）；流式同样（Task 8）；测试覆盖 force 分支（Task 1 + Task 6）
+- **C3**：Task 9 列全 practice.py 的 13 个端点（不只 explain 3 个），剥前缀策略说明完整化，加 OpenAPI 不重复断言
+- **C4**：全文 `from app.main import app` → `from main import app`；`app/main.py` → 根目录 `main.py`
+- **C5**：spec §2 加 "save_item 命中不更新字段" 隐患说明；Task 12 前端在 ExplanationModal 顶部一次性推断 `inferredItemType`，phonetic 与 explain 共用
+- **I1**：Task 4 / 7 schema 测试改为直接实例化 model 断言字段（不用 422，Pydantic 默认 ignore extra）
+- **I2**：Task 9 alias router 加 `include_in_schema=False`，避免 OpenAPI 重复条目
+- **I3**：Task 9 顺手把 `main.py` 的 `API_PREFIXES` 加 `"articles/"`
+- **I4**：所有 `app.dependency_overrides` 改 fixture-scoped 自动清理
+- **I5**：Task 7 复用现有 `get_current_user_id_optional`（auth.py:73），不新建重复函数
+- **I6**：Vocabulary.vue 计数文案改 "已加载 N 条"（避免 `count` 语义歧义）
+- **I7**：前端 import 路径修正为 `@/composables/useAuthFetch` + `@/config`（`@/utils/api` / `@/api/endpoints` 不存在）
+
+Codex 评审原文：`.omc/artifacts/ask/codex-review-spec-plan-2026-05-19.md`
