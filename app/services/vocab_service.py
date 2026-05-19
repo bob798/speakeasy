@@ -154,6 +154,7 @@ def list_items(
     user_id: str,
     item_type: Optional[str] = None,
     source_ref: Optional[str] = None,
+    source_type: Optional[str] = None,
     due_only: bool = False,
     limit: int = 50,
     offset: int = 0,
@@ -164,6 +165,8 @@ def list_items(
             q = q.filter_by(item_type=item_type)
         if source_ref:
             q = q.filter_by(source_ref=source_ref)
+        if source_type:
+            q = q.filter_by(source_type=source_type)
         rows = q.order_by(Vocabulary.created_at.desc()).all()
 
         items = [_to_dict(v) for v in rows]
