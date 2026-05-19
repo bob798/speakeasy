@@ -28,6 +28,7 @@ from app.services.tts_service import multi_tts
 from app.models.db import engine, SubtitleSource
 from sqlalchemy.orm import Session as OrmSession
 from app.logger import get_logger
+from app.services import vocab_service as _vocab_service
 
 logger = get_logger("practice")
 
@@ -326,6 +327,60 @@ async def get_due_cards(
 ):
     cards = get_due_pronunciation_cards(user_id, limit=limit)
     return {"cards": cards, "count": len(cards)}
+
+
+def _resolve_item_type(text: str, explicit: Optional[str], kind: str) -> str:
+    """优先显式 item_type，否则按 kind 推断；word 多 token 视作 phrase。"""
+    if explicit in ("word", "phrase", "sentence"):
+        return explicit
+    if kind == "word":
+        tokens = (text or "").strip().split()
+        return "word" if len(tokens) <= 1 else "phrase"
+    return "sentence"
+
+
+def _auto_save_vocab(
+    user_id: Optional[str],
+    text: str,
+    context: Optional[str],
+    source_type: Optional[str],
+    source_ref: Optional[str],
+    item_type: str,
+) -> bool:
+    """解读发起时占位写入 vocabulary（explanation_json=None）。
+
+    跳过条件：未登录 / 未提供 source_type / text 为空。
+    写入失败：logger.warning，绝不向上抛。
+
+    注：save_item 命中已存在记录时不更新任何字段（vocab_service.py L77–83）。
+    这意味着同一 (user_id, source_text, source_ref) 的 item_type 由**第一次**调用决定，
+    后续调用即使 item_type 不同也不会更新。前端必须确保 phonetic 与后续 explain 使用一致的 item_type。
+    """
+    if not user_id or not source_type or not text or not text.strip():
+        return False
+    try:
+        _vocab_service.save_item(
+            user_id=user_id,
+            source_text=text,
+            translated_text="",
+            direction="en2zh",
+            context=context or None,
+            item_type=item_type,
+            source_type=source_type,
+            source_ref=source_ref,
+            explanation_json=None,
+        )
+        logger.info(
+            "vocab_auto_save_attempt user_id=%s text=%s source_type=%s source_ref=%s item_type=%s",
+            user_id, text[:40], source_type, source_ref, item_type,
+        )
+        return True
+    except Exception as e:
+        logger.warning(
+            "vocab_auto_save_failed user_id=%s text=%s err=%s",
+            user_id, text[:40], e,
+        )
+        return False
 
 
 # ── 句子/单词解读 ─────────────────────────────────────────
