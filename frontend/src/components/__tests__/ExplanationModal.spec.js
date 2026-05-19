@@ -47,7 +47,7 @@ vi.mock('@/composables/useScrollLock', () => ({
 }))
 
 vi.mock('@/config', () => ({
-  API: { PRACTICE: '/practice' },
+  API: { PRACTICE: '/practice', ARTICLES: '/articles', VOCAB: '/vocab' },
 }))
 
 // AskPanel 是 child component；测试不关心其内部，stub 掉
@@ -195,5 +195,80 @@ describe('ExplanationModal · IPA 🎧 按钮', () => {
     const body = JSON.parse(authFetchMock.mock.calls[0][1].body)
     expect(body.text).toBe('give me')
     expect(body.phoneme_map).toEqual({ 'give me': 'ɡɪmi' })
+  })
+
+  it('word: explain calls use /articles/* and carry source/item_type fields', async () => {
+    const wrapper = await mountModal({
+      target: {
+        type: 'word',
+        content: 'schedule',
+        context: { vocab_source_type: 'article', vocab_source_ref: 'ep42' },
+      },
+      dataPatch: { phonetic: 'ˈskɛdʒuːl' },
+    })
+    await flushPromises()
+
+    // authFetchJson called twice: phonetic + explain
+    expect(authFetchJsonMock).toHaveBeenCalledTimes(2)
+    const [phoneticUrl, phoneticBody] = authFetchJsonMock.mock.calls[0]
+    const [explainUrl, explainBody] = authFetchJsonMock.mock.calls[1]
+
+    expect(phoneticUrl).toBe('/articles/explain/phonetic')
+    expect(phoneticBody.source_type).toBe('article')
+    expect(phoneticBody.source_ref).toBe('ep42')
+    expect(phoneticBody.item_type).toBe('word')
+
+    expect(explainUrl).toBe('/articles/explain')
+    expect(explainBody.source_type).toBe('article')
+    expect(explainBody.source_ref).toBe('ep42')
+    expect(explainBody.item_type).toBe('word')
+
+    // phonetic and explain share the same item_type
+    expect(phoneticBody.item_type).toBe(explainBody.item_type)
+  })
+
+  it('sentence: stream call uses /articles/explain/stream and carries source/item_type fields', async () => {
+    // Mount manually to control sseStreamMock capture (mountModal helper overwrites it)
+    let capturedUrl = ''
+    let capturedBody = {}
+    sseStreamMock.mockImplementation(async (url, body, opts) => {
+      capturedUrl = url
+      capturedBody = body
+      opts?.onEvent?.({
+        _cached: true,
+        explanation: { meaning: 'help', grammar: '', phrases: [], liaison: [], current_level_points: [], next_level_points: [], narration: '' },
+      })
+    })
+
+    const target = {
+      type: 'sentence',
+      content: 'give me a hand',
+      context: { vocab_source_type: 'article', vocab_source_ref: 'ep42' },
+    }
+    const wrapper = mount(ExplanationModal, {
+      props: { open: false, target },
+    })
+    await wrapper.setProps({ open: true })
+    await flushPromises()
+    await nextTick()
+
+    expect(capturedUrl).toBe('/articles/explain/stream')
+    expect(capturedBody.source_type).toBe('article')
+    expect(capturedBody.source_ref).toBe('ep42')
+    expect(capturedBody.item_type).toBe('sentence')
+  })
+
+  it('word phrase: item_type is "phrase" for multi-token word', async () => {
+    const wrapper = await mountModal({
+      target: { type: 'word', content: 'give up' },
+      dataPatch: { phonetic: '' },
+    })
+    await flushPromises()
+
+    expect(authFetchJsonMock).toHaveBeenCalledTimes(2)
+    const [, phoneticBody] = authFetchJsonMock.mock.calls[0]
+    const [, explainBody] = authFetchJsonMock.mock.calls[1]
+    expect(phoneticBody.item_type).toBe('phrase')
+    expect(explainBody.item_type).toBe('phrase')
   })
 })

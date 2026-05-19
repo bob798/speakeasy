@@ -111,6 +111,37 @@ graph LR
 
 ---
 
+## V0.8 架构变更说明（文字补充）
+
+> 以下变更未反映在上方 Mermaid 图（图维护于 V0.3.1，待后续版本统一刷新）。
+
+### 路由重命名
+
+- `PracticeRouter`（`/practice/*`）→ `ArticlesRouter`（`/articles/*`）
+- 旧 `/practice/*` 路由注册为 alias，保留 1–2 个版本后移除
+
+### 新增容器
+
+| 容器 | 路径 | 说明 |
+|---|---|---|
+| VocabService | `app/services/vocab_service.py` | vocabulary 写入/查询，含 auto-save + explanation 回填 |
+| VocabularyRouter | `/vocabulary` | 生词本独立页，支持 source_type 筛选 |
+
+### 新增数据流
+
+```
+ExplanationModal（前端）
+  → POST /articles/explain* （ArticlesRouter）
+       │
+       ├─ 1. _auto_save_vocab()  → SQLite vocabulary（explanation_json=NULL）
+       │
+       ├─ 2. explain_service.explain()
+       │
+       └─ 3. vocab_service.update_explanation()  → 回填 explanation_json
+```
+
+---
+
 ## 变更记录
 
 | 版本 | 变更内容 |
@@ -119,6 +150,11 @@ graph LR
 | V0.2a | 新增：STT / TTS 外部服务接入 |
 | V0.2b | 新增：ReviewRouter · ReviewService · MemoryService · grammar_cards 表 · session_reviews 表 |
 | V0.3.1 | 新增：SettingsRouter · SettingsService · VADRouter · VADService · user_settings 表 |
+| V0.4 | 新增：PracticeRouter（/practice/*）· PracticeService · SubtitleService · pronunciation_cards 表 · subtitle_sources 表 |
+| V0.5 | 新增：TranslateRouter（/translate/*）· TranslateService · vocabulary 表 |
+| V0.6 | 新增：AuthRouter · 用户账号系统 · JWT |
+| V0.7 | 新增：AskRouter（/ask/threads）· ExplainService · ask_threads / ask_messages 表 |
+| V0.8 | **路由重命名**：PracticeRouter → ArticlesRouter（/articles/*），/practice/* 保留为 alias；新增：VocabService（解读发起自动入库 vocabulary）· VocabularyRouter（/vocabulary 独立页，source_type 筛选）|
 
 ---
 
@@ -131,3 +167,4 @@ graph LR
 | 主对话   | [chat-flow.md](flows/chat-flow.md) | 消息处理、记忆注入、多模型路由 |
 | 用户设置 | [settings-flow.md](flows/settings-flow.md) | 语速·音色·激活方式保存与TTS集成 |
 | VAD检测  | [vad-flow.md](flows/vad-flow.md) | 实时语音检测、误触处理 |
+| 文章解读→生词自动入库 | [article-explain-vocab-flow.md](flows/article-explain-vocab-flow.md) | V0.8 解读发起占位写入 + 流末尾回填 vocabulary |

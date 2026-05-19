@@ -186,9 +186,16 @@ function maybeStartSequence() {
   startSequence()
 }
 
-// ── 收藏到生词本（V0.10）─────────────────────────────────────
-const starState = ref('idle')   // idle | saving | saved | error
-const starError = ref('')
+// V0.8: item_type 全组件一致：word 单 token = word；word 多 token = phrase；句子级 = sentence
+// 必须 phonetic 与 explain 共用同一个值，避免 save_item 命中不更新字段导致同一短语永久错存为 word
+const inferredItemType = computed(() => {
+  if (!props.target?.content) return 'word'
+  if (props.target.type === 'word') {
+    const tokens = props.target.content.trim().split(/\s+/)
+    return tokens.length === 1 ? 'word' : 'phrase'
+  }
+  return 'sentence'
+})
 
 function deriveVocabSource() {
   // 来源由父组件透传到 target.context；下面的 fallback 兼容老调用
@@ -258,65 +265,17 @@ function reset() {
   }
   error.value = ''
   activeTab.value = 'explain'
-  starState.value = 'idle'
-  starError.value = ''
-}
-
-async function saveToVocab() {
-  if (!props.target?.content || starState.value === 'saving') return
-  starState.value = 'saving'
-  starError.value = ''
-  const { source_type, source_ref } = deriveVocabSource()
-  // 拼一份解释 JSON（按 type 取相关字段）
-  const exp = data.value
-  const explanationPayload = props.target.type === 'word'
-    ? {
-        phonetic: exp.phonetic,
-        pos: exp.pos,
-        definitions: exp.definitions,
-        examples: exp.examples,
-        synonyms: exp.synonyms,
-        antonyms: exp.antonyms,
-      }
-    : {
-        meaning: exp.meaning,
-        grammar: exp.grammar,
-        phrases: exp.phrases,
-        liaison: exp.liaison,
-      }
-  // 句子用 sentence；word 单 token；多 token 视作 phrase
-  let item_type = 'sentence'
-  if (props.target.type === 'word') {
-    const tokens = props.target.content.trim().split(/\s+/)
-    item_type = tokens.length === 1 ? 'word' : 'phrase'
-  }
-  const translated = props.target.type === 'word'
-    ? (exp.definitions?.[0] || '')
-    : (exp.meaning || '')
-
-  try {
-    await authFetchJson(API.VOCAB, {
-      source_text: props.target.content,
-      translated_text: translated,
-      direction: 'en2zh',
-      context: props.target.sentence || '',
-      item_type,
-      source_type,
-      source_ref,
-      explanation_json: JSON.stringify(explanationPayload),
-    })
-    starState.value = 'saved'
-  } catch (err) {
-    starError.value = getErrorMessage(err, '收藏失败')
-    starState.value = 'error'
-  }
 }
 
 async function fetchWord(refresh = false) {
+  const { source_type, source_ref } = deriveVocabSource()
   // 1. IPA 快拿（本地秒出 · 不阻塞主请求）
   try {
-    const p = await authFetchJson(`${API.PRACTICE}/explain/phonetic`, {
+    const p = await authFetchJson(`${API.ARTICLES}/explain/phonetic`, {
       text: props.target.content,
+      source_type: source_type || null,
+      source_ref: source_ref || null,
+      item_type: inferredItemType.value,
     })
     data.value.phonetic = p.phonetic || ''
   } catch {
@@ -326,11 +285,14 @@ async function fetchWord(refresh = false) {
   // 2. 完整解读 · Word prompt 9 字段
   loading.value = true
   try {
-    const resp = await authFetchJson(`${API.PRACTICE}/explain`, {
+    const resp = await authFetchJson(`${API.ARTICLES}/explain`, {
       text: props.target.content,
       kind: 'word',
       context: props.target.sentence || '',
       refresh,
+      source_type: source_type || null,
+      source_ref: source_ref || null,
+      item_type: inferredItemType.value,
     })
     const exp = resp.explanation || {}
     Object.assign(data.value, {
@@ -373,10 +335,18 @@ function _scheduleUpdate(field, value) {
 
 async function fetchSentence(refresh = false) {
   loading.value = true
+  const { source_type, source_ref } = deriveVocabSource()
   try {
     await sseStream(
-      `${API.PRACTICE}/explain/stream`,
-      { text: props.target.content, refresh },
+      `${API.ARTICLES}/explain/stream`,
+      {
+        text: props.target.content,
+        refresh,
+        source_type: source_type || null,
+        source_ref: source_ref || null,
+        item_type: inferredItemType.value,
+        context: props.target.sentence || '',
+      },
       {
         mode: 'ndjson',
         onEvent: (evt) => {
@@ -662,17 +632,6 @@ onBeforeUnmount(() => {
             :title="autoPlayExplain ? '自动播放开启（点击关闭）' : '自动播放关闭（点击开启）'"
           >
             <span>{{ autoPlayExplain ? '🔊' : '🔇' }}</span>
-          </button>
-          <button
-            class="star-btn"
-            :class="{ saved: starState === 'saved', saving: starState === 'saving', error: starState === 'error' }"
-            @click="saveToVocab"
-            :disabled="!target?.content || starState === 'saving' || starState === 'saved'"
-            :aria-label="starState === 'saved' ? '已收藏' : '收藏到生词本'"
-            :title="starState === 'error' ? (starError || '收藏失败') : (starState === 'saved' ? '已加入生词本' : '收藏到生词本')"
-          >
-            <span v-if="starState === 'saving'" class="spin">⏳</span>
-            <span v-else>{{ starState === 'saved' ? '★' : '☆' }}</span>
           </button>
           <button
             class="play-btn"
@@ -1022,31 +981,6 @@ onBeforeUnmount(() => {
   border-radius: 999px;
 }
 
-.star-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  font-size: 18px;
-  color: var(--accent);
-  background: var(--accent-soft);
-  flex-shrink: 0;
-  transition: transform var(--duration) var(--ease), background var(--duration) var(--ease);
-}
-.star-btn:active {
-  transform: scale(0.92);
-}
-.star-btn.saved {
-  color: #c89b3c;
-  background: rgba(200, 155, 60, 0.16);
-  cursor: default;
-}
-.star-btn.error {
-  color: #b0403a;
-  background: rgba(176, 64, 58, 0.12);
-}
-.star-btn:disabled {
-  opacity: 0.6;
-}
 .play-btn {
   width: 36px;
   height: 36px;

@@ -145,13 +145,17 @@ onMounted(() => {
 
     <!-- 次级功能导航 -->
     <nav class="secondary">
-      <RouterLink to="/practice" class="sec-item">
+      <RouterLink to="/articles" class="sec-item">
         <span class="ico">🎧</span>
-        <span class="name">发音练习</span>
+        <span class="name">文章学习</span>
       </RouterLink>
       <RouterLink to="/translate" class="sec-item">
         <span class="ico">🌐</span>
         <span class="name">翻译 · 生词本</span>
+      </RouterLink>
+      <RouterLink to="/vocabulary" class="sec-item">
+        <span class="ico">📖</span>
+        <span class="name">生词本</span>
       </RouterLink>
       <RouterLink to="/polish" class="sec-item">
         <span class="ico">✍️</span>
@@ -368,7 +372,7 @@ textarea {
 .secondary {
   margin-top: auto;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: var(--space-2);
   padding-top: var(--space-3);
   border-top: 1px solid var(--border);

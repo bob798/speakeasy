@@ -101,7 +101,7 @@ speakeasy/
 | user_facts | V0.3 | LLM 提取的跨会话事实记忆 |
 | pronunciation_cards | V0.4 | FSRS 管理的发音练习卡片 |
 | subtitle_sources | V0.4 | B站字幕缓存 |
-| vocabulary | V0.5 | 翻译生词本收藏（软删除，无 FSRS） |
+| vocabulary | V0.5 | 翻译生词本收藏（软删除，无 FSRS）（V0.8 起 explain 接口发起即自动入库，explanation_json 由解读完成回填） |
 | ask_threads | V0.7 | 跨页面通用追问 thread（scope + ref_type/ref_id） |
 | ask_messages | V0.7 | 追问 thread 的消息列表 |
 | bbc_eaw_episodes | V0.7.x | BBC English at Work 67 集语料（共享，不绑 user_id），见 `docs/datasets/bbc_eaw.md` |
@@ -121,20 +121,25 @@ speakeasy/
 | `/memory/cards` | GET | V0.3 | 语法卡列表（active/pending） |
 | `/memory/cards/{id}` | DELETE | V0.3 | 软删除语法卡（status='deleted'） |
 | `/memory` | GET | V0.3 | 返回 memory.html 管理页面 |
-| `/practice/subtitles` | POST | V0.4 | B站字幕提取或手动文本解析 |
-| `/practice/cards` | POST | V0.4 | 批量创建发音练习卡片 |
-| `/practice/cards` | GET | V0.4 | 发音卡列表（支持分页/状态过滤） |
-| `/practice/cards/{id}/review` | POST | V0.4 | FSRS 评分更新 |
-| `/practice/cards/{id}` | DELETE | V0.4 | 软删除发音卡 |
-| `/practice/due` | GET | V0.4 | 获取到期复习卡 |
-| `/practice` | GET | V0.4 | 返回 practice.html 练习页面 |
+| `/articles/subtitles` | POST | V0.4 | B站字幕提取或手动文本解析 |
+| `/articles/sources/import` | POST | V0.4 | 外部内容导入 |
+| `/articles/cards` | POST | V0.4 | 批量创建发音练习卡片 |
+| `/articles/cards` | GET | V0.4 | 发音卡列表（支持分页/状态过滤） |
+| `/articles/cards/{id}/review` | POST | V0.4 | FSRS 评分更新 |
+| `/articles/cards/{id}` | DELETE | V0.4 | 软删除发音卡 |
+| `/articles/due` | GET | V0.4 | 获取到期复习卡 |
+| `/articles` | GET | V0.8 | 返回文章学习页（原 /practice，V0.8 起重命名） |
+| `/practice/*` | — | V0.4 | 旧路由保留为 alias，（旧 /practice/* 路由保留为 alias，1–2 个版本后移除） |
 | `/translate` | GET | V0.5 | 返回 translate.html 翻译页面 |
 | `/translate/text` | POST | V0.5 | 双向翻译（zh2en/en2zh），1000 字符上限 |
 | `/translate/vocabulary` | POST | V0.5 | 收藏译文到生词本 |
 | `/translate/vocabulary` | GET | V0.5 | 生词本列表（分页） |
 | `/translate/vocabulary/{id}` | DELETE | V0.5 | 软删除生词本条目 |
-| `/practice/explain/phonetic` | POST | V0.7 | 单词 IPA 本地秒出（eng-to-ipa） |
-| `/practice/explain/stream` | POST | V0.7 | 句子解读 NDJSON 流式（字段级渐进渲染） |
+| `/articles/explain/phonetic` | POST | V0.7 | 单词 IPA 本地秒出（eng-to-ipa） |
+| `/articles/explain/stream` | POST | V0.7 | 句子解读 NDJSON 流式（字段级渐进渲染）（V0.8 起：解读发起自动写入 vocabulary） |
+| `/articles/explain` | POST | V0.8 | 单次词/句解读，发起即自动写入 vocabulary |
+| `/articles/tts` | POST | V0.8 | 文章 TTS 语音合成 |
+| `/vocabulary` | GET | V0.8 | 生词本独立页（支持 source_type 过滤） |
 | `/ask/threads` | POST | V0.7 | 通用追问：新建 thread + 首轮问答 |
 | `/ask/threads/{id}/messages` | POST | V0.7 | 追问某 thread（带历史） |
 | `/ask/threads` | GET | V0.7 | 列出 thread（按 scope/ref_type/ref_id 过滤） |
@@ -239,7 +244,21 @@ push 到 main → GitHub Actions 自动触发
 
 > ⚠️ 此部分每次版本迭代后由 Human / Claude 更新
 
-### 当前版本：V0.7（已完成）
+### 当前版本：V0.8（开发中）
+
+**核心交付：**
+- /practice → /articles 路由重命名（"文章学习"模块）
+- 解读自动入库 vocabulary（占位 + 回填）
+- 独立 /vocabulary 页 + source_type 标签筛选
+- ExplanationModal 删除手动 saveToVocab，改由后端自动接管
+
+**保留 alias：** `/practice/*` 路由仍可访问，与 `/articles/*` 等价；将在后续版本移除。
+
+**关联 issue：** [#42 source_type 与表名重构为 article-* 通用语义](https://github.com/bob798/speakeasy/issues/42)（独立跟踪，不在 V0.8 范围）
+
+---
+
+### V0.7（已完成）
 
 **已完成版本功能：**
 ```
@@ -251,11 +270,6 @@ V0.4  ✅  发音练习 · B站字幕提取 · 录音对比 · FSRS 复习闭环
 V0.5  ✅  翻译 MVP：双向翻译 · 生词本 · /translate 独立页
 V0.6  ✅  用户账号系统 · JWT · 登录注册 · 数据迁移脚本
 V0.7  ✅  解读弹窗增强 · 通用 Ask 追问（跨页面可复用）
-```
-
-**下一版本预告：V0.8**
-```
-场景模式（职场/旅行/面试） · 进度可视化 · 学习连续天数
 ```
 
 ---
@@ -291,3 +305,4 @@ pytest tests/test_stepN.py -v
 | V0.5 | ✅ 完成 | 翻译 MVP：双向翻译 · 生词本 · /translate 独立页 |
 | V0.6 | ✅ 完成 | 用户账号系统 · JWT · 登录注册 · 数据迁移 |
 | V0.7 | ✅ 完成 | 解读弹窗增强（IPA 秒出 / 连读 / 点读 / 讲解朗读 / 流式）· 通用 Ask 追问抽象 |
+| V0.8 | 🚧 开发中 | /practice → /articles 重命名 · 解读自动入库 vocabulary · 独立 /vocabulary 页 · source_type 筛选 |

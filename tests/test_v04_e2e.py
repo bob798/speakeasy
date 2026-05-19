@@ -137,4 +137,4 @@ def test_no_import_errors():
     import app.services.fsrs_utils
     import app.services.subtitle_service
     import app.services.practice_service
-    import app.routers.practice
+    import app.routers.articles

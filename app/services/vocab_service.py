@@ -113,10 +113,48 @@ def save_item(
         return _to_dict(v)
 
 
+def update_explanation(
+    user_id: str,
+    source_text: str,
+    source_ref: Optional[str],
+    explanation_json: str,
+    force: bool = False,
+) -> bool:
+    """回填 explanation_json。
+
+    默认仅在当前 explanation_json 为 NULL 时写入（保护已有解释不被首写覆盖）。
+    force=True 时强制覆盖（用于 refresh=True 路径，用户主动重生）。
+    软删条目也回填（保留历史，下次复活带完整数据）。
+    找不到记录返回 False，不抛异常。
+    """
+    with OrmSession(engine) as s:
+        v = (
+            s.query(Vocabulary)
+            .filter_by(user_id=user_id, source_text=source_text, source_ref=source_ref)
+            .first()
+        )
+        if not v:
+            logger.warning(
+                "vocab_explanation_backfill_miss user_id=%s source_text=%s source_ref=%s",
+                user_id, source_text, source_ref,
+            )
+            return False
+        if v.explanation_json and not force:
+            return False
+        v.explanation_json = explanation_json
+        s.commit()
+        logger.info(
+            "vocab_explanation_backfill user_id=%s id=%s len=%d force=%s",
+            user_id, v.id, len(explanation_json), force,
+        )
+        return True
+
+
 def list_items(
     user_id: str,
     item_type: Optional[str] = None,
     source_ref: Optional[str] = None,
+    source_type: Optional[str] = None,
     due_only: bool = False,
     limit: int = 50,
     offset: int = 0,
@@ -127,6 +165,8 @@ def list_items(
             q = q.filter_by(item_type=item_type)
         if source_ref:
             q = q.filter_by(source_ref=source_ref)
+        if source_type:
+            q = q.filter_by(source_type=source_type)
         rows = q.order_by(Vocabulary.created_at.desc()).all()
 
         items = [_to_dict(v) for v in rows]

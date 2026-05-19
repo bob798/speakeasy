@@ -28,6 +28,7 @@ from app.services.tts_service import multi_tts
 from app.models.db import engine, SubtitleSource
 from sqlalchemy.orm import Session as OrmSession
 from app.logger import get_logger
+from app.services import vocab_service as _vocab_service
 
 logger = get_logger("practice")
 
@@ -76,9 +77,13 @@ class ReviewRequest(BaseModel):
 
 class ExplainRequest(BaseModel):
     text: str
-    kind: str                     # 'sentence' | 'word'
-    context: Optional[str] = ""   # word 模式下可提供所在句子
-    refresh: bool = False         # V0.11 #8 · 跳过缓存强制重新生成
+    kind: str                                # 'sentence' | 'word'
+    context: Optional[str] = ""              # word 模式下可提供所在句子
+    refresh: bool = False                    # V0.11 #8 · 跳过缓存强制重新生成
+    # V0.8 自动入库：可选，传了就在解读入口自动写 vocabulary
+    source_type: Optional[str] = None        # 'bbc_eaw' | 'translate' | ...
+    source_ref: Optional[str] = None         # 例: BBC episode slug
+    item_type: Optional[str] = None          # 'word' | 'phrase' | 'sentence'，缺省由 kind 推断
 
 
 # ── 字幕缓存工具 ─────────────────────────────────────────
@@ -119,7 +124,7 @@ def _cache_subtitles(user_id: str, source_id: str, source_type: str,
 
 # ── 字幕提取 ──────────────────────────────────────────────
 
-@router.post("/practice/subtitles")
+@router.post("/subtitles")
 async def get_subtitles(
     req: SubtitleRequest,
     user_id: Optional[str] = Depends(get_current_user_id_optional),
@@ -176,7 +181,7 @@ async def get_subtitles(
 
 # ── 字幕历史 ──────────────────────────────────────────────
 
-@router.get("/practice/subtitles")
+@router.get("/subtitles")
 async def list_subtitle_history(
     user_id: str = Depends(get_current_user_id),
     limit: int = Query(20, ge=1, le=100),
@@ -205,7 +210,7 @@ async def list_subtitle_history(
         }
 
 
-@router.get("/practice/subtitles/{source_id}")
+@router.get("/subtitles/{source_id}")
 async def get_cached_subtitles(
     source_id: int,
     user_id: str = Depends(get_current_user_id),
@@ -235,7 +240,7 @@ async def get_cached_subtitles(
 
 # ── 外部导入 ─────────────────────────────────────────────
 
-@router.post("/practice/sources/import", status_code=201)
+@router.post("/sources/import", status_code=201)
 async def import_source(
     req: SourceImportRequest,
     user_id: str = Depends(get_current_user_id),
@@ -269,7 +274,7 @@ async def import_source(
 
 # ── 卡片 CRUD ────────────────────────────────────────────
 
-@router.post("/practice/cards", status_code=201)
+@router.post("/cards", status_code=201)
 async def create_cards(
     req: CreateCardsRequest,
     user_id: str = Depends(get_current_user_id),
@@ -279,7 +284,7 @@ async def create_cards(
     return result
 
 
-@router.get("/practice/cards")
+@router.get("/cards")
 async def list_cards(
     user_id: str = Depends(get_current_user_id),
     status: Optional[str] = Query(None),
@@ -290,7 +295,7 @@ async def list_cards(
     return {"cards": cards, "count": len(cards)}
 
 
-@router.post("/practice/cards/{card_id}/review")
+@router.post("/cards/{card_id}/review")
 async def review_card_endpoint(
     card_id: int,
     req: ReviewRequest,
@@ -302,7 +307,7 @@ async def review_card_endpoint(
     return result
 
 
-@router.delete("/practice/cards/{card_id}")
+@router.delete("/cards/{card_id}")
 async def delete_card(
     card_id: int,
     user_id: str = Depends(get_current_user_id),
@@ -315,7 +320,7 @@ async def delete_card(
 
 # ── 到期复习 ─────────────────────────────────────────────
 
-@router.get("/practice/due")
+@router.get("/due")
 async def get_due_cards(
     user_id: str = Depends(get_current_user_id),
     limit: int = Query(10, ge=1, le=50),
@@ -324,13 +329,75 @@ async def get_due_cards(
     return {"cards": cards, "count": len(cards)}
 
 
+def _resolve_item_type(text: str, explicit: Optional[str], kind: str) -> str:
+    """优先显式 item_type，否则按 kind 推断；word 多 token 视作 phrase。"""
+    if explicit in ("word", "phrase", "sentence"):
+        return explicit
+    if kind == "word":
+        tokens = (text or "").strip().split()
+        return "word" if len(tokens) <= 1 else "phrase"
+    return "sentence"
+
+
+def _auto_save_vocab(
+    user_id: Optional[str],
+    text: str,
+    context: Optional[str],
+    source_type: Optional[str],
+    source_ref: Optional[str],
+    item_type: str,
+) -> bool:
+    """解读发起时占位写入 vocabulary（explanation_json=None）。
+
+    跳过条件：未登录 / 未提供 source_type / text 为空。
+    写入失败：logger.warning，绝不向上抛。
+
+    注：save_item 命中已存在记录时不更新任何字段（vocab_service.py L77–83）。
+    这意味着同一 (user_id, source_text, source_ref) 的 item_type 由**第一次**调用决定，
+    后续调用即使 item_type 不同也不会更新。前端必须确保 phonetic 与后续 explain 使用一致的 item_type。
+    """
+    if not user_id or not source_type or not text or not text.strip():
+        return False
+    try:
+        _vocab_service.save_item(
+            user_id=user_id,
+            source_text=text,
+            translated_text="",
+            direction="en2zh",
+            context=context or None,
+            item_type=item_type,
+            source_type=source_type,
+            source_ref=source_ref,
+            explanation_json=None,
+        )
+        logger.info(
+            "vocab_auto_save_attempt user_id=%s text=%s source_type=%s source_ref=%s item_type=%s",
+            user_id, text[:40], source_type, source_ref, item_type,
+        )
+        return True
+    except Exception as e:
+        logger.warning(
+            "vocab_auto_save_failed user_id=%s text=%s err=%s",
+            user_id, text[:40], e,
+        )
+        return False
+
+
 # ── 句子/单词解读 ─────────────────────────────────────────
 
-@router.post("/practice/explain")
+@router.post("/explain")
 async def practice_explain(
     req: ExplainRequest,
     user_id: str = Depends(get_current_user_id),
 ):
+    # 入口占位写入
+    item_type = _resolve_item_type(req.text, req.item_type, req.kind)
+    _auto_save_vocab(
+        user_id=user_id, text=req.text, context=req.context,
+        source_type=req.source_type, source_ref=req.source_ref,
+        item_type=item_type,
+    )
+
     try:
         result = await explain_text(
             text=req.text,
@@ -344,27 +411,60 @@ async def practice_explain(
     except Exception as e:
         logger.error("解读失败: %s", e, exc_info=True)
         raise HTTPException(503, "解读服务暂时不可用，请稍后重试")
+
+    # 解读完成回填（refresh=True 时 force-overwrite，否则仅 NULL 写入）
+    if req.source_type and result.get("explanation"):
+        try:
+            _vocab_service.update_explanation(
+                user_id=user_id,
+                source_text=req.text,
+                source_ref=req.source_ref,
+                explanation_json=json.dumps(result["explanation"], ensure_ascii=False),
+                force=req.refresh,
+            )
+        except Exception as e:
+            logger.warning("vocab_backfill_failed user_id=%s err=%s", user_id, e)
+
     return result
 
 
 class QuickPhoneticRequest(BaseModel):
     text: str
+    source_type: Optional[str] = None
+    source_ref: Optional[str] = None
+    item_type: Optional[str] = None         # 前端推断后传入，避免与后续 explain 不一致
 
 
-@router.post("/practice/explain/phonetic")
-async def practice_explain_phonetic(req: QuickPhoneticRequest):
+@router.post("/explain/phonetic")
+async def practice_explain_phonetic(
+    req: QuickPhoneticRequest,
+    user_id: Optional[str] = Depends(get_current_user_id_optional),
+):
     """单词 IPA 本地秒出；未知词 phonetic=null，前端退回等 LLM 结果。"""
     if not req.text or not req.text.strip():
         raise HTTPException(400, "text is required")
+    # 登录态 + 带 source 时占位入库；phonetic 不产生完整解读，不回填
+    if user_id and req.source_type:
+        item_type = _resolve_item_type(req.text, req.item_type, "word")
+        _auto_save_vocab(
+            user_id=user_id, text=req.text, context=None,
+            source_type=req.source_type, source_ref=req.source_ref,
+            item_type=item_type,
+        )
     return {"phonetic": quick_phonetic(req.text)}
 
 
 class StreamExplainRequest(BaseModel):
     text: str
-    refresh: bool = False         # V0.11 #8
+    refresh: bool = False                    # V0.11 #8
+    # V0.8 自动入库
+    source_type: Optional[str] = None
+    source_ref: Optional[str] = None
+    item_type: Optional[str] = None
+    context: Optional[str] = ""              # 句子级 context（如所在段落）
 
 
-@router.post("/practice/explain/stream")
+@router.post("/explain/stream")
 async def practice_explain_stream(
     req: StreamExplainRequest,
     user_id: str = Depends(get_current_user_id),
@@ -380,17 +480,51 @@ async def practice_explain_stream(
     if not req.text or not req.text.strip():
         raise HTTPException(400, "text is required")
 
+    # 入口占位写入
+    item_type = _resolve_item_type(req.text, req.item_type, "sentence")
+    _auto_save_vocab(
+        user_id=user_id, text=req.text, context=req.context,
+        source_type=req.source_type, source_ref=req.source_ref,
+        item_type=item_type,
+    )
+
     async def event_stream():
+        collected: dict = {}
         try:
             async for line in stream_sentence_explanation(req.text, user_id, force=req.refresh):
+                try:
+                    evt = json.loads(line)
+                except Exception:
+                    evt = None
+                if isinstance(evt, dict):
+                    if evt.get("_cached") and isinstance(evt.get("explanation"), dict):
+                        collected = dict(evt["explanation"])
+                    elif "field" in evt and "value" in evt:
+                        collected[evt["field"]] = evt["value"]
                 yield line + "\n"
         except ValueError as e:
-            import json as _json
-            yield _json.dumps({"_error": str(e)}, ensure_ascii=False) + "\n"
+            yield json.dumps({"_error": str(e)}, ensure_ascii=False) + "\n"
+            return
         except Exception as e:
-            import json as _json
             logger.error("stream 解读失败: %s", e, exc_info=True)
-            yield _json.dumps({"_error": "解读服务暂时不可用"}, ensure_ascii=False) + "\n"
+            yield json.dumps({"_error": "解读服务暂时不可用"}, ensure_ascii=False) + "\n"
+            return
+
+        # 流末尾回填（best-effort）：
+        # · 如果客户端中途断开，Starlette 抛 ClientDisconnect → generator 不会到这里
+        #   → pending 留存，由前端 /vocabulary 重拉路径兜底（这是 by design）
+        # · refresh=True 时 force-overwrite 已有 explanation_json
+        if req.source_type and collected:
+            try:
+                _vocab_service.update_explanation(
+                    user_id=user_id,
+                    source_text=req.text,
+                    source_ref=req.source_ref,
+                    explanation_json=json.dumps(collected, ensure_ascii=False),
+                    force=req.refresh,
+                )
+            except Exception as e:
+                logger.warning("vocab_stream_backfill_failed user_id=%s err=%s", user_id, e)
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
@@ -406,7 +540,7 @@ class PracticeTTSRequest(BaseModel):
     phoneme_map: Optional[Dict[str, str]] = None   # IPA 纠音映射，传入则后端走 Azure
 
 
-@router.post("/practice/tts")
+@router.post("/tts")
 async def practice_tts(req: PracticeTTSRequest):
     """Multi-source TTS with disk caching"""
     import time
