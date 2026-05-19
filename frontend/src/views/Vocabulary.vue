@@ -1,14 +1,145 @@
 <template>
-  <div class="vocabulary-page">
-    <h1>我的生词本</h1>
-    <p>TODO Task 13+ 填充列表与 tag chip</p>
+  <div class="vocab-page">
+    <header class="vocab-header">
+      <h1>我的生词本</h1>
+      <span class="vocab-count">已加载 {{ items.length }} 条</span>
+    </header>
+
+    <nav class="tag-chips">
+      <button
+        v-for="t in tabs"
+        :key="t.value"
+        :class="['chip', { active: currentTag === t.value }]"
+        @click="switchTag(t.value)"
+      >
+        {{ t.label }}
+      </button>
+    </nav>
+
+    <div v-if="loading" class="vocab-loading">加载中...</div>
+    <div v-else-if="items.length === 0" class="vocab-empty">暂无条目</div>
+    <ul v-else class="vocab-list">
+      <li v-for="item in items" :key="item.id" class="vocab-item">
+        <div class="vocab-head" @click="toggle(item.id)">
+          <span class="vocab-text">{{ truncate(item.source_text, 80) }}</span>
+          <span :class="['vocab-tag', `tag-${item.source_type}`]">{{ tagLabel(item.source_type) }}</span>
+        </div>
+        <div class="vocab-translated">{{ item.translated_text || '—' }}</div>
+        <div class="vocab-meta">
+          ⏱ {{ relativeTime(item.created_at) }}
+          <span v-if="!item.explanation_json" class="vocab-pending">⚠ 解读生成中</span>
+        </div>
+        <!-- 展开区由 Task 14 实现 -->
+        <div v-if="expandedId === item.id" class="vocab-detail">
+          <!-- 占位，Task 14 接入 explanation 渲染 -->
+        </div>
+      </li>
+    </ul>
+
+    <div v-if="hasMore" class="vocab-loadmore">
+      <button @click="loadMore">加载更多</button>
+    </div>
   </div>
 </template>
 
 <script setup>
-// Task 13+ 实现
+import { ref, onMounted } from 'vue'
+import { useAuthFetch, getErrorMessage } from '@/composables/useAuthFetch'
+import { API } from '@/config'
+
+const { authFetch } = useAuthFetch()
+
+const tabs = [
+  { value: '', label: '全部' },
+  { value: 'bbc_eaw', label: 'BBC' },
+  { value: 'translate', label: '翻译收藏' },
+]
+
+const currentTag = ref('')
+const items = ref([])
+const loading = ref(false)
+const expandedId = ref(null)
+const offset = ref(0)
+const PAGE_SIZE = 20
+const hasMore = ref(false)
+
+function tagLabel(source_type) {
+  return tabs.find(t => t.value === source_type)?.label || source_type
+}
+
+function truncate(text, n) {
+  if (!text) return ''
+  return text.length > n ? text.slice(0, n) + '…' : text
+}
+
+function relativeTime(iso) {
+  if (!iso) return ''
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000
+  if (diff < 60) return '刚刚'
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
+  return `${Math.floor(diff / 86400)} 天前`
+}
+
+async function fetchList(reset = false) {
+  loading.value = true
+  if (reset) {
+    offset.value = 0
+    items.value = []
+  }
+  const params = new URLSearchParams({
+    limit: String(PAGE_SIZE),
+    offset: String(offset.value),
+  })
+  if (currentTag.value) params.set('source_type', currentTag.value)
+  try {
+    const resp = await authFetch(`${API.VOCAB}?${params}`)
+    if (!resp.ok) throw new Error('加载失败')
+    const data = await resp.json()
+    const fetched = data.items || []
+    items.value = reset ? fetched : [...items.value, ...fetched]
+    hasMore.value = fetched.length === PAGE_SIZE
+    offset.value += fetched.length
+  } catch (err) {
+    console.error('vocab list failed:', getErrorMessage(err, '加载失败'))
+  } finally {
+    loading.value = false
+  }
+}
+
+function switchTag(t) {
+  currentTag.value = t
+  fetchList(true)
+}
+
+function loadMore() {
+  fetchList(false)
+}
+
+function toggle(id) {
+  expandedId.value = expandedId.value === id ? null : id
+}
+
+onMounted(() => fetchList(true))
 </script>
 
 <style scoped>
-.vocabulary-page { padding: 16px; }
+.vocab-page { padding: 16px; max-width: 720px; margin: 0 auto; }
+.vocab-header { display: flex; align-items: baseline; gap: 12px; }
+.vocab-count { color: #888; font-size: 14px; }
+.tag-chips { display: flex; gap: 8px; margin: 12px 0; }
+.chip { padding: 6px 14px; border-radius: 16px; border: 1px solid #ccc; background: transparent; cursor: pointer; }
+.chip.active { background: var(--accent, #4a90e2); color: white; border-color: transparent; }
+.vocab-list { list-style: none; padding: 0; }
+.vocab-item { border-bottom: 1px solid #eee; padding: 12px 0; }
+.vocab-head { display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+.vocab-text { font-weight: 600; }
+.vocab-tag { font-size: 12px; padding: 2px 8px; border-radius: 8px; background: #eee; }
+.tag-bbc_eaw { background: #ffe9d6; }
+.tag-translate { background: #d6f0ff; }
+.vocab-translated { color: #555; margin: 4px 0; }
+.vocab-meta { font-size: 12px; color: #888; }
+.vocab-pending { color: #c97c00; margin-left: 8px; }
+.vocab-loadmore { text-align: center; margin-top: 16px; }
+.vocab-empty, .vocab-loading { padding: 24px; text-align: center; color: #888; }
 </style>
