@@ -47,7 +47,6 @@ API_PREFIXES = (
     "practice/",
     "articles/",
     "translate/",
-    "vocab",
     "vocab/",
     "polish/",
     "auth/",
