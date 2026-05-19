@@ -76,9 +76,13 @@ class ReviewRequest(BaseModel):
 
 class ExplainRequest(BaseModel):
     text: str
-    kind: str                     # 'sentence' | 'word'
-    context: Optional[str] = ""   # word 模式下可提供所在句子
-    refresh: bool = False         # V0.11 #8 · 跳过缓存强制重新生成
+    kind: str                                # 'sentence' | 'word'
+    context: Optional[str] = ""              # word 模式下可提供所在句子
+    refresh: bool = False                    # V0.11 #8 · 跳过缓存强制重新生成
+    # V0.8 自动入库：可选，传了就在解读入口自动写 vocabulary
+    source_type: Optional[str] = None        # 'bbc_eaw' | 'translate' | ...
+    source_ref: Optional[str] = None         # 例: BBC episode slug
+    item_type: Optional[str] = None          # 'word' | 'phrase' | 'sentence'，缺省由 kind 推断
 
 
 # ── 字幕缓存工具 ─────────────────────────────────────────
@@ -361,7 +365,12 @@ async def practice_explain_phonetic(req: QuickPhoneticRequest):
 
 class StreamExplainRequest(BaseModel):
     text: str
-    refresh: bool = False         # V0.11 #8
+    refresh: bool = False                    # V0.11 #8
+    # V0.8 自动入库
+    source_type: Optional[str] = None
+    source_ref: Optional[str] = None
+    item_type: Optional[str] = None
+    context: Optional[str] = ""              # 句子级 context（如所在段落）
 
 
 @router.post("/practice/explain/stream")
