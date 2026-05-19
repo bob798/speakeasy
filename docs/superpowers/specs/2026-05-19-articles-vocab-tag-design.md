@@ -3,7 +3,7 @@
 > Date: 2026-05-19
 > Owner: Claude Code (实现) · Human (验收)
 > 范围: 后端路由重命名 + 解读自动入库 + 生词本前端独立页与标签化
-> 关联 issue: 待创建（后端 `source_type` 枚举与 `bbc_eaw_episodes` 表名重构 → 独立跟踪）
+> 关联 issue: [#42](https://github.com/bob798/speakeasy/issues/42)（后端 `source_type` 枚举与 `bbc_eaw_episodes` 表名重构 → 独立跟踪）
 > 关联前序 spec: `2026-05-12-practice-mobile-redesign.md`
 
 ## 目标
@@ -279,19 +279,15 @@ ExplanationModal 打开，触发以下三种之一：
 
 ### 8. 关联 issue（独立跟踪，不阻塞本轮）
 
-待创建 GitHub Issue，标题大致：
-
-> chore(vocab): 把 `bbc_eaw` 源相关命名重构为 `article-*` 语义
+GitHub Issue：[#42 chore(vocab): source_type 与表名重构为 article-* 通用语义](https://github.com/bob798/speakeasy/issues/42)
 
 **背景**：本轮 `/practice` → `/articles` 仅文案层完成，后端 `source_type='bbc_eaw'`、`bbc_eaw_episodes` 表名仍是 BBC 专属命名。未来加 VOA 等系列后会需要更通用的 `article-*` 语义。
 
-**预期工作**：
+**预期工作**（详见 issue #42）：
 - 数据迁移：`vocabulary.source_type` `bbc_eaw` → `article` + `series='bbc_eaw'` 的拆分（或类似方案）
 - 表名 `bbc_eaw_episodes` → `article_episodes`，新增 `series` 字段
 - 旧 alias `/practice/*` 一并移除
 - 标签 chip 由 `series` 字段派生
-
-issue 创建后回填编号到本 spec 的 frontmatter。
 
 ## 验收标准
 
