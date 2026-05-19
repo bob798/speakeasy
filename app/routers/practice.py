@@ -390,6 +390,14 @@ async def practice_explain(
     req: ExplainRequest,
     user_id: str = Depends(get_current_user_id),
 ):
+    # 入口占位写入
+    item_type = _resolve_item_type(req.text, req.item_type, req.kind)
+    _auto_save_vocab(
+        user_id=user_id, text=req.text, context=req.context,
+        source_type=req.source_type, source_ref=req.source_ref,
+        item_type=item_type,
+    )
+
     try:
         result = await explain_text(
             text=req.text,
@@ -403,6 +411,20 @@ async def practice_explain(
     except Exception as e:
         logger.error("解读失败: %s", e, exc_info=True)
         raise HTTPException(503, "解读服务暂时不可用，请稍后重试")
+
+    # 解读完成回填（refresh=True 时 force-overwrite，否则仅 NULL 写入）
+    if req.source_type and result.get("explanation"):
+        try:
+            _vocab_service.update_explanation(
+                user_id=user_id,
+                source_text=req.text,
+                source_ref=req.source_ref,
+                explanation_json=json.dumps(result["explanation"], ensure_ascii=False),
+                force=req.refresh,
+            )
+        except Exception as e:
+            logger.warning("vocab_backfill_failed user_id=%s err=%s", user_id, e)
+
     return result
 
 
