@@ -430,13 +430,27 @@ async def practice_explain(
 
 class QuickPhoneticRequest(BaseModel):
     text: str
+    source_type: Optional[str] = None
+    source_ref: Optional[str] = None
+    item_type: Optional[str] = None         # 前端推断后传入，避免与后续 explain 不一致
 
 
 @router.post("/practice/explain/phonetic")
-async def practice_explain_phonetic(req: QuickPhoneticRequest):
+async def practice_explain_phonetic(
+    req: QuickPhoneticRequest,
+    user_id: Optional[str] = Depends(get_current_user_id_optional),
+):
     """单词 IPA 本地秒出；未知词 phonetic=null，前端退回等 LLM 结果。"""
     if not req.text or not req.text.strip():
         raise HTTPException(400, "text is required")
+    # 登录态 + 带 source 时占位入库；phonetic 不产生完整解读，不回填
+    if user_id and req.source_type:
+        item_type = _resolve_item_type(req.text, req.item_type, "word")
+        _auto_save_vocab(
+            user_id=user_id, text=req.text, context=None,
+            source_type=req.source_type, source_ref=req.source_ref,
+            item_type=item_type,
+        )
     return {"phonetic": quick_phonetic(req.text)}
 
 
