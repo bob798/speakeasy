@@ -3,7 +3,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 // Lazy-loaded views (code-split by route)
 const Home = () => import('@/views/Home.vue')
 const Chat = () => import('@/views/Chat.vue')
-const Practice = () => import('@/views/Practice.vue')
+const Articles = () => import('@/views/Articles.vue')
+const Vocabulary = () => import('@/views/Vocabulary.vue')
 const Translate = () => import('@/views/Translate.vue')
 const Polish = () => import('@/views/Polish.vue')
 const Memory = () => import('@/views/Memory.vue')
@@ -19,9 +20,19 @@ const router = createRouter({
     { path: '/', name: 'home', component: Home, meta: { requiresAuth: true } },
     { path: '/chat', name: 'chat', component: Chat, meta: { requiresAuth: true } },
     {
+      path: '/articles',
+      name: 'Articles',
+      component: Articles,
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/practice',
-      name: 'practice',
-      component: Practice,
+      redirect: '/articles',
+    },
+    {
+      path: '/vocabulary',
+      name: 'Vocabulary',
+      component: Vocabulary,
       meta: { requiresAuth: true },
     },
     {
