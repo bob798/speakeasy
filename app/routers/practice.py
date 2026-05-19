@@ -480,17 +480,51 @@ async def practice_explain_stream(
     if not req.text or not req.text.strip():
         raise HTTPException(400, "text is required")
 
+    # 入口占位写入
+    item_type = _resolve_item_type(req.text, req.item_type, "sentence")
+    _auto_save_vocab(
+        user_id=user_id, text=req.text, context=req.context,
+        source_type=req.source_type, source_ref=req.source_ref,
+        item_type=item_type,
+    )
+
     async def event_stream():
+        collected: dict = {}
         try:
             async for line in stream_sentence_explanation(req.text, user_id, force=req.refresh):
+                try:
+                    evt = json.loads(line)
+                except Exception:
+                    evt = None
+                if isinstance(evt, dict):
+                    if evt.get("_cached") and isinstance(evt.get("explanation"), dict):
+                        collected = dict(evt["explanation"])
+                    elif "field" in evt and "value" in evt:
+                        collected[evt["field"]] = evt["value"]
                 yield line + "\n"
         except ValueError as e:
-            import json as _json
-            yield _json.dumps({"_error": str(e)}, ensure_ascii=False) + "\n"
+            yield json.dumps({"_error": str(e)}, ensure_ascii=False) + "\n"
+            return
         except Exception as e:
-            import json as _json
             logger.error("stream 解读失败: %s", e, exc_info=True)
-            yield _json.dumps({"_error": "解读服务暂时不可用"}, ensure_ascii=False) + "\n"
+            yield json.dumps({"_error": "解读服务暂时不可用"}, ensure_ascii=False) + "\n"
+            return
+
+        # 流末尾回填（best-effort）：
+        # · 如果客户端中途断开，Starlette 抛 ClientDisconnect → generator 不会到这里
+        #   → pending 留存，由前端 /vocabulary 重拉路径兜底（这是 by design）
+        # · refresh=True 时 force-overwrite 已有 explanation_json
+        if req.source_type and collected:
+            try:
+                _vocab_service.update_explanation(
+                    user_id=user_id,
+                    source_text=req.text,
+                    source_ref=req.source_ref,
+                    explanation_json=json.dumps(collected, ensure_ascii=False),
+                    force=req.refresh,
+                )
+            except Exception as e:
+                logger.warning("vocab_stream_backfill_failed user_id=%s err=%s", user_id, e)
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
