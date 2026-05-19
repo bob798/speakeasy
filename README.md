@@ -109,8 +109,11 @@ Alex 自然回应（隐式引导，对话中无感发生）：
 | V0.2a ✅ | 语音输入 STT + 语音输出 TTS + 流式输出 + 对话历史持久化 |
 | V0.2b ✅ | 对话复盘（错误分析 + 亮点）+ FSRS 错误调度 + 点击追问 UI |
 | V0.3 ✅ | 用户画像 + Level 评估 + 跨会话事实记忆 + 记忆管理页面 |
-| V0.4 ✅ | 发音练习 + B站字幕提取 + 录音对比 + FSRS 复习闭环 |
-| V0.5 🚧 | 翻译模块 MVP：双向中英翻译（/translate 独立页）+ 生词本收藏（vocabulary 表，软删除）+ Header 🌐 入口 |
+| V0.4 ✅ | 文章学习（/articles）+ B站字幕提取 + 录音对比 + FSRS 复习闭环 |
+| V0.5 ✅ | 翻译模块 MVP：双向中英翻译（/translate 独立页）+ 生词本收藏（vocabulary 表，软删除）+ Header 🌐 入口 |
+| V0.6 ✅ | 用户账号系统 · JWT · 登录注册 · 数据迁移脚本 |
+| V0.7 ✅ | 解读弹窗增强（IPA 秒出 / 连读 / 点读 / 讲解朗读 / 流式）· 通用 Ask 追问抽象 |
+| V0.8 🚧 | /practice → /articles 路由重命名 · 解读自动入库 vocabulary · 独立 /vocabulary 页（支持 source_type 筛选）|
 
 ---
 
