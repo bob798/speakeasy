@@ -154,7 +154,7 @@ describe('ExplanationModal · IPA 🎧 按钮', () => {
     expect(btns[1].attributes('aria-label')).toContain('would you')
   })
 
-  it('word: 点 🎧 发 POST /practice/tts，body 含正确 phoneme_map', async () => {
+  it('word: 点 🎧 发 POST /articles/tts，body 含正确 phoneme_map', async () => {
     authFetchMock.mockResolvedValue({
       ok: true,
       blob: async () => new Blob([new Uint8Array([1, 2, 3])], { type: 'audio/mpeg' }),
@@ -168,7 +168,7 @@ describe('ExplanationModal · IPA 🎧 按钮', () => {
 
     expect(authFetchMock).toHaveBeenCalledOnce()
     const [url, opts] = authFetchMock.mock.calls[0]
-    expect(url).toBe('/practice/tts')
+    expect(url).toBe('/articles/tts')
     expect(opts.method).toBe('POST')
     const body = JSON.parse(opts.body)
     expect(body.text).toBe('schedule')

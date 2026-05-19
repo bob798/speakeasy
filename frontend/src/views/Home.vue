@@ -95,7 +95,7 @@ onMounted(() => {
       <div v-if="stats.today_message_count > 0" class="chip">
         💬 <span>今日 {{ stats.today_message_count }} 条</span>
       </div>
-      <RouterLink v-if="stats.due_cards > 0" to="/practice" class="chip cta">
+      <RouterLink v-if="stats.due_cards > 0" to="/articles" class="chip cta">
         📝 <span>{{ stats.due_cards }} 张待复习</span>
       </RouterLink>
     </div>
@@ -151,7 +151,7 @@ onMounted(() => {
       </RouterLink>
       <RouterLink to="/translate" class="sec-item">
         <span class="ico">🌐</span>
-        <span class="name">翻译 · 生词本</span>
+        <span class="name">翻译</span>
       </RouterLink>
       <RouterLink to="/vocabulary" class="sec-item">
         <span class="ico">📖</span>

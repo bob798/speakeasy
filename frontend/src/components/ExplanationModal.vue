@@ -537,7 +537,7 @@ async function playIPA(key, text, ipa) {
   ipaState.value = 'loading'
 
   try {
-    const resp = await authFetch(`${API.PRACTICE}/tts`, {
+    const resp = await authFetch(`${API.ARTICLES}/tts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
