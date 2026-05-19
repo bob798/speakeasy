@@ -145,9 +145,9 @@ onMounted(() => {
 
     <!-- 次级功能导航 -->
     <nav class="secondary">
-      <RouterLink to="/practice" class="sec-item">
+      <RouterLink to="/articles" class="sec-item">
         <span class="ico">🎧</span>
-        <span class="name">发音练习</span>
+        <span class="name">文章学习</span>
       </RouterLink>
       <RouterLink to="/translate" class="sec-item">
         <span class="ico">🌐</span>

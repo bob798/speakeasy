@@ -421,7 +421,8 @@ onBeforeUnmount(() => {
   <div class="practice-page" :class="{ mobile: isMobile }">
     <header class="topbar">
       <RouterLink class="back" to="/">← 返回</RouterLink>
-      <div class="title">发音练习</div>
+      <div class="title">文章学习</div>
+      <div class="subtitle">BBC English at Work</div>
       <div class="topbar-right">
         <!-- 桌面端原有按钮 -->
         <template v-if="!isMobile">
@@ -615,6 +616,11 @@ onBeforeUnmount(() => {
 .title {
   font-weight: 600;
   color: var(--accent);
+}
+.subtitle {
+  font-size: 11px;
+  color: var(--text-2);
+  margin-top: 1px;
 }
 .back {
   color: var(--text-2);
