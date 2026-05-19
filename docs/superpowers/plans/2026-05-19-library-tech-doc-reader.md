@@ -20,7 +20,7 @@
 ## 阶段约定
 
 - 测试 user_id 统一前缀：`test_user_v08_library_<task>`
-- 每个 Task = 一个独立 commit + 一个 PR（题头 `[V0.8 library / Step N] ...`，body `Refs #<tracking-issue>`）
+- 每个 Task = 一个独立 commit + 一个 PR（题头 `[V0.8 library / Step N] ...`，body `Refs ##46`）
 - 仅 Mock 外部依赖（`trafilatura.fetch_url` / `trafilatura.extract` / LLM 客户端），不 Mock 内部 service
 - 断言用具体值（如 `assert article["status"] == "active"`），禁止 `assert x is not None` 模糊断言
 - 每个 Task 完成判定：`pytest tests/test_v08_library_<task>.py -v` 全 PASS + 涉及到的既有测试 `pytest tests/ -k vocab -v` 不回归
@@ -184,7 +184,7 @@ git add requirements.txt app/models/db.py tests/test_v08_library_task1_model.py
 git commit -m "$(cat <<'EOF'
 feat(library): 新增 LibraryArticle 表 + trafilatura 依赖 (V0.8 Step 1)
 
-Refs #<tracking-issue>
+Refs ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -483,7 +483,7 @@ feat(library): library_service.import_article — URL 抓取 + Markdown 粘贴 (
 trafilatura 抓正文输出 Markdown；超长截断 100k；URL 命中去重；
 软删条目复活；并发 IntegrityError 兜底。失败抛 ImportError。
 
-Refs #<tracking-issue>
+Refs ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -743,7 +743,7 @@ feat(library): list/get/delete/refetch service 函数 (V0.8 Step 3)
 list 返回时带 vocab_count，避免前端 N+1；
 delete 不级联 vocabulary；refetch 拒绝粘贴模式。
 
-Refs #<tracking-issue>
+Refs ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -1045,7 +1045,7 @@ feat(library): /library CRUD 路由 (V0.8 Step 4)
 POST /library/articles (URL/粘贴二选一, 201/200/400);
 GET /library/articles 分页; GET /library/articles/{id}; DELETE; POST /refetch.
 
-Refs #<tracking-issue>
+Refs ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -1194,7 +1194,7 @@ feat(library): vocab source_type='library' + _auto_save_library_vocab (V0.8 Step
 
 VALID_SOURCE_TYPES 加 library; 自动入库工具吞异常仅日志。
 
-Refs #<tracking-issue>
+Refs ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -1406,7 +1406,7 @@ feat(library): /library/articles/{id}/explain 同步解读 + 自动入库 + 回�
 
 入口占位; LLM 完成后 update_explanation 回填; 入库异常吞日志.
 
-Refs #<tracking-issue>
+Refs ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -1554,7 +1554,7 @@ feat(library): /library/articles/{id}/explain/phonetic IPA 秒出 + 入库 (V0.8
 
 仅点 IPA 也视为用户对该词感兴趣的信号 — 同步入 vocabulary 占位.
 
-Refs #<tracking-issue>
+Refs ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -1763,7 +1763,7 @@ feat(library): /library/articles/{id}/explain/stream NDJSON 流式 + 末尾回�
 
 入口占位; 流式时解析 _done/_cached 事件拿到 explanation; 回填异常不破流.
 
-Refs #<tracking-issue>
+Refs ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -1933,7 +1933,7 @@ feat(library/fe): 加 marked + dompurify + useLibraryApi composable (V0.8 Step 9
 
 7 个端点 client 封装；流式 NDJSON 按行回调；fetch_failed 错误码归一.
 
-Refs #<tracking-issue>
+Refs ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -2222,7 +2222,7 @@ feat(library/fe): /library 列表页 + AddArticleModal (V0.8 Step 10)
 URL / 粘贴两种 tab；fetch_failed 自动建议切粘贴；
 列表带 vocab_count、阅读时长；Home 导航入口卡片.
 
-Refs #<tracking-issue>
+Refs ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -2489,7 +2489,7 @@ feat(library/fe): LibraryArticle 骨架 + MarkdownReader + 点词浮气泡 (V0.8
 marked + DOMPurify 渲染；caretRangeFromPoint 精准定位单词；
 代码块整块 user-select=text 但不响应点词；句级上下文用句末标点切分。
 
-Refs #<tracking-issue>
+Refs ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -2687,7 +2687,7 @@ feat(library/fe): 选区菜单 + 流式 explain 浮层 + 共享 ExplanationCard 
 
 ExplanationCard 抽取为可复用组件，BBC spec 后续 /vocabulary 页一并使用.
 
-Refs #<tracking-issue>
+Refs ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -2879,7 +2879,7 @@ feat(library/fe): 本文沉淀侧栏 + pending 重拉 + 实时刷新 (V0.8 Step 
 vocab.py 加 source_type query；侧栏挂在文章详情；
 ExplanationCard 复用 inline 渲染；pending 条目支持主动拉取.
 
-Refs #<tracking-issue>
+Refs ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -2957,7 +2957,7 @@ feat(library/fe): 移动端降级 — 侧栏改 sheet + touchend 点词 (V0.8 St
 
 PC 优先已就位，移动端确保能看能查；不做独立移动布局.
 
-Refs #<tracking-issue>
+Refs ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -3106,7 +3106,7 @@ git add .claude/CLAUDE.md README.md docs/architecture/c4-container.md docs/archi
 git commit -m "$(cat <<'EOF'
 docs(library): CLAUDE.md / README / 架构图 / 数据流文档同步 (V0.8 Step 15)
 
-Refs #<tracking-issue>
+Refs ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -3174,7 +3174,7 @@ git add -A
 git commit -m "$(cat <<'EOF'
 chore(library): V0.8 ship 验收清单完成 (Step 16)
 
-Closes #<tracking-issue>
+Closes ##46
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
