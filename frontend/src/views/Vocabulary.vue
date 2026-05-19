@@ -58,8 +58,10 @@
             </div>
           </template>
           <template v-else>
-            <!-- Task 15 接入 pending 重拉 -->
-            <button class="exp-fetch" @click="fetchPending(item)">点击生成解读</button>
+            <button class="exp-fetch" @click="fetchPending(item)" :disabled="item._fetching">
+              {{ item._fetching ? '生成中...' : '点击生成解读' }}
+            </button>
+            <p v-if="item._fetchError" class="exp-error">{{ item._fetchError }}</p>
           </template>
         </div>
       </li>
@@ -74,9 +76,11 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAuthFetch, getErrorMessage } from '@/composables/useAuthFetch'
+import { useSSE } from '@/composables/useSSE'
 import { API } from '@/config'
 
-const { authFetch } = useAuthFetch()
+const { authFetch, authFetchJson } = useAuthFetch()
+const { stream: sseStream } = useSSE()
 
 const tabs = [
   { value: '', label: '全部' },
@@ -125,7 +129,7 @@ async function fetchList(reset = false) {
     const resp = await authFetch(`${API.VOCAB}?${params}`)
     if (!resp.ok) throw new Error('加载失败')
     const data = await resp.json()
-    const fetched = data.items || []
+    const fetched = (data.items || []).map(it => ({ ...it, _fetching: false, _fetchError: '' }))
     items.value = reset ? fetched : [...items.value, ...fetched]
     hasMore.value = fetched.length === PAGE_SIZE
     offset.value += fetched.length
@@ -160,8 +164,48 @@ function parsedExplanation(item) {
   }
 }
 
-function fetchPending(item) {
-  /* Task 15 实现 */
+async function fetchPending(item) {
+  if (item._fetching) return
+  item._fetching = true
+  item._fetchError = ''
+  const isSentence = item.item_type === 'sentence'
+  try {
+    if (isSentence) {
+      const fields = {}
+      await sseStream(
+        `${API.ARTICLES}/explain/stream`,
+        {
+          text: item.source_text,
+          source_type: item.source_type,
+          source_ref: item.source_ref,
+          item_type: 'sentence',
+          context: item.context || '',
+        },
+        {
+          mode: 'ndjson',
+          onEvent: (evt) => {
+            if (evt._cached && evt.explanation) Object.assign(fields, evt.explanation)
+            else if (evt.field) fields[evt.field] = evt.value
+          },
+        },
+      )
+      item.explanation_json = JSON.stringify(fields)
+    } else {
+      const resp = await authFetchJson(`${API.ARTICLES}/explain`, {
+        text: item.source_text,
+        kind: 'word',
+        context: item.context || '',
+        source_type: item.source_type,
+        source_ref: item.source_ref,
+        item_type: item.item_type,
+      })
+      item.explanation_json = JSON.stringify(resp.explanation || {})
+    }
+  } catch (err) {
+    item._fetchError = '生成失败，请稍后重试'
+  } finally {
+    item._fetching = false
+  }
 }
 
 onMounted(() => fetchList(true))
@@ -190,4 +234,6 @@ onMounted(() => fetchList(true))
 .exp-row { margin: 6px 0; }
 .exp-row ul { margin: 4px 0 4px 18px; }
 .exp-fetch { padding: 6px 12px; border: 1px solid #4a90e2; color: #4a90e2; background: transparent; border-radius: 8px; cursor: pointer; }
+.exp-fetch:disabled { opacity: 0.6; cursor: not-allowed; }
+.exp-error { color: #c0392b; font-size: 13px; margin-top: 6px; }
 </style>
