@@ -29,9 +29,38 @@
           ⏱ {{ relativeTime(item.created_at) }}
           <span v-if="!item.explanation_json" class="vocab-pending">⚠ 解读生成中</span>
         </div>
-        <!-- 展开区由 Task 14 实现 -->
         <div v-if="expandedId === item.id" class="vocab-detail">
-          <!-- 占位，Task 14 接入 explanation 渲染 -->
+          <template v-if="parsedExplanation(item)">
+            <div v-if="parsedExplanation(item).phonetic" class="exp-row">
+              <strong>音标：</strong>/{{ parsedExplanation(item).phonetic }}/
+            </div>
+            <div v-if="parsedExplanation(item).meaning" class="exp-row">
+              <strong>含义：</strong>{{ parsedExplanation(item).meaning }}
+            </div>
+            <div v-if="parsedExplanation(item).grammar" class="exp-row">
+              <strong>语法：</strong>{{ parsedExplanation(item).grammar }}
+            </div>
+            <div v-if="parsedExplanation(item).definitions?.length" class="exp-row">
+              <strong>释义：</strong>
+              <ul><li v-for="d in parsedExplanation(item).definitions" :key="d">{{ d }}</li></ul>
+            </div>
+            <div v-if="parsedExplanation(item).examples?.length" class="exp-row">
+              <strong>例句：</strong>
+              <ul><li v-for="e in parsedExplanation(item).examples" :key="e">{{ e }}</li></ul>
+            </div>
+            <div v-if="parsedExplanation(item).phrases?.length" class="exp-row">
+              <strong>短语：</strong>
+              <ul><li v-for="p in parsedExplanation(item).phrases" :key="JSON.stringify(p)">{{ typeof p === 'string' ? p : (p.phrase + ' — ' + p.meaning) }}</li></ul>
+            </div>
+            <div v-if="parsedExplanation(item).liaison?.length" class="exp-row">
+              <strong>连读：</strong>
+              <ul><li v-for="l in parsedExplanation(item).liaison" :key="JSON.stringify(l)">{{ typeof l === 'string' ? l : JSON.stringify(l) }}</li></ul>
+            </div>
+          </template>
+          <template v-else>
+            <!-- Task 15 接入 pending 重拉 -->
+            <button class="exp-fetch" @click="fetchPending(item)">点击生成解读</button>
+          </template>
         </div>
       </li>
     </ul>
@@ -120,6 +149,21 @@ function toggle(id) {
   expandedId.value = expandedId.value === id ? null : id
 }
 
+function parsedExplanation(item) {
+  if (!item.explanation_json) return null
+  try {
+    return typeof item.explanation_json === 'string'
+      ? JSON.parse(item.explanation_json)
+      : item.explanation_json
+  } catch {
+    return null
+  }
+}
+
+function fetchPending(item) {
+  /* Task 15 实现 */
+}
+
 onMounted(() => fetchList(true))
 </script>
 
@@ -142,4 +186,8 @@ onMounted(() => fetchList(true))
 .vocab-pending { color: #c97c00; margin-left: 8px; }
 .vocab-loadmore { text-align: center; margin-top: 16px; }
 .vocab-empty, .vocab-loading { padding: 24px; text-align: center; color: #888; }
+.vocab-detail { padding: 12px 0 4px; border-top: 1px dashed #ddd; margin-top: 8px; }
+.exp-row { margin: 6px 0; }
+.exp-row ul { margin: 4px 0 4px 18px; }
+.exp-fetch { padding: 6px 12px; border: 1px solid #4a90e2; color: #4a90e2; background: transparent; border-radius: 8px; cursor: pointer; }
 </style>
