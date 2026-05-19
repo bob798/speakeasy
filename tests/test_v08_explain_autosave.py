@@ -39,7 +39,7 @@ def stub_explain(monkeypatch):
 
     monkeypatch.setattr(explain_service, "explain_text", _fake)
     # 也替换路由直接 import 的那个引用
-    import app.routers.practice as pr
+    import app.routers.articles as pr
     monkeypatch.setattr(pr, "explain_text", _fake)
 
 

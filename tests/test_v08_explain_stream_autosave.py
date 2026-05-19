@@ -37,7 +37,7 @@ def stub_stream(monkeypatch):
         yield json.dumps({"field": "grammar", "value": "名词短语"}, ensure_ascii=False)
         yield json.dumps({"_done": True, "cefr_level": "B1"}, ensure_ascii=False)
 
-    import app.routers.practice as pr
+    import app.routers.articles as pr
     monkeypatch.setattr(pr, "stream_sentence_explanation", _fake)
 
 
@@ -68,7 +68,7 @@ def test_stream_cache_hit_backfills(monkeypatch):
         }, ensure_ascii=False)
         yield json.dumps({"_done": True}, ensure_ascii=False)
 
-    import app.routers.practice as pr
+    import app.routers.articles as pr
     monkeypatch.setattr(pr, "stream_sentence_explanation", _fake_cached)
 
     body = {"text": "cached text", "source_type": "bbc_eaw", "source_ref": "ep-1", "item_type": "sentence"}

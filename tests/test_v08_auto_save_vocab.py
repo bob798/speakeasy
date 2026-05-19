@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy.orm import Session as OrmSession
 from app.models.db import engine, Vocabulary, Base
-from app.routers.practice import _auto_save_vocab, _resolve_item_type
+from app.routers.articles import _auto_save_vocab, _resolve_item_type
 
 USER = "test_user_v08_articles_task5"
 

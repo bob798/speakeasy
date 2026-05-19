@@ -11,7 +11,7 @@ from app.services.bbc_eaw_seeder import seed_at_startup
 from app.routers import chat, stt, tts, history, debug, review
 from app.routers.settings import router as settings_router
 from app.routers.memory import router as memory_router
-from app.routers.practice import router as practice_router
+from app.routers.articles import router as articles_router
 from app.routers.translate import router as translate_router
 from app.routers.auth import router as auth_router
 from app.routers.ask import router as ask_router
@@ -45,6 +45,7 @@ API_PREFIXES = (
     "review/",
     "memory/",
     "practice/",
+    "articles/",
     "translate/",
     "vocab",
     "vocab/",
@@ -88,7 +89,9 @@ app.include_router(debug.router)
 app.include_router(review.router)
 app.include_router(settings_router)
 app.include_router(memory_router)
-app.include_router(practice_router)
+app.include_router(articles_router, prefix="/articles")
+app.include_router(articles_router, prefix="/practice", include_in_schema=False)
+# ↑ alias: include_in_schema=False prevents OpenAPI duplication; remove in 1-2 versions
 app.include_router(translate_router)
 app.include_router(auth_router)
 app.include_router(ask_router)
