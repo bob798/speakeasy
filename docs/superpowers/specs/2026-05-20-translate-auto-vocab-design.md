@@ -51,8 +51,10 @@ Response    {
 
 ```python
 1. 参数校验(空 / >1000 字符)— 现状不变
-2. user_id = get_optional_user_id(request)
-3. vocab_id = None
+2. direction 白名单校验(必为 'zh2en' | 'en2zh',非法即 400)
+   ↑ 提前到占位写入之前,避免非法 direction 在 vocab 表留空白行
+3. user_id = await get_current_user_id_optional(authorization)
+4. vocab_id = None
    if user_id:
        try:
            item = save_item(
@@ -68,33 +70,44 @@ Response    {
        except Exception as e:
            logger.warning("translate_placeholder_save_fail user=%s err=%s", user_id, e)
            vocab_id = None  # 降级:翻译继续,不入库
-4. translated = await translate_text(req.text, req.direction)
-5. if user_id and vocab_id and translated:
-       update_translated_text(
-           user_id=user_id,
-           source_text=req.text,
-           source_ref=None,
-           translated_text=translated,
-           force=True,
-       )
-6. return {
+5. translated = await translate_text(req.text, req.direction)
+6. if user_id and vocab_id and translated:
+       try:
+           update_translated_text(
+               user_id=user_id,
+               source_text=req.text,
+               source_ref=None,
+               translated_text=translated,
+               force=True,
+           )
+       except Exception as e:
+           # 回填失败不能把已成功的翻译降级成 503
+           logger.warning(
+               "translate_backfill_fail user=%s vocab_id=%s err=%s",
+               user_id, vocab_id, e,
+           )
+7. return {
        "translated_text": translated,
        "saved_to_vocab": bool(vocab_id),
        "vocab_id": vocab_id,
    }
 ```
 
-### 3.3 新增依赖 `get_optional_user_id`
+> **direction 校验**:现状 `translate_service.translate_text()` 内部抛 `ValueError`。本次把校验前置到路由层(白名单 set 比对),service 校验保留作兜底。
 
-位置: `app/routers/auth.py`
+### 3.3 复用现有 `get_current_user_id_optional`
+
+位置: `app/routers/auth.py:73-80`(已存在,无需新增)
 
 ```python
-def get_optional_user_id(authorization: str | None = Header(None)) -> str | None:
-    """同 get_current_user_id,但无 token / 非法 / 过期时返回 None 而非抛 401。"""
+async def get_current_user_id_optional(
+    authorization: Optional[str] = Header(None),
+) -> Optional[str]:
+    """同 get_current_user_id 但未提供 token 时返回 None 而不抛异常"""
 ```
 
-- 复用 `get_current_user_id` 的解码逻辑,把异常吞掉返回 None
-- 不影响 `get_current_user_id` 自身,/vocab 等强校验端点继续抛 401
+- 直接 `Depends(get_current_user_id_optional)`
+- 不引入第二个 optional auth 依赖(避免 auth 行为分裂在两处维护)
 
 ### 3.4 新增 service 函数 `update_translated_text`
 
@@ -179,6 +192,8 @@ async function onTranslate() {
 | `test_translate_failure_keeps_placeholder` | mock `translate_text` 抛异常 → 503;占位条目仍在(translated_text="") |
 | `test_invalid_token_falls_back_anonymous` | 非法 Authorization → 200, saved_to_vocab=False(不抛 401) |
 | `test_save_placeholder_failure_degrades` | mock `save_item` 抛异常 → 翻译仍 200 返回译文,saved_to_vocab=False;有 warning 日志 |
+| `test_backfill_failure_degrades` | mock `update_translated_text` 抛异常 → 翻译仍 200 返回译文,saved_to_vocab=True(占位仍在),vocab_id 有值;有 warning 日志 |
+| `test_invalid_direction_no_placeholder` | 登录态 + direction='xx' → 400;vocabulary 表无新增空白行 |
 
 测试规范遵循 `.claude/CLAUDE.md`:
 - 独立 user_id (`test_user_translate_autovocab_xxx`)
@@ -225,11 +240,24 @@ async function onTranslate() {
 
 ## 7. 实施清单(给 writing-plans 的输入)
 
-- [ ] 后端:`app/routers/auth.py` 新增 `get_optional_user_id`
 - [ ] 后端:`app/services/vocab_service.py` 新增 `update_translated_text`
-- [ ] 后端:`app/routers/translate.py` 改造 `do_translate`,扩响应字段
-- [ ] 后端测试:`tests/test_translate_auto_vocab.py` 七个用例
+- [ ] 后端:`app/routers/translate.py` 改造 `do_translate`
+  - 复用 `get_current_user_id_optional`(无需新增 auth 依赖)
+  - direction 白名单校验提前到占位写入之前
+  - update_translated_text 用 try/except 包住,失败不影响翻译返回
+  - 扩响应字段 `saved_to_vocab` / `vocab_id`
+- [ ] 后端测试:`tests/test_translate_auto_vocab.py`(测试用例见 §5.1,新增覆盖 backfill 失败降级)
 - [ ] 前端:`frontend/src/views/Translate.vue` 顶部能力条、状态行、删按钮、JS 调整
 - [ ] 前端测试:`frontend/src/views/__tests__/Translate.spec.js`
 - [ ] 文档:`.claude/CLAUDE.md` 接口清单中 `/translate/text` 注记响应字段扩展
 - [ ] 文档:`docs/architecture/c4-container.md` 如有翻译模块视图,补一句「认证可选 + 自动入库」
+
+---
+
+## 8. Codex Review 回应(2026-05-20)
+
+| Codex 反馈 | 严重度 | 处理 |
+|---|---|---|
+| direction 校验需在占位写入之前 | P2 | 已修 §3.2 step 2 提前 |
+| update_translated_text 失败要降级,不能拖垮翻译 | P2 | 已修 §3.2 step 6 加 try/except |
+| 应复用已有 `get_current_user_id_optional`,不要新增 | P3 | 已修 §3.3 改"复用" |
