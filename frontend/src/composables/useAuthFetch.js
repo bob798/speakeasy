@@ -91,8 +91,17 @@ export function useAuthFetch() {
     if (!resp.ok) {
       let detail = `HTTP ${resp.status}`
       try {
-        const err = await resp.json()
-        detail = err.detail || err.error || detail
+        const body = await resp.json()
+        const raw = body?.detail ?? body?.error
+        if (typeof raw === 'string') {
+          detail = raw
+        } else if (Array.isArray(raw)) {
+          // FastAPI 422: [{loc, msg, type, ...}, ...] — 转成可读文案
+          const parts = raw.map((d) => (d && typeof d === 'object' && d.msg) || JSON.stringify(d))
+          if (parts.length) detail = parts.join('; ')
+        } else if (raw != null && typeof raw === 'object') {
+          detail = JSON.stringify(raw)
+        }
       } catch {
         /* ignore parse error */
       }

@@ -70,6 +70,34 @@ describe('useAuthFetch', () => {
     await expect(authFetchJson('/api/boom', { x: 1 })).rejects.toThrow('服务器内部错误')
   })
 
+  it('422 路径: FastAPI 校验数组 detail 转成可读文案（避免 [object Object]）', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          detail: [
+            { loc: ['body', 'text'], msg: 'field required', type: 'value_error.missing' },
+            { loc: ['body', 'kind'], msg: 'value is not a valid enumeration member', type: 'type_error.enum' },
+          ],
+        }),
+        { status: 422 }
+      )
+    )
+
+    const { authFetchJson } = useAuthFetch()
+    await expect(authFetchJson('/api/bad', {})).rejects.toThrow(
+      /field required.*value is not a valid enumeration member/
+    )
+  })
+
+  it('对象 detail: stringify 而非 [object Object]', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: { code: 'X', reason: 'Y' } }), { status: 500 })
+    )
+
+    const { authFetchJson } = useAuthFetch()
+    await expect(authFetchJson('/api/weird', {})).rejects.toThrow(/"code":"X"/)
+  })
+
   it('network 错误路径: 透传 fetch 抛出的错误', async () => {
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
 
