@@ -254,7 +254,23 @@ async function onTranslate() {
 
 ---
 
-## 8. Codex Review 回应(2026-05-20)
+## 8. 后续工作(Phase 2 占位,本 spec 不含)
+
+本 spec 的范围是「翻译自动入生词本」(Phase 1)。原始需求里还有一条 **「生词本做好去重」** 被明确推迟,留作下一个 brainstorm session 的入口。
+
+待 Phase 2 brainstorm 触及的开放问题:
+- 大小写 / 首尾空格 / 结尾标点不一致是否合并(规范化策略)
+- 跨 `source_type` 的同文本是否合并(translate vs bbc_eaw vs explain)
+- 双向翻译里"同一句"的归一(zh2en 源 vs en2zh 译文)
+- 翻译自动入库放大了上面这些重复场景,Phase 2 是 Phase 1 的自然后续
+- UI 端「这条已在生词本」提示(可选)
+- 误翻译污染的最小长度阈值(本 spec §6 风险 1 提过)
+
+启动方式:对话里说「继续 brainstorm 生词本去重」,本文件路径作为锚点引用。
+
+---
+
+## 9. Codex Review 回应(2026-05-20)
 
 | Codex 反馈 | 严重度 | 处理 |
 |---|---|---|
