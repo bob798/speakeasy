@@ -197,25 +197,29 @@ const inferredItemType = computed(() => {
   return 'sentence'
 })
 
+// 后端 source_ref: Optional[str]。SubtitleSource.id 是 Integer，
+// 不做强转会让 Pydantic 422 "Input should be a valid string"。
+const _refStr = (v) => (v == null || v === '' ? null : String(v))
+
 function deriveVocabSource() {
   // 来源由父组件透传到 target.context；下面的 fallback 兼容老调用
   const ctx = props.target?.context || {}
-  // 父组件优先：显式传入 vocab_source_type / vocab_source_ref
+  let source_type, raw
   if (ctx.vocab_source_type) {
-    return {
-      source_type: ctx.vocab_source_type,
-      source_ref: ctx.vocab_source_ref || null,
-    }
+    source_type = ctx.vocab_source_type
+    raw = ctx.vocab_source_ref
+  } else if (ctx.source === 'chat') {
+    source_type = 'chat'
+    raw = ctx.session_id
+  } else if (ctx.source === 'practice') {
+    source_type = 'practice'
+    raw = ctx.source_id
+  } else {
+    // 解读页 / 其它
+    source_type = 'translate'
+    raw = null
   }
-  // 老路径推断
-  if (ctx.source === 'chat') {
-    return { source_type: 'chat', source_ref: ctx.session_id || null }
-  }
-  if (ctx.source === 'practice') {
-    return { source_type: 'practice', source_ref: ctx.source_id || null }
-  }
-  // 解读页 / 其它
-  return { source_type: 'translate', source_ref: null }
+  return { source_type, source_ref: _refStr(raw) }
 }
 
 const data = ref({

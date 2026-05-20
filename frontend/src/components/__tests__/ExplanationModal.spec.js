@@ -258,6 +258,26 @@ describe('ExplanationModal · IPA 🎧 按钮', () => {
     expect(capturedBody.item_type).toBe('sentence')
   })
 
+  it('word: source_ref 是整数（SubtitleSource.id）时强转 string，避免 Pydantic 422', async () => {
+    const wrapper = await mountModal({
+      target: {
+        type: 'word',
+        content: 'throughout',
+        sentence: 'go on throughout the day',
+        context: { vocab_source_type: 'practice', vocab_source_ref: 42 },
+      },
+      dataPatch: { phonetic: 'θruːˈaʊt' },
+    })
+    await flushPromises()
+
+    const [, phoneticBody] = authFetchJsonMock.mock.calls[0]
+    const [, explainBody] = authFetchJsonMock.mock.calls[1]
+    expect(phoneticBody.source_ref).toBe('42')
+    expect(typeof phoneticBody.source_ref).toBe('string')
+    expect(explainBody.source_ref).toBe('42')
+    expect(typeof explainBody.source_ref).toBe('string')
+  })
+
   it('word phrase: item_type is "phrase" for multi-token word', async () => {
     const wrapper = await mountModal({
       target: { type: 'word', content: 'give up' },

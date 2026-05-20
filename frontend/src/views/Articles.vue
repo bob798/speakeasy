@@ -190,9 +190,12 @@ function onExplain(payload) {
   }
   const src = store.currentSource || {}
   const isBbc = src.source_type === 'bbc_eaw' || src.type === 'bbc_eaw'
+  // SubtitleSource.id 是 Integer，必须强转 string 后再塞入；
+  // 后端 source_ref: Optional[str]，数字会被 Pydantic 拒收。
+  const refStr = (v) => (v == null || v === '' ? null : String(v))
   const vocabRef = isBbc
-    ? { vocab_source_type: 'bbc_eaw', vocab_source_ref: src.slug || src.id || null }
-    : { vocab_source_type: 'practice', vocab_source_ref: src.id || src.source_id || null }
+    ? { vocab_source_type: 'bbc_eaw', vocab_source_ref: refStr(src.slug) || refStr(src.id) }
+    : { vocab_source_type: 'practice', vocab_source_ref: refStr(src.id) || refStr(src.source_id) }
   target.context = {
     source: 'practice',
     source_id: src.id,
