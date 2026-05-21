@@ -153,6 +153,41 @@ def update_explanation(
         return True
 
 
+def update_translated_text(
+    user_id: str,
+    source_text: str,
+    source_ref: Optional[str],
+    translated_text: str,
+    force: bool = True,
+) -> bool:
+    """回填 translated_text。
+
+    默认覆盖(force=True),保持「页面看到啥 = 生词本里是啥」。
+    找不到记录返回 False,不抛异常。
+    """
+    with OrmSession(engine) as s:
+        v = (
+            s.query(Vocabulary)
+            .filter_by(user_id=user_id, source_text=source_text, source_ref=source_ref)
+            .first()
+        )
+        if not v:
+            logger.warning(
+                "vocab_translated_text_backfill_miss user_id=%s source_text=%s source_ref=%s",
+                user_id, source_text, source_ref,
+            )
+            return False
+        if v.translated_text and not force:
+            return False
+        v.translated_text = translated_text
+        s.commit()
+        logger.info(
+            "vocab_translated_text_backfill user_id=%s id=%s force=%s",
+            user_id, v.id, force,
+        )
+        return True
+
+
 def list_items(
     user_id: str,
     item_type: Optional[str] = None,
