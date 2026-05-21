@@ -20,17 +20,17 @@ def _cleanup():
 
 def test_filter_by_bbc_eaw_returns_only_bbc():
     save_item(user_id=USER, source_text="bbc word", item_type="word",
-              source_type="bbc_eaw", source_ref="ep-1")
+              source_type="article", source_ref="ep-1", series="bbc_eaw")
     save_item(user_id=USER, source_text="translate word", item_type="word",
               source_type="translate", source_ref=None)
-    items = list_items(user_id=USER, source_type="bbc_eaw")
+    items = list_items(user_id=USER, source_type="article")
     assert len(items) == 1
     assert items[0]["source_text"] == "bbc word"
 
 
 def test_no_filter_returns_all():
     save_item(user_id=USER, source_text="bbc word", item_type="word",
-              source_type="bbc_eaw", source_ref="ep-1")
+              source_type="article", source_ref="ep-1", series="bbc_eaw")
     save_item(user_id=USER, source_text="translate word", item_type="word",
               source_type="translate", source_ref=None)
     items = list_items(user_id=USER)

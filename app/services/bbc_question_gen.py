@@ -18,7 +18,7 @@ from typing import List, Dict, Optional
 
 from sqlalchemy.orm import Session as OrmSession
 
-from app.models.db import engine, BbcEawEpisode
+from app.models.db import engine, ArticleEpisode
 from app.prompts.bbc_questions import BBC_QUESTION_GEN_PROMPT
 from app.logger import get_logger
 
@@ -27,9 +27,9 @@ logger = get_logger("bbc_question_gen")
 VALID_QTYPES = {"cloze", "back_translate", "recall_prompt"}
 
 
-def _load_episode(slug: str) -> Optional[BbcEawEpisode]:
+def _load_episode(slug: str) -> Optional[ArticleEpisode]:
     with OrmSession(engine) as s:
-        return s.query(BbcEawEpisode).filter_by(slug=slug).first()
+        return s.query(ArticleEpisode).filter_by(slug=slug).first()
 
 
 def _build_cloze(transcript: List[Dict], phrases: List[str]) -> Optional[Dict]:
@@ -120,7 +120,7 @@ def _validate_question(q: Dict) -> Optional[Dict]:
     }
 
 
-async def _generate_via_llm(episode: BbcEawEpisode) -> List[Dict]:
+async def _generate_via_llm(episode: ArticleEpisode) -> List[Dict]:
     """LLM 出题；任何异常向上抛，由 generate_questions 捕获后回退。"""
     from app.services.model_client import get_client  # 延迟导入以便测试时无 LLM 也能用
 
@@ -158,7 +158,7 @@ async def _generate_via_llm(episode: BbcEawEpisode) -> List[Dict]:
     return validated[:6]
 
 
-def _generate_deterministic(episode: BbcEawEpisode) -> List[Dict]:
+def _generate_deterministic(episode: ArticleEpisode) -> List[Dict]:
     transcript = json.loads(episode.transcript_json or "[]")
     phrases = json.loads(episode.phrases_json or "[]")
     transcript = [t for t in transcript if (t.get("text") or "").strip()]

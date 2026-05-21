@@ -255,6 +255,9 @@ class ArticleEpisode(Base):
     updated_at         = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+BbcEawEpisode = ArticleEpisode  # 向后兼容别名
+
+
 # ── V0.10 BBC 文章级 SRS ──────────────────────────────────
 # 每个 (user, slug) 一张 FSRS 卡，文章作为复习单元
 # 题目按 slug 共享，懒加载首次复习时由 LLM 生成

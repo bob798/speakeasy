@@ -26,9 +26,13 @@ const vocabExpandedId = ref(null)
 
 const SOURCE_LABEL = {
   translate: '解读',
-  bbc_eaw: 'BBC',
+  article: '文章',
   practice: '练习',
   chat: '对话',
+}
+const SERIES_LABEL = {
+  bbc_eaw: 'BBC',
+  voa: 'VOA',
 }
 
 const TYPE_LABEL = { word: '词', phrase: '短语', sentence: '句' }
@@ -273,7 +277,7 @@ watch(vocabFilter, () => loadVocab())
             <div v-if="vocabExpandedId === v.id" class="v-detail">
               <div v-if="v.context" class="v-context">📍 {{ v.context }}</div>
               <div class="v-meta">
-                <span class="v-source">来源：{{ SOURCE_LABEL[v.source_type] || v.source_type }}</span>
+                <span class="v-source">来源：{{ v.series ? (SERIES_LABEL[v.series] || v.series) : (SOURCE_LABEL[v.source_type] || v.source_type) }}</span>
                 <span v-if="v.created_at">{{ v.created_at.slice(0, 10) }}</span>
               </div>
               <div class="rate-row">

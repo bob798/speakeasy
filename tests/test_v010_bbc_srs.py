@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session as OrmSession
 
 from app.models.db import (
     engine,
-    BbcEawEpisode,
+    ArticleEpisode,
     BbcArticleCard,
     BbcArticleQuestion,
     Vocabulary,
@@ -32,8 +32,8 @@ def _reset():
         s.query(BbcArticleCard).filter_by(user_id=USER).delete()
         s.query(BbcArticleQuestion).filter_by(slug=SLUG).delete()
         s.query(Vocabulary).filter_by(user_id=USER).delete()
-        s.query(BbcEawEpisode).filter_by(slug=SLUG).delete()
-        s.add(BbcEawEpisode(
+        s.query(ArticleEpisode).filter_by(slug=SLUG).delete()
+        s.add(ArticleEpisode(
             slug=SLUG,
             url="http://example.com",
             title="Test Episode",
@@ -183,7 +183,7 @@ def test_rate_with_wrong_segments_inserts_vocab():
     assert result["wrong_saved"] == 2
     items = vocab_service.list_items(user_id=USER, source_ref=SLUG)
     assert len(items) == 2
-    assert all(it["source_type"] == "bbc_eaw" for it in items)
+    assert all(it["source_type"] == "article" for it in items)
 
 
 def test_rate_invalid_rating():

@@ -44,7 +44,7 @@ const hasSource = computed(
 )
 const isBbcSource = computed(() => {
   const s = store.currentSource
-  return !!s && (s.source_type === 'bbc_eaw' || s.type === 'bbc_eaw')
+  return !!s && (s.source_type === 'article' || s.series === 'bbc_eaw' || s.source_type === 'bbc_eaw' || s.type === 'bbc_eaw')
 })
 
 function showToast(text, type = 'info', duration = 2500) {
@@ -189,12 +189,12 @@ function onExplain(payload) {
     if (payload.sentence) target.sentence = payload.sentence
   }
   const src = store.currentSource || {}
-  const isBbc = src.source_type === 'bbc_eaw' || src.type === 'bbc_eaw'
+  const isBbc = src.source_type === 'article' || src.series === 'bbc_eaw' || src.source_type === 'bbc_eaw' || src.type === 'bbc_eaw'
   // SubtitleSource.id 是 Integer，必须强转 string 后再塞入；
   // 后端 source_ref: Optional[str]，数字会被 Pydantic 拒收。
   const refStr = (v) => (v == null || v === '' ? null : String(v))
   const vocabRef = isBbc
-    ? { vocab_source_type: 'bbc_eaw', vocab_source_ref: refStr(src.slug) || refStr(src.id) }
+    ? { vocab_source_type: 'article', vocab_source_ref: refStr(src.slug) || refStr(src.id), vocab_series: 'bbc_eaw' }
     : { vocab_source_type: 'practice', vocab_source_ref: refStr(src.id) || refStr(src.source_id) }
   target.context = {
     source: 'practice',

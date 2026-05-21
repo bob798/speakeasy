@@ -1,4 +1,7 @@
-"""BBC 文章级 SRS 路由 — V0.10"""
+"""文章级 SRS 路由 — V0.10
+
+路由前缀：/articles/episodes（由 main.py 注册）
+"""
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -25,7 +28,7 @@ class RateRequest(BaseModel):
     wrong_segments: Optional[List[WrongSegment]] = None
 
 
-@router.post("/bbc-eaw/{slug}/start", status_code=201)
+@router.post("/articles/episodes/{slug}/start", status_code=201)
 async def start(slug: str, user_id: str = Depends(get_current_user_id)):
     try:
         return bbc_article_srs.start_studying(user_id, slug)
@@ -33,7 +36,7 @@ async def start(slug: str, user_id: str = Depends(get_current_user_id)):
         raise HTTPException(404, str(e))
 
 
-@router.get("/bbc-eaw/{slug}/review")
+@router.get("/articles/episodes/{slug}/review")
 async def review(slug: str, user_id: str = Depends(get_current_user_id)):
     """取该文章的复习题；未生成则懒加载首次生成。"""
     try:
@@ -45,7 +48,7 @@ async def review(slug: str, user_id: str = Depends(get_current_user_id)):
     return {"slug": slug, "questions": questions, "count": len(questions)}
 
 
-@router.post("/bbc-eaw/{slug}/rate")
+@router.post("/articles/episodes/{slug}/rate")
 async def rate(
     slug: str,
     req: RateRequest,
@@ -60,7 +63,7 @@ async def rate(
         raise HTTPException(404, str(e))
 
 
-@router.get("/bbc-eaw/due")
+@router.get("/articles/due")
 async def due(user_id: str = Depends(get_current_user_id)):
     items = bbc_article_srs.list_due_articles(user_id)
     return {"items": items, "count": len(items)}

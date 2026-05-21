@@ -3,7 +3,7 @@
  * Review Dashboard · V0.10
  *
  * 「今日待复习」统一入口：
- *   - BBC 文章 (GET /bbc-eaw/due)
+ *   - BBC 文章 (GET /articles/due)
  *   - 生词条目 (GET /vocab?due=true)
  *
  * 文章 → /bbc-review/:slug
@@ -42,7 +42,7 @@ async function loadAll() {
   error.value = ''
   try {
     const [a, v, p] = await Promise.all([
-      authFetch(`${API.BASE}/bbc-eaw/due`).then((r) => (r.ok ? r.json() : { items: [] })),
+      authFetch(`${API.BASE}/articles/due`).then((r) => (r.ok ? r.json() : { items: [] })),
       authFetch(`${API.VOCAB}?due=true&limit=200`).then((r) => (r.ok ? r.json() : { items: [] })),
       authFetch(`${API.POLISH}/due`).then((r) => (r.ok ? r.json() : { items: [] })),
     ])

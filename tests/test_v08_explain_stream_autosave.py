@@ -43,8 +43,9 @@ def stub_stream(monkeypatch):
 
 def test_stream_writes_pending_at_entry_and_backfills_on_done(stub_stream):
     body = {
-        "text": "office banter exists", "source_type": "bbc_eaw",
+        "text": "office banter exists", "source_type": "article",
         "source_ref": "ep-12", "item_type": "sentence", "context": "in the meeting",
+        "series": "bbc_eaw",
     }
     with client.stream("POST", "/practice/explain/stream", json=body) as resp:
         assert resp.status_code == 200
@@ -53,7 +54,7 @@ def test_stream_writes_pending_at_entry_and_backfills_on_done(stub_stream):
     with OrmSession(engine) as s:
         v = s.query(Vocabulary).filter_by(user_id=USER, source_text="office banter exists").first()
         assert v is not None
-        assert v.source_type == "bbc_eaw"
+        assert v.source_type == "article"
         assert v.item_type == "sentence"
         parsed = json.loads(v.explanation_json)
         assert parsed["meaning"] == "办公室闲聊"
@@ -71,7 +72,7 @@ def test_stream_cache_hit_backfills(monkeypatch):
     import app.routers.articles as pr
     monkeypatch.setattr(pr, "stream_sentence_explanation", _fake_cached)
 
-    body = {"text": "cached text", "source_type": "bbc_eaw", "source_ref": "ep-1", "item_type": "sentence"}
+    body = {"text": "cached text", "source_type": "article", "source_ref": "ep-1", "item_type": "sentence", "series": "bbc_eaw"}
     with client.stream("POST", "/practice/explain/stream", json=body) as resp:
         list(resp.iter_lines())
     with OrmSession(engine) as s:
