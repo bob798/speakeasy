@@ -365,3 +365,113 @@ def test_vocab_count_in_list():
     articles = list_resp.json()["articles"]
     assert len(articles) == 1
     assert articles[0]["vocab_count"] == 2
+
+
+def test_explain_save_item_failure_degrades(stub_explain, monkeypatch):
+    """Vocab save failure is swallowed — explain still returns 200."""
+    from app.services import vocab_service as vs
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("simulated DB error")
+
+    monkeypatch.setattr(vs, "save_item", _boom)
+    monkeypatch.setattr(vs, "update_explanation", _boom)
+
+    # Create article
+    resp = client.post(
+        "/library/articles",
+        json={"markdown": "# Degrade Test\n\nContent.", "title": "Degrade Test"},
+    )
+    assert resp.status_code == 201
+    article_id = resp.json()["id"]
+
+    # Even though vocab save raises, explain should still succeed
+    explain_resp = client.post(
+        f"/library/articles/{article_id}/explain",
+        json={"text": "degrade", "kind": "word"},
+    )
+    assert explain_resp.status_code == 200
+    data = explain_resp.json()
+    assert "explanation" in data
+
+
+def test_truncation_at_100k():
+    """Paste-mode article with markdown >100k chars is truncated to 100k and source_meta has truncated=true."""
+    long_markdown = "# Long Article\n\n" + ("word " * 25_000)  # ~125 001 chars
+    assert len(long_markdown) > 100_000
+
+    resp = client.post(
+        "/library/articles",
+        json={"markdown": long_markdown, "title": "Long Article"},
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    article_id = data["id"]
+
+    # Fetch detail to get full markdown
+    get_resp = client.get(f"/library/articles/{article_id}")
+    assert get_resp.status_code == 200
+    detail = get_resp.json()
+
+    assert len(detail["markdown"]) == 100_000
+    assert detail["source_meta"].get("truncated") is True
+
+
+def test_refetch_url_article():
+    """Refetch on a URL article updates its markdown with newly extracted content."""
+    original_md = "# Original\n\nOriginal content."
+    updated_md = "# Updated\n\nFresh content after refetch."
+    fake_meta = {"title": "Updated", "site_name": "example.com", "author": None}
+
+    with patch("app.services.library_service._extract_from_url") as mock_extract:
+        mock_extract.return_value = (original_md, {"title": "Original", "site_name": "example.com", "author": None})
+        resp = client.post(
+            "/library/articles",
+            json={"url": "https://example.com/refetch-test"},
+        )
+
+    assert resp.status_code == 201
+    article_id = resp.json()["id"]
+
+    with patch("app.services.library_service._extract_from_url") as mock_extract:
+        mock_extract.return_value = (updated_md, fake_meta)
+        refetch_resp = client.post(f"/library/articles/{article_id}/refetch")
+
+    assert refetch_resp.status_code == 200
+    data = refetch_resp.json()
+    assert "Fresh content after refetch" in data["markdown"]
+
+
+def test_explain_stream_creates_vocab():
+    """Stream explain endpoint creates a vocabulary record with source_type='library'."""
+    import asyncio
+    import app.routers.library as lr
+
+    # Create article
+    resp = client.post(
+        "/library/articles",
+        json={"markdown": "# Stream Test\n\nSome sentence to explain.", "title": "Stream Test"},
+    )
+    assert resp.status_code == 201
+    article_id = resp.json()["id"]
+
+    text = "Some sentence to explain"
+
+    async def _fake_stream(text_arg, user_id, force=False):
+        explanation = {"meaning": "stub meaning", "phonetic": "stʌb"}
+        yield json.dumps({"_cached": True, "cefr_level": "B1", "explanation": explanation})
+
+    with patch.object(lr, "stream_sentence_explanation", _fake_stream):
+        stream_resp = client.post(
+            f"/library/articles/{article_id}/explain/stream",
+            json={"text": text, "item_type": "sentence"},
+        )
+
+    assert stream_resp.status_code == 200
+
+    # Vocab record should exist (either from placeholder or backfill)
+    from app.services import vocab_service as vs
+    items = vs.list_items(user_id=USER, source_type="library", source_ref=str(article_id))
+    assert len(items) >= 1
+    assert items[0]["source_type"] == "library"
+    assert items[0]["source_ref"] == str(article_id)
