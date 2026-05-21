@@ -18,7 +18,9 @@ const API_PREFIXES = [
   '/review',
   '/memory',
   '/practice',
+  '/articles',
   '/translate',
+  '/vocab',
   '/auth',
   '/ask',
   '/settings',
@@ -27,7 +29,7 @@ const API_PREFIXES = [
   '/static/audio_cache',
   '/static/tts_cache',
   '/legacy',
-  '/bbc-eaw',
+  // '/bbc-eaw' routes moved to /articles/episodes/* (already covered by /articles proxy)
   '/stats',
 ]
 

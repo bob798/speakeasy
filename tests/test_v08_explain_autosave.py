@@ -46,7 +46,8 @@ def stub_explain(monkeypatch):
 def test_explain_with_source_creates_pending_then_backfills(stub_explain):
     body = {
         "text": "office banter", "kind": "word",
-        "source_type": "bbc_eaw", "source_ref": "ep-12", "item_type": "phrase",
+        "source_type": "article", "source_ref": "ep-12", "item_type": "phrase",
+        "series": "bbc_eaw",
     }
     resp = client.post("/practice/explain", json=body)
     assert resp.status_code == 200
@@ -71,12 +72,13 @@ def test_explain_refresh_overwrites_existing_json(stub_explain):
     from app.services.vocab_service import save_item
     save_item(
         user_id=USER, source_text="重写测试", item_type="word",
-        source_type="bbc_eaw", source_ref="ep-1",
+        source_type="article", source_ref="ep-1", series="bbc_eaw",
         explanation_json='{"meaning": "旧值"}',
     )
     body = {
         "text": "重写测试", "kind": "word", "refresh": True,
-        "source_type": "bbc_eaw", "source_ref": "ep-1", "item_type": "word",
+        "source_type": "article", "source_ref": "ep-1", "item_type": "word",
+        "series": "bbc_eaw",
     }
     resp = client.post("/practice/explain", json=body)
     assert resp.status_code == 200

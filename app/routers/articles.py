@@ -81,8 +81,9 @@ class ExplainRequest(BaseModel):
     context: Optional[str] = ""              # word 模式下可提供所在句子
     refresh: bool = False                    # V0.11 #8 · 跳过缓存强制重新生成
     # V0.8 自动入库：可选，传了就在解读入口自动写 vocabulary
-    source_type: Optional[str] = None        # 'bbc_eaw' | 'translate' | ...
-    source_ref: Optional[str] = None         # 例: BBC episode slug
+    source_type: Optional[str] = None        # 'article' | 'translate' | ...
+    source_ref: Optional[str] = None         # 例: episode slug
+    series: Optional[str] = None             # bbc_eaw | voa | ... (when source_type='article')
     item_type: Optional[str] = None          # 'word' | 'phrase' | 'sentence'，缺省由 kind 推断
 
 
@@ -346,6 +347,7 @@ def _auto_save_vocab(
     source_type: Optional[str],
     source_ref: Optional[str],
     item_type: str,
+    series: Optional[str] = None,
 ) -> bool:
     """解读发起时占位写入 vocabulary（explanation_json=None）。
 
@@ -369,10 +371,11 @@ def _auto_save_vocab(
             source_type=source_type,
             source_ref=source_ref,
             explanation_json=None,
+            series=series,
         )
         logger.info(
-            "vocab_auto_save_attempt user_id=%s text=%s source_type=%s source_ref=%s item_type=%s",
-            user_id, text[:40], source_type, source_ref, item_type,
+            "vocab_auto_save_attempt user_id=%s text=%s source_type=%s series=%s source_ref=%s item_type=%s",
+            user_id, text[:40], source_type, series, source_ref, item_type,
         )
         return True
     except Exception as e:
@@ -395,7 +398,7 @@ async def practice_explain(
     _auto_save_vocab(
         user_id=user_id, text=req.text, context=req.context,
         source_type=req.source_type, source_ref=req.source_ref,
-        item_type=item_type,
+        item_type=item_type, series=req.series,
     )
 
     try:
@@ -433,6 +436,7 @@ class QuickPhoneticRequest(BaseModel):
     source_type: Optional[str] = None
     source_ref: Optional[str] = None
     item_type: Optional[str] = None         # 前端推断后传入，避免与后续 explain 不一致
+    series: Optional[str] = None            # bbc_eaw | voa | ...
 
 
 @router.post("/explain/phonetic")
@@ -449,7 +453,7 @@ async def practice_explain_phonetic(
         _auto_save_vocab(
             user_id=user_id, text=req.text, context=None,
             source_type=req.source_type, source_ref=req.source_ref,
-            item_type=item_type,
+            item_type=item_type, series=req.series,
         )
     return {"phonetic": quick_phonetic(req.text)}
 
@@ -461,6 +465,7 @@ class StreamExplainRequest(BaseModel):
     source_type: Optional[str] = None
     source_ref: Optional[str] = None
     item_type: Optional[str] = None
+    series: Optional[str] = None             # bbc_eaw | voa | ...
     context: Optional[str] = ""              # 句子级 context（如所在段落）
 
 
@@ -485,7 +490,7 @@ async def practice_explain_stream(
     _auto_save_vocab(
         user_id=user_id, text=req.text, context=req.context,
         source_type=req.source_type, source_ref=req.source_ref,
-        item_type=item_type,
+        item_type=item_type, series=req.series,
     )
 
     async def event_stream():

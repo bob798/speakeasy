@@ -1,4 +1,4 @@
-"""Seed bbc_eaw_episodes from data/bbc_eaw/parsed/*.json.
+"""Seed article_episodes from data/bbc_eaw/parsed/*.json.
 
 Idempotent upsert by `slug`. Used by:
   - scripts/bbc_eaw_seed.py (CLI / one-shot)
@@ -14,7 +14,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session as OrmSession
 
-from app.models.db import BbcEawEpisode, engine
+from app.models.db import ArticleEpisode, engine
 
 log = logging.getLogger(__name__)
 
@@ -55,12 +55,12 @@ def seed(parsed_dir: Path = DEFAULT_PARSED_DIR,
         for f in files:
             parsed = json.loads(f.read_text(encoding="utf-8"))
             slug = parsed["slug"]
-            row = sess.query(BbcEawEpisode).filter_by(slug=slug).one_or_none()
+            row = sess.query(ArticleEpisode).filter_by(slug=slug).one_or_none()
             fields = _row_fields(parsed, Path(raw_dir))
             if row is None:
                 inserted += 1
                 if not dry_run:
-                    sess.add(BbcEawEpisode(**fields))
+                    sess.add(ArticleEpisode(**fields))
             else:
                 updated += 1
                 if not dry_run:

@@ -159,8 +159,9 @@ class Vocabulary(Base):
     status           = Column(String, nullable=False, default="active")  # active | deleted
     # ── V0.10 生词本 + FSRS（P1）──────────────────────────────
     item_type        = Column(String, nullable=False, default="sentence")  # word | phrase | sentence
-    source_type      = Column(String, nullable=False, default="translate") # translate | bbc_eaw | practice | chat
-    source_ref       = Column(String, nullable=True)                       # bbc slug / session_id / null
+    source_type      = Column(String, nullable=False, default="translate") # translate | article | practice | chat
+    source_ref       = Column(String, nullable=True)                       # episode slug / session_id / null
+    series           = Column(String, nullable=True)                       # bbc_eaw | voa | ... (when source_type='article')
     explanation_json = Column(String, nullable=True)                       # 复用 ExplanationCache 输出
     fsrs_card_data   = Column(String, nullable=False, default="")
     last_reviewed_at = Column(DateTime, nullable=True)
@@ -228,14 +229,15 @@ class AskMessage(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
-# ── 公共素材：BBC Learning English / English at Work ────────
-# 67 集，每集一行；不绑 user_id（全用户共享）
+# ── 公共素材：文章系列（BBC EAW / VOA / ...）────────
+# 每集一行；不绑 user_id（全用户共享）
 # 灌库脚本：scripts/bbc_eaw_seed.py（数据来源 data/bbc_eaw/parsed/）
 
-class BbcEawEpisode(Base):
-    __tablename__ = "bbc_eaw_episodes"
+class ArticleEpisode(Base):
+    __tablename__ = "article_episodes"
 
     id                 = Column(Integer, primary_key=True, autoincrement=True)
+    series             = Column(String, nullable=False, default="bbc_eaw")  # bbc_eaw | voa | ...
     slug               = Column(String, nullable=False, unique=True)   # 01-the-interview
     url                = Column(String, nullable=False)
     title              = Column(String, nullable=True)                 # The Interview
@@ -253,6 +255,9 @@ class BbcEawEpisode(Base):
     updated_at         = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+BbcEawEpisode = ArticleEpisode  # 向后兼容别名
+
+
 # ── V0.10 BBC 文章级 SRS ──────────────────────────────────
 # 每个 (user, slug) 一张 FSRS 卡，文章作为复习单元
 # 题目按 slug 共享，懒加载首次复习时由 LLM 生成
@@ -262,7 +267,7 @@ class BbcArticleCard(Base):
 
     id               = Column(Integer, primary_key=True, autoincrement=True)
     user_id          = Column(String, nullable=False, index=True)
-    slug             = Column(String, nullable=False, index=True)         # 关联 BbcEawEpisode.slug
+    slug             = Column(String, nullable=False, index=True)         # 关联 ArticleEpisode.slug
     fsrs_card_data   = Column(String, nullable=False, default="")
     status           = Column(String, nullable=False, default="active")   # active | deleted
     first_studied_at = Column(DateTime, default=datetime.utcnow)

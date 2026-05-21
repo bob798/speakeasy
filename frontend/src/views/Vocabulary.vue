@@ -22,7 +22,7 @@
       <li v-for="item in items" :key="item.id" class="vocab-item">
         <div class="vocab-head" @click="toggle(item.id)">
           <span class="vocab-text">{{ truncate(item.source_text, 80) }}</span>
-          <span :class="['vocab-tag', `tag-${item.source_type}`]">{{ tagLabel(item.source_type) }}</span>
+          <span :class="['vocab-tag', `tag-${item.source_type}`]">{{ tagLabel(item) }}</span>
         </div>
         <div class="vocab-translated">{{ item.translated_text || '—' }}</div>
         <div class="vocab-meta">
@@ -84,7 +84,7 @@ const { stream: sseStream } = useSSE()
 
 const tabs = [
   { value: '', label: '全部' },
-  { value: 'bbc_eaw', label: 'BBC' },
+  { value: 'article', label: 'BBC' },
   { value: 'translate', label: '翻译收藏' },
 ]
 
@@ -96,8 +96,16 @@ const offset = ref(0)
 const PAGE_SIZE = 20
 const hasMore = ref(false)
 
-function tagLabel(source_type) {
-  return tabs.find(t => t.value === source_type)?.label || source_type
+const SERIES_LABELS = {
+  bbc_eaw: 'BBC',
+  voa: 'VOA',
+}
+
+function tagLabel(item) {
+  if (item.source_type === 'article' && item.series) {
+    return SERIES_LABELS[item.series] || item.series
+  }
+  return tabs.find(t => t.value === item.source_type)?.label || item.source_type
 }
 
 function truncate(text, n) {
@@ -179,6 +187,7 @@ async function fetchPending(item) {
           source_type: item.source_type,
           source_ref: item.source_ref,
           item_type: 'sentence',
+          series: item.series || null,
           context: item.context || '',
         },
         {
@@ -198,6 +207,7 @@ async function fetchPending(item) {
         source_type: item.source_type,
         source_ref: item.source_ref,
         item_type: item.item_type,
+        series: item.series || null,
       })
       item.explanation_json = JSON.stringify(resp.explanation || {})
     }
@@ -223,7 +233,7 @@ onMounted(() => fetchList(true))
 .vocab-head { display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
 .vocab-text { font-weight: 600; }
 .vocab-tag { font-size: 12px; padding: 2px 8px; border-radius: 8px; background: #eee; }
-.tag-bbc_eaw { background: #ffe9d6; }
+.tag-article { background: #ffe9d6; }
 .tag-translate { background: #d6f0ff; }
 .vocab-translated { color: #555; margin: 4px 0; }
 .vocab-meta { font-size: 12px; color: #888; }

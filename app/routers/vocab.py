@@ -32,9 +32,10 @@ class VocabCreate(BaseModel):
     direction: str = "en2zh"
     context: Optional[str] = None
     item_type: str = "sentence"           # word | phrase | sentence
-    source_type: str = "translate"        # translate | bbc_eaw | practice | chat
+    source_type: str = "translate"        # translate | article | practice | chat
     source_ref: Optional[str] = None
     explanation_json: Optional[str] = None
+    series: Optional[str] = None          # bbc_eaw | voa | ... (when source_type='article')
 
 
 class VocabRate(BaseModel):
@@ -54,6 +55,7 @@ async def create_vocab(req: VocabCreate, user_id: str = Depends(get_current_user
             source_type=req.source_type,
             source_ref=req.source_ref,
             explanation_json=req.explanation_json,
+            series=req.series,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))

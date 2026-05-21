@@ -41,11 +41,11 @@ def test_save_item_creates_with_fsrs_card():
 def test_save_item_dedupes_by_user_text_ref():
     a = vocab_service.save_item(
         user_id=USER, source_text="dedupe", item_type="word",
-        source_type="bbc_eaw", source_ref="01-the-interview",
+        source_type="article", source_ref="01-the-interview", series="bbc_eaw",
     )
     b = vocab_service.save_item(
         user_id=USER, source_text="dedupe", item_type="word",
-        source_type="bbc_eaw", source_ref="01-the-interview",
+        source_type="article", source_ref="01-the-interview", series="bbc_eaw",
     )
     assert a["id"] == b["id"]
 
@@ -53,11 +53,11 @@ def test_save_item_dedupes_by_user_text_ref():
 def test_save_item_different_source_ref_creates_new():
     a = vocab_service.save_item(
         user_id=USER, source_text="ambiguous", source_ref="article-a",
-        source_type="bbc_eaw",
+        source_type="article", series="bbc_eaw",
     )
     b = vocab_service.save_item(
         user_id=USER, source_text="ambiguous", source_ref="article-b",
-        source_type="bbc_eaw",
+        source_type="article", series="bbc_eaw",
     )
     assert a["id"] != b["id"]
 
@@ -76,7 +76,7 @@ def test_list_filters_by_type_and_source():
     vocab_service.save_item(user_id=USER, source_text="phrase y z", item_type="phrase")
     vocab_service.save_item(
         user_id=USER, source_text="from bbc", item_type="sentence",
-        source_type="bbc_eaw", source_ref="ep-1",
+        source_type="article", source_ref="ep-1", series="bbc_eaw",
     )
 
     words = vocab_service.list_items(user_id=USER, item_type="word")
@@ -129,5 +129,5 @@ def test_bulk_save_from_bbc_creates_sentence_items():
     assert n == 2
     items = vocab_service.list_items(user_id=USER, source_ref="ep-99")
     assert len(items) == 2
-    assert all(it["source_type"] == "bbc_eaw" for it in items)
+    assert all(it["source_type"] == "article" for it in items)
     assert all(it["item_type"] == "sentence" for it in items)

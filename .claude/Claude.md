@@ -101,10 +101,10 @@ speakeasy/
 | user_facts | V0.3 | LLM 提取的跨会话事实记忆 |
 | pronunciation_cards | V0.4 | FSRS 管理的发音练习卡片 |
 | subtitle_sources | V0.4 | B站字幕缓存 |
-| vocabulary | V0.5 | 翻译生词本收藏（软删除，无 FSRS）（V0.8 起 explain 接口发起即自动入库，explanation_json 由解读完成回填） |
+| vocabulary | V0.5 | 翻译生词本收藏（软删除）（V0.8 起 explain 自动入库；source_type='article' + series 字段区分来源系列） |
 | ask_threads | V0.7 | 跨页面通用追问 thread（scope + ref_type/ref_id） |
 | ask_messages | V0.7 | 追问 thread 的消息列表 |
-| bbc_eaw_episodes | V0.7.x | BBC English at Work 67 集语料（共享，不绑 user_id），见 `docs/datasets/bbc_eaw.md` |
+| article_episodes | V0.7.x | 文章系列语料（共享，不绑 user_id），series 字段区分 bbc_eaw/voa 等（原 bbc_eaw_episodes，Issue #42 重命名） |
 
 ### API 接口清单
 
@@ -140,6 +140,12 @@ speakeasy/
 | `/articles/explain` | POST | V0.8 | 单次词/句解读，发起即自动写入 vocabulary |
 | `/articles/tts` | POST | V0.8 | 文章 TTS 语音合成 |
 | `/vocabulary` | GET | V0.8 | 生词本独立页（支持 source_type 过滤） |
+| `/articles/episodes` | GET | #42 | 文章系列列表（原 /bbc-eaw/episodes，支持 series 过滤） |
+| `/articles/episodes/{slug}` | GET | #42 | 单集详情（原 /bbc-eaw/episodes/{slug}） |
+| `/articles/episodes/{slug}/start` | POST | #42 | 开始学习（原 /bbc-eaw/{slug}/start） |
+| `/articles/episodes/{slug}/review` | GET | #42 | 文章复习题（原 /bbc-eaw/{slug}/review） |
+| `/articles/episodes/{slug}/rate` | POST | #42 | FSRS 评分（原 /bbc-eaw/{slug}/rate） |
+| `/articles/due` | GET | #42 | 到期文章列表（原 /bbc-eaw/due） |
 | `/ask/threads` | POST | V0.7 | 通用追问：新建 thread + 首轮问答 |
 | `/ask/threads/{id}/messages` | POST | V0.7 | 追问某 thread（带历史） |
 | `/ask/threads` | GET | V0.7 | 列出 thread（按 scope/ref_type/ref_id 过滤） |
