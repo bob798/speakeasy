@@ -71,6 +71,18 @@ const router = createRouter({
       component: BbcArticleReview,
       meta: { requiresAuth: true },
     },
+    {
+      path: '/library',
+      name: 'library',
+      component: () => import('@/views/Library.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/library/:id',
+      name: 'library-article',
+      component: () => import('@/views/LibraryArticle.vue'),
+      meta: { requiresAuth: true },
+    },
     { path: '/login', name: 'login', component: Login, meta: { requiresAuth: false } },
     { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFound },
   ],

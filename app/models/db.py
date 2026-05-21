@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import (
     String, ForeignKey, func,
-    Column, Integer, Boolean, DateTime, UniqueConstraint, create_engine,
+    Column, Integer, Boolean, DateTime, Text, UniqueConstraint, create_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -159,8 +159,9 @@ class Vocabulary(Base):
     status           = Column(String, nullable=False, default="active")  # active | deleted
     # ── V0.10 生词本 + FSRS（P1）──────────────────────────────
     item_type        = Column(String, nullable=False, default="sentence")  # word | phrase | sentence
-    source_type      = Column(String, nullable=False, default="translate") # translate | bbc_eaw | practice | chat
-    source_ref       = Column(String, nullable=True)                       # bbc slug / session_id / null
+    source_type      = Column(String, nullable=False, default="translate") # translate | article | practice | chat
+    source_ref       = Column(String, nullable=True)                       # episode slug / session_id / null
+    series           = Column(String, nullable=True)                       # bbc_eaw | voa | ... (when source_type='article')
     explanation_json = Column(String, nullable=True)                       # 复用 ExplanationCache 输出
     fsrs_card_data   = Column(String, nullable=False, default="")
     last_reviewed_at = Column(DateTime, nullable=True)
@@ -228,14 +229,15 @@ class AskMessage(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
-# ── 公共素材：BBC Learning English / English at Work ────────
-# 67 集，每集一行；不绑 user_id（全用户共享）
+# ── 公共素材：文章系列（BBC EAW / VOA / ...）────────
+# 每集一行；不绑 user_id（全用户共享）
 # 灌库脚本：scripts/bbc_eaw_seed.py（数据来源 data/bbc_eaw/parsed/）
 
-class BbcEawEpisode(Base):
-    __tablename__ = "bbc_eaw_episodes"
+class ArticleEpisode(Base):
+    __tablename__ = "article_episodes"
 
     id                 = Column(Integer, primary_key=True, autoincrement=True)
+    series             = Column(String, nullable=False, default="bbc_eaw")  # bbc_eaw | voa | ...
     slug               = Column(String, nullable=False, unique=True)   # 01-the-interview
     url                = Column(String, nullable=False)
     title              = Column(String, nullable=True)                 # The Interview
@@ -262,7 +264,7 @@ class BbcArticleCard(Base):
 
     id               = Column(Integer, primary_key=True, autoincrement=True)
     user_id          = Column(String, nullable=False, index=True)
-    slug             = Column(String, nullable=False, index=True)         # 关联 BbcEawEpisode.slug
+    slug             = Column(String, nullable=False, index=True)         # 关联 ArticleEpisode.slug
     fsrs_card_data   = Column(String, nullable=False, default="")
     status           = Column(String, nullable=False, default="active")   # active | deleted
     first_studied_at = Column(DateTime, default=datetime.utcnow)
@@ -328,6 +330,27 @@ class LlmCallLog(Base):
     created_at     = Column(DateTime, default=datetime.utcnow)
 
 
+# ── V0.8 用户文章库 ────────────────────────────────────────
+
+class LibraryArticle(Base):
+    __tablename__ = "library_articles"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    user_id     = Column(String, nullable=False, index=True)
+    source_url  = Column(String, nullable=True)
+    title       = Column(String, nullable=False)
+    markdown    = Column(Text, nullable=False)
+    word_count  = Column(Integer, nullable=False, default=0)
+    source_meta = Column(Text, nullable=True)   # JSON string
+    status      = Column(String, nullable=False, default="active")  # active | deleted
+    created_at  = Column(DateTime, default=func.now())
+    updated_at  = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "source_url", name="ux_library_articles_user_url"),
+    )
+
+
 # Sync engine for ORM operations (tests, memory_service, review_service)
 import os as _os
 _DB_PATH = _os.environ.get("SPEAKEASY_DB_PATH", "./speakeasy.db")
@@ -336,3 +359,8 @@ engine = create_engine(
     connect_args={"check_same_thread": False},
 )
 Base.metadata.create_all(engine)
+
+
+def init_db():
+    """Create all tables (idempotent). Convenience wrapper for tests."""
+    Base.metadata.create_all(engine)

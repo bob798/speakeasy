@@ -25,7 +25,7 @@ from app.logger import get_logger
 logger = get_logger("vocab_service")
 
 VALID_ITEM_TYPES = {"word", "phrase", "sentence"}
-VALID_SOURCE_TYPES = {"translate", "bbc_eaw", "practice", "chat"}
+VALID_SOURCE_TYPES = {"translate", "article", "practice", "chat", "library"}
 
 
 def _to_dict(v: Vocabulary) -> Dict:
@@ -39,6 +39,7 @@ def _to_dict(v: Vocabulary) -> Dict:
         "item_type": v.item_type,
         "source_type": v.source_type,
         "source_ref": v.source_ref,
+        "series": v.series,
         "explanation_json": v.explanation_json,
         "status": v.status,
         "created_at": v.created_at.isoformat() if v.created_at else None,
@@ -58,6 +59,7 @@ def save_item(
     source_type: str = "translate",
     source_ref: Optional[str] = None,
     explanation_json: Optional[str] = None,
+    series: Optional[str] = None,
 ) -> Dict:
     """新增或返回已存在条目（去重键: user_id + source_text + source_ref）"""
     if not source_text or not source_text.strip():
@@ -91,6 +93,7 @@ def save_item(
             item_type=item_type,
             source_type=source_type,
             source_ref=source_ref,
+            series=series,
             explanation_json=explanation_json,
             fsrs_card_data=create_card(),
             status="active",
@@ -225,8 +228,9 @@ def bulk_save_from_bbc(
             direction="en2zh",
             context=seg.get("context"),
             item_type="sentence",
-            source_type="bbc_eaw",
+            source_type="article",
             source_ref=slug,
+            series="bbc_eaw",
         )
         # 粗略判定：刚创建的 last_reviewed_at 必为 None
         if item.get("last_reviewed_at") is None:

@@ -149,6 +149,10 @@ onMounted(() => {
         <span class="ico">🎧</span>
         <span class="name">文章学习</span>
       </RouterLink>
+      <RouterLink to="/library" class="sec-item">
+        <span class="ico">📚</span>
+        <span class="name">文章库</span>
+      </RouterLink>
       <RouterLink to="/translate" class="sec-item">
         <span class="ico">🌐</span>
         <span class="name">翻译</span>
