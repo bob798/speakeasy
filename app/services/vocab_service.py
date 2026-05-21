@@ -25,7 +25,7 @@ from app.logger import get_logger
 logger = get_logger("vocab_service")
 
 VALID_ITEM_TYPES = {"word", "phrase", "sentence"}
-VALID_SOURCE_TYPES = {"translate", "article", "practice", "chat"}
+VALID_SOURCE_TYPES = {"translate", "article", "practice", "chat", "library"}
 
 
 def _to_dict(v: Vocabulary) -> Dict:

@@ -21,6 +21,7 @@ from app.routers.bbc_review import router as bbc_review_router
 from app.routers.vocab import router as vocab_router
 from app.routers.polish import router as polish_router
 from app.routers.model import router as model_router
+from app.routers.library import router as library_router
 
 
 # ── V0.8 前端重构挂载策略（Pass 3 plan §4 + Critic B1-B5）────────────
@@ -49,12 +50,13 @@ API_PREFIXES = (
     "translate/",
     "vocab/",
     "polish/",
+    "library/",
     "auth/",
     "ask/",
     "assessment/",
     "settings/",
     "stats/",
-    "bbc-eaw/",
+    # "bbc-eaw/" 已迁移到 articles/episodes/*，articles/ 前缀已覆盖
     "health",
     "debug/",
     "legacy/",
@@ -100,6 +102,7 @@ app.include_router(bbc_review_router)
 app.include_router(vocab_router)
 app.include_router(polish_router)
 app.include_router(model_router)
+app.include_router(library_router)
 
 # 数据目录挂载（audio_cache、tts_cache 等）——无论新旧前端都要读
 app.mount("/static", StaticFiles(directory="static"), name="static")

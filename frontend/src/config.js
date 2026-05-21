@@ -15,6 +15,7 @@ export const API = {
   MEMORY: '/memory',
   PRACTICE: '/practice',
   ARTICLES: '/articles',  // V0.8：文章学习模块新名；后端 /practice/* alias 仍在
+  LIBRARY: '/library',   // V0.8：用户文章库
   TRANSLATE: '/translate',
   VOCAB: '/vocab',
   POLISH: '/polish',
