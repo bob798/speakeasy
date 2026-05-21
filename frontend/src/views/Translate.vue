@@ -29,6 +29,17 @@ const { authFetchJson } = useAuthFetch()
 
 // ═══ Layout state ═══
 const sidebarOpen = ref(true)
+const sheetOpen = ref(false)
+const isMobile = ref(false)
+
+function checkMobile() {
+  isMobile.value = window.innerWidth < 1024
+  if (isMobile.value) sidebarOpen.value = false
+}
+if (typeof window !== 'undefined') {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+}
 
 // ═══ Translation state ═══
 const direction = ref('zh2en')
@@ -200,6 +211,7 @@ function _toast(text, type = 'info', duration = 1800) {
 onUnmounted(() => {
   clearTimeout(debounceTimer)
   abortCtrl?.abort()
+  if (typeof window !== 'undefined') window.removeEventListener('resize', checkMobile)
 })
 </script>
 
@@ -251,10 +263,27 @@ onUnmounted(() => {
           </p>
         </div>
 
-        <!-- Right: sidebar -->
-        <TranslateSidebar :open="sidebarOpen" />
+        <!-- Right: sidebar (desktop) -->
+        <TranslateSidebar v-if="!isMobile" :open="sidebarOpen" />
       </div>
     </main>
+
+    <!-- Mobile FAB + bottom sheet -->
+    <button v-if="isMobile" class="fab" @click="sheetOpen = true" aria-label="打开生词本">
+      📖
+    </button>
+
+    <Teleport to="body">
+      <Transition name="sheet">
+        <div v-if="sheetOpen" class="sheet-overlay" @click.self="sheetOpen = false">
+          <div class="sheet-container" role="dialog" aria-label="生词本">
+            <div class="sheet-grip" />
+            <button class="sheet-close" @click="sheetOpen = false" aria-label="关闭">✕</button>
+            <TranslateSidebar :open="true" />
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <Transition name="toast">
       <div v-if="toast.show" class="toast" :class="toast.type">{{ toast.text }}</div>
@@ -385,4 +414,66 @@ onUnmounted(() => {
 .toast-leave-to {
   opacity: 0;
 }
+
+/* Mobile FAB */
+.fab {
+  position: fixed;
+  bottom: calc(var(--safe-bottom) + var(--space-4));
+  right: var(--space-4);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 40;
+}
+.fab:active { transform: scale(0.92); }
+
+/* Bottom sheet overlay */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: var(--z-modal, 200);
+  display: flex;
+  align-items: flex-end;
+}
+.sheet-container {
+  width: 100%;
+  max-height: min(60vh, calc(100vh - var(--safe-top, 0px) - 48px));
+  background: var(--bg);
+  border-radius: var(--radius) var(--radius) 0 0;
+  overflow-y: auto;
+  position: relative;
+  padding-bottom: var(--safe-bottom, 0px);
+}
+.sheet-grip {
+  width: 36px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 8px auto;
+}
+.sheet-close {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 18px;
+  color: var(--text-3);
+  z-index: 1;
+}
+.sheet-close:hover { color: var(--text-1); }
+
+/* Sheet transitions */
+.sheet-enter-active { transition: opacity 0.2s ease, transform 0.2s ease; }
+.sheet-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
+.sheet-enter-from { opacity: 0; }
+.sheet-enter-from .sheet-container { transform: translateY(100%); }
+.sheet-leave-to { opacity: 0; }
+.sheet-leave-to .sheet-container { transform: translateY(100%); }
 </style>
