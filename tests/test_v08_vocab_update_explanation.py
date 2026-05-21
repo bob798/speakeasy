@@ -21,8 +21,8 @@ def _cleanup():
 def _seed(explanation_json=None, status="active"):
     item = save_item(
         user_id=USER, source_text="office banter",
-        item_type="phrase", source_type="bbc_eaw", source_ref="ep-12",
-        explanation_json=explanation_json,
+        item_type="phrase", source_type="article", source_ref="ep-12",
+        series="bbc_eaw", explanation_json=explanation_json,
     )
     if status == "deleted":
         with OrmSession(engine) as s:

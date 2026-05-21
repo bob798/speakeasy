@@ -82,7 +82,7 @@ export function usePractice() {
    * BBC English at Work 公共语料 · 列表
    */
   async function listEawEpisodes(limit = 100) {
-    const resp = await authFetch(`/bbc-eaw/episodes?limit=${limit}`)
+    const resp = await authFetch(`/articles/episodes?limit=${limit}`)
     if (!resp.ok) throw new Error('加载 BBC EAW 失败')
     return resp.json()
   }
@@ -91,7 +91,7 @@ export function usePractice() {
    * BBC English at Work 单集 · 转 segments 与 user 字幕同形态
    */
   async function getEawEpisode(slug) {
-    const resp = await authFetch(`/bbc-eaw/episodes/${encodeURIComponent(slug)}`)
+    const resp = await authFetch(`/articles/episodes/${encodeURIComponent(slug)}`)
     if (!resp.ok) throw new Error('加载 EAW 单集失败')
     return resp.json()
   }

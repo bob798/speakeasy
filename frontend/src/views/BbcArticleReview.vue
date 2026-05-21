@@ -3,10 +3,10 @@
  * BBC 文章复习 · V0.10
  *
  * 流程：
- *   1. start (POST /bbc-eaw/:slug/start) 确保卡存在
- *   2. review (GET  /bbc-eaw/:slug/review) 取题
+ *   1. start (POST /articles/episodes/:slug/start) 确保卡存在
+ *   2. review (GET  /articles/episodes/:slug/review) 取题
  *   3. 用户做完所有题 → 评分弹窗（Again/Hard/Good/Easy）
- *   4. POST /bbc-eaw/:slug/rate · wrong_segments 联动入生词本
+ *   4. POST /articles/episodes/:slug/rate · wrong_segments 联动入生词本
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -46,17 +46,17 @@ async function bootstrap() {
   loading.value = true
   error.value = ''
   try {
-    const articleResp = await authFetch(`${API.BASE}/bbc-eaw/episodes/${slug.value}`)
+    const articleResp = await authFetch(`${API.BASE}/articles/episodes/${slug.value}`)
     if (!articleResp.ok) throw new Error('加载文章失败')
     article.value = await articleResp.json()
 
     card.value = await authFetchJson(
-      `${API.BASE}/bbc-eaw/${slug.value}/start`,
+      `${API.BASE}/articles/episodes/${slug.value}/start`,
       {},
       { method: 'POST' },
     )
 
-    const reviewResp = await authFetch(`${API.BASE}/bbc-eaw/${slug.value}/review`)
+    const reviewResp = await authFetch(`${API.BASE}/articles/episodes/${slug.value}/review`)
     if (!reviewResp.ok) {
       const detail = (await reviewResp.json().catch(() => ({}))).detail
       throw new Error(detail || '题目加载失败')
@@ -124,7 +124,7 @@ function buildWrongPayload() {
 async function submitRating(rating) {
   submitting.value = true
   try {
-    const result = await authFetchJson(`${API.BASE}/bbc-eaw/${slug.value}/rate`, {
+    const result = await authFetchJson(`${API.BASE}/articles/episodes/${slug.value}/rate`, {
       rating,
       wrong_segments: buildWrongPayload(),
     })

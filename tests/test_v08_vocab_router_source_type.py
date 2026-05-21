@@ -30,9 +30,9 @@ def _cleanup():
 
 
 def test_get_vocab_with_source_type_bbc():
-    save_item(user_id=USER, source_text="bbc", item_type="word", source_type="bbc_eaw", source_ref="ep-1")
+    save_item(user_id=USER, source_text="bbc", item_type="word", source_type="article", source_ref="ep-1", series="bbc_eaw")
     save_item(user_id=USER, source_text="trans", item_type="word", source_type="translate", source_ref=None)
-    resp = client.get("/vocab?source_type=bbc_eaw")
+    resp = client.get("/vocab?source_type=article")
     assert resp.status_code == 200
     body = resp.json()
     assert body["count"] == 1
@@ -40,7 +40,7 @@ def test_get_vocab_with_source_type_bbc():
 
 
 def test_get_vocab_no_source_type_returns_all():
-    save_item(user_id=USER, source_text="bbc", item_type="word", source_type="bbc_eaw", source_ref="ep-1")
+    save_item(user_id=USER, source_text="bbc", item_type="word", source_type="article", source_ref="ep-1", series="bbc_eaw")
     save_item(user_id=USER, source_text="trans", item_type="word", source_type="translate", source_ref=None)
     resp = client.get("/vocab")
     assert resp.status_code == 200

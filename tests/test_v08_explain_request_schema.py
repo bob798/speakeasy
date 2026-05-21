@@ -6,9 +6,10 @@ def test_explain_request_accepts_source_fields():
     from app.routers.articles import ExplainRequest
     req = ExplainRequest(
         text="Hello", kind="word", context="",
-        source_type="bbc_eaw", source_ref="ep-1", item_type="word",
+        source_type="article", source_ref="ep-1", item_type="word",
+        series="bbc_eaw",
     )
-    assert req.source_type == "bbc_eaw"
+    assert req.source_type == "article"
     assert req.source_ref == "ep-1"
     assert req.item_type == "word"
 
@@ -16,10 +17,11 @@ def test_explain_request_accepts_source_fields():
 def test_stream_request_accepts_source_fields():
     from app.routers.articles import StreamExplainRequest
     req = StreamExplainRequest(
-        text="Hello world.", source_type="bbc_eaw",
+        text="Hello world.", source_type="article",
         source_ref="ep-1", item_type="sentence", context="paragraph context",
+        series="bbc_eaw",
     )
-    assert req.source_type == "bbc_eaw"
+    assert req.source_type == "article"
     assert req.context == "paragraph context"
 
 

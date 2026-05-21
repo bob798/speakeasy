@@ -34,13 +34,14 @@ def test_resolve_item_type_word_kind_multi_token_becomes_phrase():
 def test_auto_save_writes_pending_record():
     ok = _auto_save_vocab(
         user_id=USER, text="office banter", context="Some context.",
-        source_type="bbc_eaw", source_ref="ep-12", item_type="phrase",
+        source_type="article", source_ref="ep-12", item_type="phrase",
+        series="bbc_eaw",
     )
     assert ok is True
     with OrmSession(engine) as s:
         v = s.query(Vocabulary).filter_by(user_id=USER, source_text="office banter").first()
         assert v is not None
-        assert v.source_type == "bbc_eaw"
+        assert v.source_type == "article"
         assert v.source_ref == "ep-12"
         assert v.item_type == "phrase"
         assert v.explanation_json is None
@@ -60,8 +61,8 @@ def test_auto_save_no_source_type_is_noop():
 def test_auto_save_no_user_id_is_noop():
     """匿名场景（phonetic 端点未登录）安全跳过。"""
     ok = _auto_save_vocab(
-        user_id=None, text="x", context="", source_type="bbc_eaw",
-        source_ref="ep-1", item_type="word",
+        user_id=None, text="x", context="", source_type="article",
+        source_ref="ep-1", item_type="word", series="bbc_eaw",
     )
     assert ok is False
 
@@ -75,7 +76,7 @@ def test_auto_save_failure_does_not_raise(monkeypatch):
 
     monkeypatch.setattr(vs, "save_item", _raise)
     ok = _auto_save_vocab(
-        user_id=USER, text="x", context="", source_type="bbc_eaw",
-        source_ref="ep-1", item_type="word",
+        user_id=USER, text="x", context="", source_type="article",
+        source_ref="ep-1", item_type="word", series="bbc_eaw",
     )
     assert ok is False  # 异常被吞，返回 False

@@ -1,7 +1,7 @@
 """BBC 文章级 SRS 服务 — V0.10
 
 每个 (user_id, slug) 一张 FSRS 卡。题目按 slug 共享缓存。
-答错的句子会落入 Vocabulary（item_type=sentence、source=bbc_eaw）。
+答错的句子会落入 Vocabulary（item_type=sentence、source_type=article、series=bbc_eaw）。
 """
 import json
 from datetime import datetime
@@ -13,7 +13,7 @@ from app.models.db import (
     engine,
     BbcArticleCard,
     BbcArticleQuestion,
-    BbcEawEpisode,
+    ArticleEpisode,
 )
 from app.services.fsrs_utils import (
     create_card,
@@ -28,7 +28,7 @@ from app.logger import get_logger
 logger = get_logger("bbc_article_srs")
 
 
-def _card_to_dict(c: BbcArticleCard, episode: Optional[BbcEawEpisode] = None) -> Dict:
+def _card_to_dict(c: BbcArticleCard, episode: Optional[ArticleEpisode] = None) -> Dict:
     return {
         "id": c.id,
         "user_id": c.user_id,
@@ -59,7 +59,7 @@ def _question_to_dict(q: BbcArticleQuestion) -> Dict:
 def start_studying(user_id: str, slug: str) -> Dict:
     """首次学习 / 已有则返回当前卡。"""
     with OrmSession(engine) as s:
-        episode = s.query(BbcEawEpisode).filter_by(slug=slug).first()
+        episode = s.query(ArticleEpisode).filter_by(slug=slug).first()
         if not episode:
             raise LookupError(f"BBC episode not found: {slug}")
 
@@ -160,7 +160,7 @@ def rate_card(
         s.commit()
         s.refresh(card)
 
-        episode = s.query(BbcEawEpisode).filter_by(slug=slug).first()
+        episode = s.query(ArticleEpisode).filter_by(slug=slug).first()
         result = _card_to_dict(card, episode)
 
     # 答错联动：在事务外做（vocab_service 自管 session）
@@ -186,7 +186,7 @@ def list_due_articles(user_id: str) -> List[Dict]:
         slugs = {c.slug for c in cards}
         episodes = {
             e.slug: e
-            for e in s.query(BbcEawEpisode).filter(BbcEawEpisode.slug.in_(slugs)).all()
+            for e in s.query(ArticleEpisode).filter(ArticleEpisode.slug.in_(slugs)).all()
         }
         result = []
         for c in cards:

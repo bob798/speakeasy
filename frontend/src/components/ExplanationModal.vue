@@ -204,10 +204,11 @@ const _refStr = (v) => (v == null || v === '' ? null : String(v))
 function deriveVocabSource() {
   // 来源由父组件透传到 target.context；下面的 fallback 兼容老调用
   const ctx = props.target?.context || {}
-  let source_type, raw
+  let source_type, raw, series = null
   if (ctx.vocab_source_type) {
     source_type = ctx.vocab_source_type
     raw = ctx.vocab_source_ref
+    series = ctx.vocab_series || null
   } else if (ctx.source === 'chat') {
     source_type = 'chat'
     raw = ctx.session_id
@@ -219,7 +220,7 @@ function deriveVocabSource() {
     source_type = 'translate'
     raw = null
   }
-  return { source_type, source_ref: _refStr(raw) }
+  return { source_type, source_ref: _refStr(raw), series }
 }
 
 const data = ref({
@@ -272,7 +273,7 @@ function reset() {
 }
 
 async function fetchWord(refresh = false) {
-  const { source_type, source_ref } = deriveVocabSource()
+  const { source_type, source_ref, series } = deriveVocabSource()
   // 1. IPA 快拿（本地秒出 · 不阻塞主请求）
   try {
     const p = await authFetchJson(`${API.ARTICLES}/explain/phonetic`, {
@@ -280,6 +281,7 @@ async function fetchWord(refresh = false) {
       source_type: source_type || null,
       source_ref: source_ref || null,
       item_type: inferredItemType.value,
+      series: series || null,
     })
     data.value.phonetic = p.phonetic || ''
   } catch {
@@ -297,6 +299,7 @@ async function fetchWord(refresh = false) {
       source_type: source_type || null,
       source_ref: source_ref || null,
       item_type: inferredItemType.value,
+      series: series || null,
     })
     const exp = resp.explanation || {}
     Object.assign(data.value, {
@@ -339,7 +342,7 @@ function _scheduleUpdate(field, value) {
 
 async function fetchSentence(refresh = false) {
   loading.value = true
-  const { source_type, source_ref } = deriveVocabSource()
+  const { source_type, source_ref, series } = deriveVocabSource()
   try {
     await sseStream(
       `${API.ARTICLES}/explain/stream`,
@@ -349,6 +352,7 @@ async function fetchSentence(refresh = false) {
         source_type: source_type || null,
         source_ref: source_ref || null,
         item_type: inferredItemType.value,
+        series: series || null,
         context: props.target.sentence || '',
       },
       {
