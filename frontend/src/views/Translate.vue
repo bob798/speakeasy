@@ -8,9 +8,11 @@
  */
 import { ref, computed } from 'vue'
 import { useAuthFetch, getErrorMessage } from '@/composables/useAuthFetch'
+import { useAuthStore } from '@/stores/auth'
 import { API } from '@/config'
 
 const { authFetchJson } = useAuthFetch()
+const authStore = useAuthStore()
 
 // ═══ 翻译区 ═══
 const direction = ref('zh2en')
@@ -18,6 +20,7 @@ const source = ref('')
 const translated = ref('')
 const translating = ref(false)
 const error = ref('')
+const savedToVocab = ref(false)
 
 const MAX_LEN = 1000
 const canSubmit = computed(
@@ -29,32 +32,18 @@ async function onTranslate() {
   translating.value = true
   error.value = ''
   translated.value = ''
+  savedToVocab.value = false
   try {
     const data = await authFetchJson(`${API.TRANSLATE}/text`, {
       text: source.value,
       direction: direction.value,
     })
     translated.value = data.translated_text || ''
+    savedToVocab.value = !!data.saved_to_vocab
   } catch (err) {
     error.value = getErrorMessage(err, '翻译失败')
   } finally {
     translating.value = false
-  }
-}
-
-async function onSave() {
-  if (!translated.value.trim()) return
-  try {
-    await authFetchJson(`${API.TRANSLATE}/vocabulary`, {
-      source_text: source.value,
-      translated_text: translated.value,
-      direction: direction.value,
-    })
-    _toast('⭐ 已加入生词本', 'success')
-  } catch (err) {
-    const msg = getErrorMessage(err)
-    error.value = msg
-    if (msg) _toast(msg, 'error')
   }
 }
 
@@ -82,6 +71,15 @@ function _toast(text, type = 'info', duration = 1800) {
       </button>
     </header>
 
+    <div class="capability-banner">
+      <template v-if="authStore.isAuthenticated">
+        ✨ 翻译过的内容会自动加入生词本
+      </template>
+      <template v-else>
+        ✨ 登录后翻译会自动加入生词本 <RouterLink to="/login">去登录</RouterLink>
+      </template>
+    </div>
+
     <main class="body">
       <!-- 翻译区 -->
       <section class="pair">
@@ -97,7 +95,9 @@ function _toast(text, type = 'info', duration = 1800) {
           <div class="result" :class="{ loading: translating }">
             {{ translated || (translating ? '翻译中...' : '译文会显示在这里') }}
           </div>
-          <button v-if="translated" class="save" @click="onSave">⭐ 收藏到生词本</button>
+          <div v-if="savedToVocab && authStore.isAuthenticated" class="vocab-status">
+            ⭐ 已加入生词本 · <RouterLink to="/vocabulary">查看生词本 →</RouterLink>
+          </div>
         </div>
       </section>
 
@@ -196,20 +196,26 @@ textarea {
   color: var(--text-3);
   text-align: right;
 }
-.save {
-  align-self: flex-start;
-  padding: 6px var(--space-3);
-  background: var(--accent-soft);
-  color: var(--accent);
-  border-radius: var(--radius-sm);
+.capability-banner {
+  text-align: center;
+  padding: var(--space-2) var(--space-4);
   font-size: 13px;
-  font-weight: 500;
-  transition: all var(--duration) var(--ease);
+  color: var(--text-2);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
 }
-.save:active {
-  background: var(--accent);
-  color: var(--text-inverse);
-  transform: scale(0.96);
+.capability-banner a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.vocab-status {
+  font-size: 13px;
+  color: var(--accent);
+  padding: var(--space-1) 0;
+}
+.vocab-status a {
+  color: var(--accent);
+  text-decoration: underline;
 }
 .primary {
   width: 100%;
