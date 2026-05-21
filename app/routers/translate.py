@@ -5,9 +5,9 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 
-from app.services.translate_service import translate_text
-from app.services.vocab_service import save_item, list_items, delete_item
-from app.routers.auth import get_current_user_id
+from app.services.translate_service import translate_text, VALID_DIRECTIONS
+from app.services.vocab_service import save_item, list_items, delete_item, update_translated_text
+from app.routers.auth import get_current_user_id, get_current_user_id_optional
 from app.logger import get_logger
 
 logger = get_logger("translate")
@@ -40,14 +40,39 @@ class VocabularyResponse(BaseModel):
     created_at: Optional[str]
 
 
-# ── 翻译（匿名可用）──────────────────────────────────────
+# ── 翻译（匿名可用，登录自动入生词本）──────────────────
 
 @router.post("/translate/text")
-async def do_translate(req: TranslateRequest):
+async def do_translate(
+    req: TranslateRequest,
+    user_id: Optional[str] = Depends(get_current_user_id_optional),
+):
     if len(req.text.strip()) == 0:
         raise HTTPException(400, "输入文本不能为空")
     if len(req.text.strip()) > 1000:
         raise HTTPException(400, "输入文本不能超过 1000 字符")
+
+    # direction 白名单校验（提前到占位写入之前）
+    if req.direction not in VALID_DIRECTIONS:
+        raise HTTPException(400, f"无效的翻译方向: {req.direction}，可选值: zh2en / en2zh")
+
+    # 登录态：占位写入 vocabulary
+    vocab_id = None
+    if user_id:
+        try:
+            item = save_item(
+                user_id=user_id,
+                source_text=req.text,
+                translated_text="",
+                direction=req.direction,
+                item_type="sentence",
+                source_type="translate",
+                source_ref=None,
+            )
+            vocab_id = item["id"]
+        except Exception as e:
+            logger.warning("translate_placeholder_save_fail user=%s err=%s", user_id, e)
+            vocab_id = None
 
     try:
         translated = await translate_text(req.text, req.direction)
@@ -57,7 +82,27 @@ async def do_translate(req: TranslateRequest):
         logger.error("翻译失败: %s", e, exc_info=True)
         raise HTTPException(503, "翻译服务暂时不可用，请稍后重试")
 
-    return {"translated_text": translated}
+    # 登录态：回填 translated_text
+    if user_id and vocab_id and translated:
+        try:
+            update_translated_text(
+                user_id=user_id,
+                source_text=req.text,
+                source_ref=None,
+                translated_text=translated,
+                force=True,
+            )
+        except Exception as e:
+            logger.warning(
+                "translate_backfill_fail user=%s vocab_id=%s err=%s",
+                user_id, vocab_id, e,
+            )
+
+    return {
+        "translated_text": translated,
+        "saved_to_vocab": bool(vocab_id),
+        "vocab_id": vocab_id,
+    }
 
 
 # ── 生词本 CRUD（登录才能用）──────────────────────────────
