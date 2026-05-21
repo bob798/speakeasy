@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import (
     String, ForeignKey, func,
-    Column, Integer, Boolean, DateTime, UniqueConstraint, create_engine,
+    Column, Integer, Boolean, DateTime, Text, UniqueConstraint, create_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -333,6 +333,27 @@ class LlmCallLog(Base):
     created_at     = Column(DateTime, default=datetime.utcnow)
 
 
+# ── V0.8 用户文章库 ────────────────────────────────────────
+
+class LibraryArticle(Base):
+    __tablename__ = "library_articles"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    user_id     = Column(String, nullable=False, index=True)
+    source_url  = Column(String, nullable=True)
+    title       = Column(String, nullable=False)
+    markdown    = Column(Text, nullable=False)
+    word_count  = Column(Integer, nullable=False, default=0)
+    source_meta = Column(Text, nullable=True)   # JSON string
+    status      = Column(String, nullable=False, default="active")  # active | deleted
+    created_at  = Column(DateTime, default=func.now())
+    updated_at  = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "source_url", name="ux_library_articles_user_url"),
+    )
+
+
 # Sync engine for ORM operations (tests, memory_service, review_service)
 import os as _os
 _DB_PATH = _os.environ.get("SPEAKEASY_DB_PATH", "./speakeasy.db")
@@ -341,3 +362,8 @@ engine = create_engine(
     connect_args={"check_same_thread": False},
 )
 Base.metadata.create_all(engine)
+
+
+def init_db():
+    """Create all tables (idempotent). Convenience wrapper for tests."""
+    Base.metadata.create_all(engine)

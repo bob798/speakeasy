@@ -15,3 +15,4 @@ yt-dlp>=2024.0.0
 bcrypt==4.2.0
 PyJWT==2.9.0
 eng-to-ipa==0.0.2
+trafilatura>=2.0.0

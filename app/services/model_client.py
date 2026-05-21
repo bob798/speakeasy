@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os
 import time
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 import httpx
 import anthropic
 from openai import OpenAI
@@ -91,7 +91,7 @@ class BaseModelClient:
         messages_or_prompt,
         max_tokens: int = 1000,
         scene: str = "default",
-        timeout: float | None = None,
+        timeout: Optional[float] = None,
     ) -> str:
         """
         单次 LLM 调用，返回纯文本。
@@ -115,7 +115,7 @@ class BaseModelClient:
         messages: list,
         max_tokens: int,
         scene: str = "default",
-        timeout: float | None = None,
+        timeout: Optional[float] = None,
     ) -> str:
         raise NotImplementedError
 
@@ -213,7 +213,7 @@ class AnthropicClient(BaseModelClient):
         messages: list,
         max_tokens: int,
         scene: str = "default",
-        timeout: float | None = None,
+        timeout: Optional[float] = None,
     ) -> str:
         t0 = time.time()
         system = next((m["content"] for m in messages if m.get("role") == "system"), None)
@@ -337,7 +337,7 @@ class OpenAICompatibleClient(BaseModelClient):
         messages: list,
         max_tokens: int,
         scene: str = "default",
-        timeout: float | None = None,
+        timeout: Optional[float] = None,
     ) -> str:
         t0 = time.time()
         kwargs = {
