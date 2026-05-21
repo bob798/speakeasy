@@ -1,67 +1,192 @@
 <script setup>
 /**
- * Translate · V0.9.4 重设计
+ * Translate · V0.11 DeepL 风格重设计 — PR1
  *
- * 修:
- *   - target_text → translated_text（字段名对齐后端 VocabularyCreate）
- *   - 移除内嵌生词本面板，生词本功能移至 /vocabulary 独立页
+ * PR1 覆盖：
+ *   - 三栏布局（左输入 / 右译文 / 右侧 sidebar）
+ *   - debounce 800ms + canonicalText + LRU cache + requestId stale 防御 + AbortController
+ *   - swap 改为纯方向切换，不动文本
+ *   - 方向自动检测（CJK 比例 ≥ 30% → zh2en）
+ *   - Cmd/Ctrl+Enter 手动触发翻译
+ *
+ * PR2 (TODO): 译文单词分词 + hover/click 词卡
+ * PR3 (TODO): sidebar 生词本接通 FSRS + 收藏闭环
+ * PR4 (TODO): 移动端 bottom-sheet
  */
-import { ref, computed } from 'vue'
+
+import { ref, computed, watch, onUnmounted } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 import { useAuthFetch, getErrorMessage } from '@/composables/useAuthFetch'
 import { API } from '@/config'
 
+import TopBar from '@/components/translate/TopBar.vue'
+import TranslateInput from '@/components/translate/TranslateInput.vue'
+import TranslateResult from '@/components/translate/TranslateResult.vue'
+import TranslateSidebar from '@/components/translate/TranslateSidebar.vue'
+
+const authStore = useAuthStore()
 const { authFetchJson } = useAuthFetch()
 
-// ═══ 翻译区 ═══
+// ═══ Layout state ═══
+const sidebarOpen = ref(true)
+
+// ═══ Translation state ═══
 const direction = ref('zh2en')
 const source = ref('')
 const translated = ref('')
 const translating = ref(false)
 const error = ref('')
+const savedToVocab = ref(false)
+/** stale=true when direction was swapped but source/translated not retranslated */
+const stale = ref(false)
 
 const MAX_LEN = 1000
 const canSubmit = computed(
   () => source.value.trim() && source.value.length <= MAX_LEN && !translating.value
 )
 
-async function onTranslate() {
-  if (!canSubmit.value) return
+// ═══ LRU cache (session-level, 100 entries) ═══
+const cache = new Map()
+const CACHE_MAX = 100
+
+// ═══ Debounce + concurrency control ═══
+let requestId = 0
+let abortCtrl = null
+let debounceTimer = null
+let lastCanonical = ''
+
+/**
+ * Detect language direction based on CJK character ratio.
+ * >= 30% CJK → zh2en (source is Chinese), else en2zh
+ * @param {string} text
+ * @returns {'zh2en' | 'en2zh'}
+ */
+function detectDirection(text) {
+  if (!text) return direction.value
+  const cjkCount = (text.match(/[\u4e00-\u9fff]/g) || []).length
+  return cjkCount / text.length >= 0.3 ? 'zh2en' : 'en2zh'
+}
+
+// Track last manual swap time to suppress auto-detect for 5 seconds
+let lastManualSwapAt = 0
+
+/**
+ * Core translate function with requestId stale defense.
+ * @param {string} canonicalText
+ * @param {string} dir
+ */
+function doTranslate(canonicalText, dir) {
+  const myId = ++requestId
+  abortCtrl?.abort()
+  abortCtrl = new AbortController()
+  const cacheKey = JSON.stringify([canonicalText, dir])
+
+  // Cache hit
+  if (cache.has(cacheKey)) {
+    if (myId === requestId) {
+      translated.value = cache.get(cacheKey)
+      savedToVocab.value = false
+      stale.value = false
+      error.value = ''
+    }
+    return
+  }
+
   translating.value = true
   error.value = ''
-  translated.value = ''
-  try {
-    const data = await authFetchJson(`${API.TRANSLATE}/text`, {
-      text: source.value,
-      direction: direction.value,
+
+  authFetchJson(
+    `${API.TRANSLATE}/text`,
+    { text: canonicalText, direction: dir },
+    { signal: abortCtrl.signal },
+  )
+    .then((data) => {
+      if (myId !== requestId) return
+      const result = data.translated_text || ''
+      cache.set(cacheKey, result)
+      if (cache.size > CACHE_MAX) {
+        cache.delete(cache.keys().next().value)
+      }
+      translated.value = result
+      savedToVocab.value = !!data.saved_to_vocab
+      stale.value = false
     })
-    translated.value = data.translated_text || ''
-  } catch (err) {
-    error.value = getErrorMessage(err, '翻译失败')
-  } finally {
-    translating.value = false
-  }
+    .catch((err) => {
+      if (err.name === 'AbortError' || myId !== requestId) return
+      error.value = getErrorMessage(err, '翻译失败')
+    })
+    .finally(() => {
+      if (myId === requestId) translating.value = false
+    })
 }
 
-async function onSave() {
-  if (!translated.value.trim()) return
-  try {
-    await authFetchJson(`${API.TRANSLATE}/vocabulary`, {
-      source_text: source.value,
-      translated_text: translated.value,
-      direction: direction.value,
-    })
-    _toast('⭐ 已加入生词本', 'success')
-  } catch (err) {
-    const msg = getErrorMessage(err)
-    error.value = msg
-    if (msg) _toast(msg, 'error')
+// ═══ Watch source for debounce auto-translate ═══
+watch(source, (val) => {
+  clearTimeout(debounceTimer)
+  const canonical = val.trim()
+
+  if (!canonical) {
+    translated.value = ''
+    savedToVocab.value = false
+    stale.value = false
+    error.value = ''
+    lastCanonical = ''
+    return
   }
+
+  if (canonical.length > MAX_LEN) return
+
+  // Auto-detect direction if user hasn't manually swapped in last 5s
+  if (Date.now() - lastManualSwapAt > 5000) {
+    const detected = detectDirection(canonical)
+    if (detected !== direction.value) {
+      direction.value = detected
+    }
+  }
+
+  // Skip if canonical text unchanged (only whitespace changed)
+  if (canonical === lastCanonical) return
+
+  debounceTimer = setTimeout(() => {
+    lastCanonical = canonical
+    doTranslate(canonical, direction.value)
+  }, 800)
+})
+
+// ═══ Watch direction change: retranslate if there's content ═══
+watch(direction, () => {
+  const canonical = source.value.trim()
+  if (canonical && canonical.length <= MAX_LEN) {
+    lastCanonical = canonical
+    doTranslate(canonical, direction.value)
+  }
+})
+
+// ═══ Manual translate (button + Cmd/Ctrl+Enter) ═══
+function onTranslate() {
+  if (!canSubmit.value) return
+  const canonical = source.value.trim()
+  clearTimeout(debounceTimer)
+  lastCanonical = canonical
+  doTranslate(canonical, direction.value)
 }
 
-function swapDirection() {
+// ═══ Swap direction (fix: only switch direction, do NOT move text) ═══
+function onSwap() {
+  lastManualSwapAt = Date.now()
   direction.value = direction.value === 'zh2en' ? 'en2zh' : 'zh2en'
-  source.value = translated.value
-  translated.value = ''
+  // Mark as stale — user sees translated text is now for the old direction
+  if (translated.value) {
+    stale.value = true
+  }
+}
+
+// ═══ Keyboard shortcut: Cmd/Ctrl+Enter ═══
+function onKeydown(e) {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    e.preventDefault()
+    onTranslate()
+  }
 }
 
 // ═══ Toast ═══
@@ -70,47 +195,65 @@ function _toast(text, type = 'info', duration = 1800) {
   toast.value = { show: true, text, type }
   setTimeout(() => (toast.value.show = false), duration)
 }
+
+// ═══ Cleanup ═══
+onUnmounted(() => {
+  clearTimeout(debounceTimer)
+  abortCtrl?.abort()
+})
 </script>
 
 <template>
-  <div class="translate-page">
-    <header class="topbar">
-      <RouterLink class="back" to="/">← 返回</RouterLink>
-      <div class="title">翻译</div>
-      <button class="swap" @click="swapDirection" aria-label="切换方向">
-        {{ direction === 'zh2en' ? '中→英' : '英→中' }} ⇄
-      </button>
-    </header>
+  <div class="translate-page" @keydown="onKeydown">
+    <TopBar
+      :direction="direction"
+      :sidebar-open="sidebarOpen"
+      @swap="onSwap"
+      @toggle-sidebar="sidebarOpen = !sidebarOpen"
+    />
 
-    <main class="body">
-      <!-- 翻译区 -->
-      <section class="pair">
-        <div class="col">
-          <textarea
-            v-model="source"
-            :placeholder="direction === 'zh2en' ? '输入中文' : 'Enter English'"
-            :maxlength="MAX_LEN"
-          ></textarea>
-          <div class="counter">{{ source.length }} / {{ MAX_LEN }}</div>
+    <main class="translate-body">
+      <div class="translate-layout" :class="{ 'no-sidebar': !sidebarOpen }">
+        <!-- Left: input -->
+        <TranslateInput
+          v-model="source"
+          :direction="direction"
+          :max-len="MAX_LEN"
+        />
+
+        <!-- Center-right: result -->
+        <div class="result-col">
+          <TranslateResult
+            :text="translated"
+            :loading="translating"
+            :saved-to-vocab="savedToVocab"
+            :is-authenticated="authStore.isAuthenticated"
+            :stale="stale"
+            :error="error"
+            :direction="direction"
+          />
+
+          <!-- Translate button -->
+          <button
+            class="translate-btn"
+            :disabled="!canSubmit"
+            @click="onTranslate"
+            title="翻译 (Cmd/Ctrl+Enter)"
+          >
+            {{ translating ? '翻译中…' : '翻译' }}
+          </button>
+
+          <!-- Vocab hint -->
+          <p class="vocab-hint">
+            收藏的译文可在
+            <RouterLink to="/vocabulary" class="vocab-link">生词本</RouterLink>
+            中查看与复习
+          </p>
         </div>
-        <div class="col">
-          <div class="result" :class="{ loading: translating }">
-            {{ translated || (translating ? '翻译中...' : '译文会显示在这里') }}
-          </div>
-          <button v-if="translated" class="save" @click="onSave">⭐ 收藏到生词本</button>
-        </div>
-      </section>
 
-      <button class="primary" :disabled="!canSubmit" @click="onTranslate">
-        {{ translating ? '...' : '翻译' }}
-      </button>
-      <p v-if="error" class="err">{{ error }}</p>
-
-      <p class="vocab-hint">
-        收藏的译文可在
-        <RouterLink to="/vocabulary" class="vocab-link">生词本</RouterLink>
-        中查看与复习
-      </p>
+        <!-- Right: sidebar -->
+        <TranslateSidebar :open="sidebarOpen" />
+      </div>
     </main>
 
     <Transition name="toast">
@@ -126,123 +269,91 @@ function _toast(text, type = 'info', duration = 1800) {
   min-height: var(--app-vh, 100dvh);
   background: var(--bg);
 }
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-3) var(--space-4);
-  padding-top: calc(var(--safe-top) + var(--space-3));
-  background: var(--bg-overlay);
-  backdrop-filter: saturate(180%) blur(16px);
-  border-bottom: 1px solid var(--border);
-}
-.title {
-  font-weight: 600;
-  color: var(--accent);
-}
-.back,
-.swap {
-  color: var(--text-2);
-  font-size: 14px;
-}
-.body {
-  padding: var(--space-4);
-  max-width: 900px;
-  width: 100%;
-  margin: 0 auto;
+
+.translate-body {
   flex: 1;
+  overflow: auto;
 }
-.pair {
+
+/* Three-column grid layout */
+.translate-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
+  grid-template-columns: 1fr 1fr 320px;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  max-width: 1400px;
+  margin: 0 auto;
+  /* Allow full height use */
+  min-height: calc(100vh - 64px);
+  align-items: start;
 }
-.col {
-  position: relative;
+
+.translate-layout.no-sidebar {
+  grid-template-columns: 1fr 1fr;
+}
+
+.result-col {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-3);
 }
-textarea,
-.result {
+
+.translate-btn {
   width: 100%;
-  min-height: 180px;
   padding: var(--space-3);
-  border: 1px solid var(--border);
+  background: var(--accent);
+  color: var(--text-inverse);
   border-radius: var(--radius);
-  background: var(--bg-elevated);
+  font-weight: 500;
   font-size: 15px;
-  line-height: 1.6;
-  outline: none;
-}
-textarea:focus {
-  border-color: var(--accent);
-}
-textarea {
-  resize: vertical;
-  font-family: inherit;
-}
-.result {
-  white-space: pre-wrap;
-  color: var(--text-1);
-}
-.result.loading {
-  color: var(--text-3);
-  font-style: italic;
-}
-.counter {
-  font-size: 11px;
-  color: var(--text-3);
-  text-align: right;
-}
-.save {
-  align-self: flex-start;
-  padding: 6px var(--space-3);
-  background: var(--accent-soft);
-  color: var(--accent);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 500;
-  transition: all var(--duration) var(--ease);
-}
-.save:active {
-  background: var(--accent);
-  color: var(--text-inverse);
-  transform: scale(0.96);
-}
-.primary {
-  width: 100%;
-  padding: var(--space-3);
-  background: var(--accent);
-  color: var(--text-inverse);
-  border-radius: var(--radius);
-  font-weight: 500;
   transition: background var(--duration) var(--ease);
 }
-.primary:active {
-  background: var(--accent-hover);
+
+.translate-btn:hover:not(:disabled) {
+  background: var(--accent-hover, color-mix(in srgb, var(--accent) 85%, black));
 }
-.primary:disabled {
+
+.translate-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.translate-btn:disabled {
   opacity: 0.5;
-}
-.err {
-  color: #c6463a;
-  font-size: 13px;
-  margin-top: var(--space-2);
+  cursor: default;
 }
 
 .vocab-hint {
-  margin-top: var(--space-4);
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-3);
   text-align: center;
 }
+
 .vocab-link {
   color: var(--accent);
   text-decoration: underline;
 }
 
+/* Tablet: two-column (sidebar hidden) */
+@media (max-width: 1024px) {
+  .translate-layout,
+  .translate-layout.no-sidebar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Hide sidebar via grid — TranslateSidebar won't show at this breakpoint anyway */
+}
+
+/* Mobile: single column */
+@media (max-width: 768px) {
+  .translate-layout,
+  .translate-layout.no-sidebar {
+    grid-template-columns: 1fr;
+    padding: var(--space-3);
+    gap: var(--space-3);
+  }
+}
+
+/* Toast */
 .toast {
   position: fixed;
   bottom: calc(var(--safe-bottom) + var(--space-5));
@@ -254,15 +365,24 @@ textarea {
   border-radius: var(--radius);
   font-size: 13px;
   z-index: var(--z-toast);
+  white-space: nowrap;
 }
-.toast.error { background: #c6463a; }
-.toast.success { background: var(--accent); }
-.toast-enter-active,
-.toast-leave-active { transition: opacity var(--duration) var(--ease); }
-.toast-enter-from,
-.toast-leave-to { opacity: 0; }
 
-@media (max-width: 768px) {
-  .pair { grid-template-columns: 1fr; }
+.toast.error {
+  background: #c6463a;
+}
+
+.toast.success {
+  background: var(--accent);
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity var(--duration) var(--ease);
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
 }
 </style>
