@@ -11,8 +11,6 @@ services:
       # SQLite 落到挂载卷 · 容器重启/镜像更新数据不丢
       DATABASE_URL: sqlite+aiosqlite:////app/data/speakeasy.db
       SPEAKEASY_DB_PATH: /app/data/speakeasy.db
-      # 日志落到 /app/logs（挂 named volume，宿主机可 `docker compose exec` 查看或挂主机目录持久化）
-      LOG_DIR: /app/logs
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - logs:/app/logs
