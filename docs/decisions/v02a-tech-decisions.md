@@ -58,7 +58,7 @@ Speakeasy 的部署路径更可能是：
 | 阶段 | 部署方式 | 是否需要 Nginx |
 |------|----------|----------------|
 | 本地开发 | `uvicorn main:app --reload` | ❌ |
-| 早期上线 | Railway / Render / Fly.io | ❌（平台内置 HTTPS + 反代） |
+| 早期上线 | VPS + docker-compose + Caddy（当前方案） | ❌（Caddy 自动 HTTPS + 反代） |
 | 规模化 | 容器化 → 云平台 LB | ❌（云 LB 原生支持 SSE） |
 | 特殊场景 | 自管服务器 | ✅ 届时配置 |
 

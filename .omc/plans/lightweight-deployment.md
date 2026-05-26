@@ -125,9 +125,9 @@ yt-dlp==<pinned>
 | Step | Action | Detail | Acceptance Criteria |
 |---|---|---|---|
 | 3.1 | Update base to `python:3.12-slim` | Match development environment Python version (3.12). | Dockerfile FROM line updated |
-| 3.2 | Review and update existing `.dockerignore` | `.dockerignore` already exists. Verify it excludes: `fly.toml`, `venv/`, `__pycache__/`, `*.db*`, `.git/`, `tests/`, `docs/`, `.omc/`, `*.md`. Add `fly.toml` if missing. | `docker build` context is <5MB |
+| 3.2 | Review and update existing `.dockerignore` | `.dockerignore` already exists. Verify it excludes: `venv/`, `__pycache__/`, `*.db*`, `.git/`, `tests/`, `docs/`, `.omc/`, `*.md`. | `docker build` context is <5MB |
 | 3.3 | Optimize layer ordering | Copy `requirements.txt` first, `pip install`, then copy app code. (Already done in current Dockerfile — verify preserved.) | Layer cache hits on code-only changes |
-| 3.4 | Remove Fly.io-specific ENV | Remove `ENV SPEAKEASY_DB_PATH=/data/speakeasy.db` from Dockerfile (line 19). Move to docker-compose env. | Dockerfile has no hardcoded paths |
+| 3.4 | Remove legacy hardcoded ENV | Remove `ENV SPEAKEASY_DB_PATH=/data/speakeasy.db` from Dockerfile (line 19). Move to docker-compose env. | Dockerfile has no hardcoded paths |
 | 3.5 | Build and measure | `docker build -t speakeasy:slim .` then `docker images speakeasy:slim` | Image size < 300MB |
 | 3.6 | Smoke test the image | `docker run --rm -p 8000:8000 speakeasy:slim` and `curl http://localhost:8000/` | Returns HTML (index.html) |
 | 3.7 | Fallback if >300MB | If image exceeds 300MB, investigate `yt-dlp` transitive deps (`certifi`, `brotli`, `mutagen`, `pycryptodomex`, `websockets`). Consider `--no-deps` with explicit sub-deps. | Image under target or deviation documented |
@@ -152,7 +152,7 @@ yt-dlp==<pinned>
 | 4.3 | Create `.env.production.example` | Template with all required vars: `DOMAIN`, `MODEL_PROVIDER=volcengine`, `VOLCENGINE_API_KEY`, `GROQ_API_KEY`, `SPEAKEASY_DB_PATH=/data/speakeasy.db`. | File exists, no real secrets committed |
 | 4.4 | Create `.github/workflows/deploy.yml` | Trigger on push to `main`. Steps: checkout → login GHCR → build+push image → SSH to VPS → `docker compose pull && docker compose up -d`. | YAML validates |
 | 4.5 | Update `.gitignore` | Add `.env.production`, verify `speakeasy.db*`, `static/tts_cache/*`, `static/audio_cache/*` are excluded | Sensitive files excluded |
-| 4.6 | Add `fly.toml` legacy comment | Add comment at top: `# LEGACY: Fly.io config, replaced by docker-compose. Remove in future PR.` | Comment added |
+| 4.6 | ~~Add `fly.toml` legacy comment~~ | DONE — `fly.toml` 已彻底移除（仓库不再保留 Fly.io 配置）。 | n/a |
 | 4.7 | Write deployment README section | Setup instructions: clone, copy `.env.production.example`, `docker compose up -d`. Include rollback: `docker compose pull <previous-tag> && docker compose up -d`. | Instructions copy-pasteable on Ubuntu 22.04+ with Docker |
 
 **docker-compose.yml structure:**
@@ -258,7 +258,7 @@ networks:
   - Build on VPS: rejected — requires build tooling on VPS; GHCR approach means VPS only needs Docker
 - **Why chosen:** Caddy eliminates TLS ops entirely. GitHub Actions + GHCR is free and avoids build tooling on VPS. Slim base avoids musl wheel compilation failures.
 - **Consequences:** Caddy adds ~40MB to the stack (acceptable). GitHub Actions creates vendor dependency (mitigated: workflow is portable to any CI with SSH). GHCR requires VPS to have network access to ghcr.io.
-- **Follow-ups:** Evaluate `fly.toml` full removal in a future PR. Consider SQLite backup strategy for production.
+- **Follow-ups:** ~~Evaluate `fly.toml` full removal in a future PR.~~ DONE. Consider SQLite backup strategy for production.
 
 ---
 

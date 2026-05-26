@@ -17,6 +17,9 @@ dist/
 static/tts_cache/
 static/audio_cache/
 
+# 应用日志（容器挂载到 /app/logs · 本地 dev 时写到 ./logs/）
+logs/
+
 # OMC runtime state (HUD cache, session state, logs, notepad, project memory)
 .omc/state/
 .omc/logs/

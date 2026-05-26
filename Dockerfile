@@ -35,8 +35,8 @@ ENV APP_VERSION="${APP_VERSION}"
 # 用 Stage 1 构建好的 dist 覆盖 frontend/dist
 COPY --from=frontend-build /build/dist ./frontend/dist
 
-# 数据目录（挂载 volume 也行 · 这里兜底）
-RUN mkdir -p static/tts_cache static/audio_cache
+# 数据 / 日志目录（挂载 volume 也行 · 这里兜底，确保未挂卷的镜像也能直接跑）
+RUN mkdir -p static/tts_cache static/audio_cache /app/logs /app/data
 
 EXPOSE 8000
 

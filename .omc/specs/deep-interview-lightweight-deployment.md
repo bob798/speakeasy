@@ -69,7 +69,7 @@
 - **STT**: Groq Whisper-large-v3
 - **TTS**: Edge-TTS (primary) + OpenAI TTS (fallback)
 - **VAD**: Silero VAD (PyTorch) — **TO BE REMOVED**
-- **Deployment**: Fly.io (fly.toml) — **TO BE REPLACED**
+- **Deployment**: VPS + docker-compose + Caddy（原 Fly.io 已迁出，`fly.toml` 已移除）
 
 ### 需要修改的文件
 - `app/services/vad_service.py` — 删除
