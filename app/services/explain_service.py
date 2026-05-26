@@ -77,14 +77,16 @@ def _normalize_level(level: Optional[str]) -> str:
 
 
 def _get_user_level(user_id: str) -> str:
+    t0 = time.time()
     with OrmSession(engine) as s:
         row = s.query(UserProfile).filter_by(user_id=user_id).first()
-        if row and row.cefr_level:
-            return _normalize_level(row.cefr_level)
-    return ""
+        level = _normalize_level(row.cefr_level) if row and row.cefr_level else ""
+    logger.debug("user_level 查询 user=%s level=%r 耗时=%.3fs", user_id[:8], level, time.time() - t0)
+    return level
 
 
 def _cache_get(text: str, kind: str, cefr_level: str) -> Optional[Dict]:
+    t0 = time.time()
     h = _hash_text(text)
     with OrmSession(engine) as s:
         row = (
@@ -96,13 +98,24 @@ def _cache_get(text: str, kind: str, cefr_level: str) -> Optional[Dict]:
             row.hit_count = (row.hit_count or 0) + 1
             s.commit()
             try:
-                return json.loads(row.explanation)
+                data = json.loads(row.explanation)
+                logger.info(
+                    "cache_get HIT kind=%s level=%s hit_count=%d 耗时=%.3fs",
+                    kind, cefr_level, row.hit_count, time.time() - t0,
+                )
+                return data
             except json.JSONDecodeError:
+                logger.warning(
+                    "cache_get 命中但 JSON 解析失败 kind=%s level=%s 耗时=%.3fs",
+                    kind, cefr_level, time.time() - t0,
+                )
                 return None
+    logger.info("cache_get MISS kind=%s level=%s 耗时=%.3fs", kind, cefr_level, time.time() - t0)
     return None
 
 
 def _cache_set(text: str, kind: str, cefr_level: str, explanation: Dict, overwrite: bool = False) -> None:
+    t0 = time.time()
     h = _hash_text(text)
     with OrmSession(engine) as s:
         existing = (
@@ -116,6 +129,9 @@ def _cache_set(text: str, kind: str, cefr_level: str, explanation: Dict, overwri
                 existing.source_text = text
                 existing.hit_count = 1   # 重生成清零计数
                 s.commit()
+                logger.debug("cache_set OVERWRITE kind=%s level=%s 耗时=%.3fs", kind, cefr_level, time.time() - t0)
+            else:
+                logger.debug("cache_set SKIP（已存在）kind=%s level=%s 耗时=%.3fs", kind, cefr_level, time.time() - t0)
             return
         s.add(
             ExplanationCache(
@@ -128,8 +144,10 @@ def _cache_set(text: str, kind: str, cefr_level: str, explanation: Dict, overwri
         )
         try:
             s.commit()
+            logger.debug("cache_set INSERT kind=%s level=%s 耗时=%.3fs", kind, cefr_level, time.time() - t0)
         except IntegrityError:
             s.rollback()
+            logger.warning("cache_set IntegrityError kind=%s level=%s 耗时=%.3fs", kind, cefr_level, time.time() - t0)
 
 
 def _strip_code_fences(raw: str) -> str:
@@ -190,6 +208,7 @@ async def explain_text(
     :param context: word 模式下提供所在句子，sentence 模式下忽略
     :param force: True 时跳过缓存，重新生成并覆盖；带 3s debounce
     """
+    t_start = time.time()
     if not text or not text.strip():
         raise ValueError("解读内容不能为空")
     text = text.strip()
@@ -197,6 +216,12 @@ async def explain_text(
         raise ValueError(f"解读内容不能超过 {MAX_TEXT_LEN} 字符")
     if kind not in VALID_KINDS:
         raise ValueError(f"无效的解读类型: {kind}，可选值: sentence / word")
+
+    preview = text if len(text) <= 30 else text[:30] + "…"
+    logger.info(
+        "explain_text 入口 kind=%s text_len=%d preview=%r user=%s force=%s",
+        kind, len(text), preview, user_id[:8] if user_id else "-", force,
+    )
 
     cefr_level = _get_user_level(user_id)
     cache_level = cefr_level or _DEFAULT_LEVEL
@@ -207,13 +232,23 @@ async def explain_text(
     else:
         cached = _cache_get(text, kind, cache_level)
         if cached is not None:
+            logger.info(
+                "explain_text 完成 kind=%s 来源=cache 总耗时=%.3fs",
+                kind, time.time() - t_start,
+            )
             return {"explanation": cached, "cefr_level": cache_level, "cached": True}
 
     prompt_level = cefr_level or _DEFAULT_LEVEL
+    t_prompt = time.time()
     if kind == "sentence":
+        liaison = liaison_prompt_block()
         system_prompt = EXPLAIN_SENTENCE_PROMPT.format(
             cefr_level=prompt_level,
-            liaison_kb=liaison_prompt_block(),
+            liaison_kb=liaison,
+        )
+        logger.debug(
+            "prompt 拼装 kind=sentence system_len=%d liaison_len=%d 耗时=%.3fs",
+            len(system_prompt), len(liaison), time.time() - t_prompt,
         )
     else:
         system_prompt = EXPLAIN_WORD_PROMPT.format(
@@ -221,16 +256,34 @@ async def explain_text(
             text=text.replace('"', '\\"'),
             context=(context or "").replace('"', '\\"'),
         )
+        logger.debug(
+            "prompt 拼装 kind=word system_len=%d context_len=%d 耗时=%.3fs",
+            len(system_prompt), len(context or ""), time.time() - t_prompt,
+        )
 
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": text},
     ]
     client = get_client()
+    t_llm = time.time()
     raw = await client.complete(messages, max_tokens=2000, scene="explain")
+    llm_elapsed = time.time() - t_llm
+    logger.info(
+        "explain_text LLM 完成 kind=%s output_len=%d 耗时=%.2fs",
+        kind, len(raw or ""), llm_elapsed,
+    )
+
+    t_parse = time.time()
     explanation = _parse_explanation(raw)
+    logger.debug("explain_text JSON 解析 耗时=%.3fs fields=%d", time.time() - t_parse, len(explanation))
 
     _cache_set(text, kind, cache_level, explanation, overwrite=force)
+    total = time.time() - t_start
+    logger.info(
+        "explain_text 完成 kind=%s 来源=llm 总耗时=%.2fs (LLM 占比=%.0f%%)",
+        kind, total, (llm_elapsed / total * 100) if total > 0 else 0,
+    )
     return {"explanation": explanation, "cefr_level": cache_level, "cached": False, "regenerated": force}
 
 
@@ -266,11 +319,18 @@ async def stream_sentence_explanation(
       - 结束后额外 yield 一个 {"_done": True} 事件
     :param force: True 时跳过缓存重新生成（带 3s debounce）
     """
+    t_start = time.time()
     if not text or not text.strip():
         raise ValueError("解读内容不能为空")
     text = text.strip()
     if len(text) > MAX_TEXT_LEN:
         raise ValueError(f"解读内容不能超过 {MAX_TEXT_LEN} 字符")
+
+    preview = text if len(text) <= 30 else text[:30] + "…"
+    logger.info(
+        "stream_sentence 入口 text_len=%d preview=%r user=%s force=%s",
+        len(text), preview, user_id[:8] if user_id else "-", force,
+    )
 
     cefr_level = _get_user_level(user_id)
     cache_level = cefr_level or _DEFAULT_LEVEL
@@ -282,16 +342,23 @@ async def stream_sentence_explanation(
     else:
         cached = _cache_get(text, "sentence", cache_level)
         if cached is not None:
+            logger.info("stream_sentence 来源=cache 总耗时=%.3fs", time.time() - t_start)
             yield json.dumps({"_cached": True, "cefr_level": cache_level, "explanation": cached}, ensure_ascii=False)
             return
 
     prompt_level = cefr_level or _DEFAULT_LEVEL
+    t_prompt = time.time()
+    liaison = liaison_prompt_block()
     system_prompt = (
         EXPLAIN_SENTENCE_PROMPT.format(
             cefr_level=prompt_level,
-            liaison_kb=liaison_prompt_block(),
+            liaison_kb=liaison,
         )
         + _STREAM_FORMAT_HINT
+    )
+    logger.debug(
+        "stream prompt 拼装 system_len=%d liaison_len=%d 耗时=%.3fs",
+        len(system_prompt), len(liaison), time.time() - t_prompt,
     )
     messages = [
         {"role": "system", "content": system_prompt},
@@ -299,6 +366,7 @@ async def stream_sentence_explanation(
     ]
 
     client = get_client()
+    t_llm = time.time()
     buffer = ""
     collected: Dict[str, object] = {}
     async for chunk in client.chat_stream_messages(messages, scene="explain"):
@@ -332,6 +400,12 @@ async def stream_sentence_explanation(
         except json.JSONDecodeError:
             pass
 
+    llm_elapsed = time.time() - t_llm
     if collected:
         _cache_set(text, "sentence", cache_level, collected, overwrite=force)
+    total = time.time() - t_start
+    logger.info(
+        "stream_sentence 完成 来源=llm fields=%d LLM=%.2fs 总耗时=%.2fs",
+        len(collected), llm_elapsed, total,
+    )
     yield json.dumps({"_done": True, "cefr_level": cache_level, "regenerated": force}, ensure_ascii=False)
