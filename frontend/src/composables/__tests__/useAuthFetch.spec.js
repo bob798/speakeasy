@@ -89,13 +89,37 @@ describe('useAuthFetch', () => {
     )
   })
 
-  it('对象 detail: stringify 而非 [object Object]', async () => {
+  it('对象 detail: hint/error 当作 message · 原对象挂到 err.detail', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ detail: { error: 'fetch_failed', hint: '抓取失败，请改用粘贴正文模式' } }),
+        { status: 400 }
+      )
+    )
+
+    const { authFetchJson } = useAuthFetch()
+    try {
+      await authFetchJson('/library/articles', { url: 'https://x.example' })
+      throw new Error('should have thrown')
+    } catch (err) {
+      expect(err.message).toBe('抓取失败，请改用粘贴正文模式')
+      expect(err.detail).toEqual({ error: 'fetch_failed', hint: '抓取失败，请改用粘贴正文模式' })
+    }
+  })
+
+  it('对象 detail 无 hint/error: 退回 JSON 串当 message · 仍挂 err.detail', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ detail: { code: 'X', reason: 'Y' } }), { status: 500 })
     )
 
     const { authFetchJson } = useAuthFetch()
-    await expect(authFetchJson('/api/weird', {})).rejects.toThrow(/"code":"X"/)
+    try {
+      await authFetchJson('/api/weird', {})
+      throw new Error('should have thrown')
+    } catch (err) {
+      expect(err.message).toMatch(/"code":"X"/)
+      expect(err.detail).toEqual({ code: 'X', reason: 'Y' })
+    }
   })
 
   it('network 错误路径: 透传 fetch 抛出的错误', async () => {
