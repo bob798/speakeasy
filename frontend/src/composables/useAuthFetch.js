@@ -90,6 +90,7 @@ export function useAuthFetch() {
     })
     if (!resp.ok) {
       let detail = `HTTP ${resp.status}`
+      let structured = null
       try {
         const body = await resp.json()
         const raw = body?.detail ?? body?.error
@@ -100,12 +101,17 @@ export function useAuthFetch() {
           const parts = raw.map((d) => (d && typeof d === 'object' && d.msg) || JSON.stringify(d))
           if (parts.length) detail = parts.join('; ')
         } else if (raw != null && typeof raw === 'object') {
-          detail = JSON.stringify(raw)
+          // 结构化 detail（如 {error, hint}）：message 取 hint/error 作可读文案，
+          // 同时把原对象挂到 err.detail，让调用方能按业务字段降级处理
+          structured = raw
+          detail = raw.hint || raw.error || JSON.stringify(raw)
         }
       } catch {
         /* ignore parse error */
       }
-      throw new Error(detail)
+      const err = new Error(detail)
+      if (structured) err.detail = structured
+      throw err
     }
     return resp.json()
   }
