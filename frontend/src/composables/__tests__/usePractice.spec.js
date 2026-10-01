@@ -159,7 +159,7 @@ describe('usePractice · 发音练习 API', () => {
     const out = await getEawEpisode('episode with spaces')
 
     expect(authFetchMock).toHaveBeenCalledWith(
-      '/bbc-eaw/episodes/episode%20with%20spaces',
+      '/articles/episodes/episode%20with%20spaces',
     )
     expect(out).toEqual(payload)
   })
@@ -195,12 +195,12 @@ describe('usePractice · 发音练习 API', () => {
     await expect(getSource(42)).rejects.toThrow('加载失败')
   })
 
-  it('listEawEpisodes: GET /bbc-eaw/episodes?limit=100 默认 + 返回 JSON / throw on !ok', async () => {
+  it('listEawEpisodes: GET /articles/episodes?limit=100 默认 + 返回 JSON / throw on !ok', async () => {
     const payload = { episodes: [{ slug: 'ep1' }, { slug: 'ep2' }] }
     authFetchMock.mockResolvedValueOnce({ ok: true, json: async () => payload })
     const { listEawEpisodes } = usePractice()
     const out = await listEawEpisodes()
-    expect(authFetchMock).toHaveBeenCalledWith('/bbc-eaw/episodes?limit=100')
+    expect(authFetchMock).toHaveBeenCalledWith('/articles/episodes?limit=100')
     expect(out).toEqual(payload)
 
     authFetchMock.mockResolvedValueOnce({ ok: false })
